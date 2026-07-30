@@ -462,6 +462,14 @@ Signing is the friction that surprises people. A binary downloaded through a bro
 
 `brew install` and `curl | sh` bypass macOS quarantine, and `scoop` or `winget` soften it on Windows. If the audience is developers, start with those channels and defer signing. For anything wider, budget it now.
 
+### Signing arrives earlier than expected
+
+Apple Silicon does not merely warn about unsigned binaries, it refuses to run them. The kernel sends SIGKILL before any code executes, so a broken signature looks like a program that produces no output and exits 137.
+
+Bun 1.3.12 walks straight into this. It writes a truncated `LC_CODE_SIGNATURE` on macOS arm64, so every `bun build --compile` output is dead on arrival, and `codesign` rejects the file outright with "invalid or unsupported format for signature". Removing the broken signature and re-signing ad-hoc is the only fix that holds. `scripts/build.ts` does this automatically on darwin.
+
+The practical lesson for Part 9: the runtime choice carries platform risk beyond the obvious. This was macOS, the platform assumed to be safe, not Windows.
+
 ## Part 11: Backups
 
 - **Full.** Copy `tenants/`. A tar is enough.

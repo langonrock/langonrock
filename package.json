@@ -23,7 +23,7 @@
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "build": "bun build --compile src/cli.ts --outfile dist/langonrock",
+    "build": "bun scripts/build.ts",
     "prepare": "husky"
   },
   "lint-staged": {
