@@ -1,0 +1,6 @@
+dist/
+coverage/
+node_modules/
+bun.lock
+test/fixtures/
+CLAUDE.md
