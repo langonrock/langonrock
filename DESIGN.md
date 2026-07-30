@@ -2,7 +2,7 @@
 
 A purpose-built, multi-tenant store for Open Knowledge Format bundles, optimized for low token cost and low latency when AI agents read it.
 
-Status: build order step 1 is implemented. The manifest compiler and the project tooling exist; steps 2 through 7 are still design only.
+Status: build order steps 1 through 3 are implemented. The compiler, the `.tnt` snapshot format, the copy-on-write writer and the batched reader all work and are exercised against real bundles. Steps 4 through 7, meaning the filesystem watcher, the MCP server, BM25 and GC, are still design only.
 
 ## Summary
 
@@ -171,18 +171,15 @@ Constraint the compiler enforces: summaries are single-line and contain no tabs.
 
 ### Section-addressable shards
 
-```
-# c/orders.md
-@schema
-order_id int64 pk
-customer_id int64 fk:customers
-@joins
-customers on customer_id
-@gotchas
-exclude status='test'
-```
+`get(id, section)` returning one slice costs a fraction of the full document.
 
-`read(id, section)` returning only `@schema` costs a fraction of the full document. Store facts, not narrative. An offline LLM pass can strip prose at build time, so you pay those tokens once instead of per query.
+An earlier draft invented `@schema` and `@joins` markers and assumed an offline LLM pass would rewrite prose into them. That turned out to be unnecessary. Markdown headings already are the section markers, and real bundles use them: every Google sample concept carries `# Schema`, `# Common query patterns`, `# Metrics`. The compiler slugs each heading and records its byte range, so section addressing works on unmodified OKF with no model in the build path.
+
+Fenced code blocks have to be excluded before scanning, because a `# comment` line inside a SQL or shell example is not a heading and these bundles are full of them.
+
+Measured on the GA4 sample: fetching the `events_` concept whole costs 9419 bytes, fetching `--section schema` costs 5486. The saving grows with document size, and it costs nothing to have.
+
+Stripping prose to bare facts is still the bigger win and still wants an LLM pass. That is a later step, and it is now optional rather than load-bearing.
 
 ### Prompt caching is the multiplier
 
@@ -233,28 +230,35 @@ Add a bundle by creating a folder. Remove it by deleting the folder. Modify it b
 
 The store is the compiled read side.
 
-### Four layers
+### Three layers
 
-1. **Immutable content-addressed blobs.** Each concept hashes to `blake3(content)`. Immutable means no locks, trivial caching, and incremental backup for free, since a new hash is a new file.
-2. **Bundle snapshot.** A list mapping `concept_id` to hash. Immutable. Editing creates a new snapshot that reuses unchanged blobs, which gives versioning, rollback, and diff without extra work.
-3. **Tenant ref.** A small file mapping `bundle_name` to `snapshot_hash`. The only mutable thing in the system. Updated by atomic rename.
-4. **Derived, disposable.** `manifest.tsv`, BM25 index, embeddings. Rebuildable from layers 1 to 3.
+1. **Immutable content-addressed snapshot.** One `.tnt` file holding the manifest, the directory, and every concept blob. Its name is `sha256` of its own bytes, so an identical bundle always lands on the same file and re-storing it is a no-op.
+2. **Tenant ref.** A one-line `current` file naming the active snapshot. The only mutable thing in the system. Updated by atomic rename.
+3. **Derived, disposable.** BM25 index, embeddings. Rebuildable from layers 1 and 2. The manifest is not here: it lives inside the snapshot, because it must be byte-identical to what the compiler produced.
 
-Layer 4 being disposable is what makes backups easy. You back up layers 1 to 3 and nothing else.
+Layer 3 being disposable is what makes backups easy. You back up layers 1 and 2 and nothing else.
+
+### Why blobs live inside the snapshot
+
+An earlier draft put each concept in its own content-addressed file and made a snapshot an index over them. That buys cross-snapshot dedup: editing one concept in a 500-concept bundle would rewrite one blob instead of all of them.
+
+It was not worth it. The whole premise of this design is that a tenant is about 10MB and writes are human-scale, which is exactly the case where rewriting everything is cheap and a second level of indirection is not. A self-contained snapshot also makes the two operations that matter trivially correct: a backup is a file copy, and a restore is a file copy back.
+
+The cost is honest and worth stating. Retaining N old versions costs N full snapshots rather than N deltas. At 12KB to 30KB per real bundle after zstd, that is not a number worth engineering around yet. Revisit it if a tenant passes roughly 500MB, which is the same threshold that would force the write path to change anyway.
 
 ### Disk layout
 
 ```
 data/
-  tenants/t_acme/
+  tenants/acme/
     current              # one line: active snapshot id
+    lock                 # present only while a writer holds it
     snapshots/
-      01J8F....tnt       # immutable
-      01J8E....tnt       # previous version
+      d735c5d3....tnt    # immutable, named by sha256 of its own bytes
+      78de7c5c....tnt    # previous version
     log.jsonl            # append-only audit
-  derived/t_acme/
-    manifest.tsv
-    bm25.idx
+  derived/acme/
+    bm25.idx             # not built yet
 ```
 
 ### The tenant file format
@@ -473,8 +477,8 @@ The practical lesson for Part 9: the runtime choice carries platform risk beyond
 ## Part 11: Backups
 
 - **Full.** Copy `tenants/`. A tar is enough.
-- **Incremental.** Blobs are immutable and named by hash, so copying the missing ones is correct by construction, with no diff step.
-- **Point in time.** Old snapshots share blobs, so keeping the last N versions costs almost nothing.
+- **Incremental.** Snapshots are immutable and named by hash, so copying the missing ones is correct by construction, with no diff step.
+- **Point in time.** Every retained snapshot is a full copy, so retention costs size times count. Cheap at the scale this targets, and the reason retention policy is still an open decision.
 - **Restore.** Copy back, delete `derived/`, let it rebuild.
 - **Audit.** `log.jsonl` is append-only and gives replay plus "who changed this".
 

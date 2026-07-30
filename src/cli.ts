@@ -3,22 +3,44 @@ import { parseArgs } from 'node:util'
 
 import { DEFAULT_SUMMARY_WIDTH, compileBundle } from './compile/manifest.ts'
 import { estimateTokens } from './compile/tokens.ts'
+import { openTenant } from './store/reader.ts'
+import { putBundle } from './store/writer.ts'
 
 import type { CompileOptions } from './compile/manifest.ts'
 import type { Diagnostic } from './okf/types.ts'
+import type { PutOptions } from './store/writer.ts'
 
-const USAGE = `langonrock - compile an OKF bundle into a dense manifest
+const USAGE = `langonrock - a token-efficient store for OKF knowledge bundles
 
 usage:
-  langonrock compile <dir> [options]
+  langonrock compile <dir> [options]        compile a bundle to a manifest
+  langonrock put <dir> --data D --tenant T  compile and store a snapshot
+  langonrock manifest --data D --tenant T   print the stored manifest
+  langonrock get <id...> --data D --tenant T  fetch concepts by id
 
 options:
-  --out <file>        write the manifest to a file instead of stdout
+  --data <dir>        store root directory
+  --tenant <id>       tenant id, [a-z0-9_-] up to 64 chars
+  --section <name>    return only this section of each concept
+  --out <file>        write to a file instead of stdout
   --bundle <name>     bundle name recorded in the header (default: dir name)
   --summary-width <n> max characters per summary cell (default: ${DEFAULT_SUMMARY_WIDTH})
   --strict            exit non-zero when any diagnostic is reported
   -h, --help          show this message
 `
+
+interface Flags {
+  out?: string | undefined
+  bundle?: string | undefined
+  strict?: boolean | undefined
+  'summary-width'?: string | undefined
+  data?: string | undefined
+  tenant?: string | undefined
+  section?: string | undefined
+  help?: boolean | undefined
+}
+
+type Command = (positionals: string[], flags: Flags) => Promise<number>
 
 function report(diagnostics: Diagnostic[]): void {
   for (const diagnostic of diagnostics) {
@@ -28,11 +50,11 @@ function report(diagnostics: Diagnostic[]): void {
   }
 }
 
-function reportStats(tsv: string, concepts: number): void {
-  const bytes = new TextEncoder().encode(tsv).byteLength
+function reportStats(text: string, concepts: number): void {
+  const bytes = new TextEncoder().encode(text).byteLength
 
   console.error(
-    `${concepts} concepts, ${bytes} bytes, ~${estimateTokens(tsv)} tokens`
+    `${concepts} concepts, ${bytes} bytes, ~${estimateTokens(text)} tokens`
   )
 }
 
@@ -50,14 +72,33 @@ function parseWidth(raw: string | undefined): number {
   return width
 }
 
-interface CompileFlags {
-  out?: string | undefined
-  bundle?: string | undefined
-  strict?: boolean | undefined
-  'summary-width'?: string | undefined
+function required(value: string | undefined, flag: string): string {
+  if (value === undefined) {
+    throw new Error(`${flag} is required`)
+  }
+
+  return value
 }
 
-async function runCompile(dir: string, flags: CompileFlags): Promise<number> {
+function positionalAt(positionals: string[], index: number, what: string) {
+  const value = positionals[index]
+
+  if (value === undefined) {
+    throw new Error(`missing ${what}`)
+  }
+
+  return value
+}
+
+function exitCode(flags: Flags, diagnostics: Diagnostic[]): number {
+  return flags.strict === true && diagnostics.length > 0 ? 1 : 0
+}
+
+async function emit(text: string, out: string | undefined): Promise<void> {
+  await Bun.write(out === undefined ? Bun.stdout : out, text)
+}
+
+const runCompile: Command = async (positionals, flags) => {
   const options: CompileOptions = {
     summaryWidth: parseWidth(flags['summary-width'])
   }
@@ -66,19 +107,85 @@ async function runCompile(dir: string, flags: CompileFlags): Promise<number> {
     options.bundle = flags.bundle
   }
 
+  const dir = positionalAt(positionals, 1, 'directory')
   const result = await compileBundle(dir, options)
 
   report(result.diagnostics)
-
-  if (flags.out === undefined) {
-    await Bun.write(Bun.stdout, result.tsv)
-  } else {
-    await Bun.write(flags.out, result.tsv)
-  }
-
+  await emit(result.tsv, flags.out)
   reportStats(result.tsv, result.concepts.length)
 
-  return flags.strict === true && result.diagnostics.length > 0 ? 1 : 0
+  return exitCode(flags, result.diagnostics)
+}
+
+const runPut: Command = async (positionals, flags) => {
+  const options: PutOptions = {
+    root: required(flags.data, '--data'),
+    tenant: required(flags.tenant, '--tenant'),
+    summaryWidth: parseWidth(flags['summary-width'])
+  }
+
+  if (flags.bundle !== undefined) {
+    options.bundle = flags.bundle
+  }
+
+  const source = positionalAt(positionals, 1, 'directory')
+  const result = await putBundle(source, options)
+
+  report(result.diagnostics)
+  console.error(
+    `snapshot ${result.snapshot.slice(0, 12)} ${result.reused ? '(reused)' : '(new)'}, ` +
+      `${result.concepts} concepts, ${result.bytes} bytes on disk`
+  )
+
+  return exitCode(flags, result.diagnostics)
+}
+
+const runManifest: Command = async (_positionals, flags) => {
+  const reader = await openTenant(
+    required(flags.data, '--data'),
+    required(flags.tenant, '--tenant')
+  )
+  const manifest = await reader.manifest()
+
+  await emit(manifest, flags.out)
+  reportStats(manifest, reader.ids.length)
+
+  return 0
+}
+
+const runGet: Command = async (positionals, flags) => {
+  const ids = positionals.slice(1)
+
+  if (ids.length === 0) {
+    throw new Error('get requires at least one concept id')
+  }
+
+  const reader = await openTenant(
+    required(flags.data, '--data'),
+    required(flags.tenant, '--tenant')
+  )
+  const found = await reader.get(ids, flags.section)
+  const chunks = [...found].map(([id, content]) => `@@ ${id}\n${content}`)
+
+  for (const id of ids) {
+    if (!found.has(id)) {
+      console.error(`warn: no such concept or section: ${id}`)
+    }
+  }
+
+  const text = chunks.join('\n')
+
+  await emit(text, flags.out)
+  reportStats(text, found.size)
+
+  return found.size === ids.length ? 0 : 1
+}
+
+const COMMANDS: Record<string, Command> = {
+  compile: runCompile,
+  put: runPut,
+  manifest: runManifest,
+  get: runGet
 }
 
 async function main(): Promise<number> {
@@ -89,6 +196,9 @@ async function main(): Promise<number> {
       bundle: { type: 'string' },
       strict: { type: 'boolean' },
       'summary-width': { type: 'string' },
+      data: { type: 'string' },
+      tenant: { type: 'string' },
+      section: { type: 'string' },
       help: { type: 'boolean', short: 'h' }
     },
     allowPositionals: true
@@ -100,17 +210,14 @@ async function main(): Promise<number> {
     return values.help === true ? 0 : 1
   }
 
-  const [command, dir] = positionals
+  const name = positionals[0] ?? ''
+  const command = COMMANDS[name]
 
-  if (command !== 'compile') {
-    throw new Error(`unknown command "${command}"`)
+  if (command === undefined) {
+    throw new Error(`unknown command "${name}"`)
   }
 
-  if (dir === undefined) {
-    throw new Error('compile requires a directory')
-  }
-
-  return runCompile(dir, values)
+  return command(positionals, values)
 }
 
 try {

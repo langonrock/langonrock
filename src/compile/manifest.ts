@@ -25,6 +25,7 @@ export interface CompileResult {
   concepts: Concept[]
   diagnostics: Diagnostic[]
   tsv: string
+  bodies: Map<string, string>
 }
 
 interface ConceptContext {
@@ -36,6 +37,7 @@ interface ConceptContext {
 interface ConceptResult {
   concept: Concept
   diagnostics: Diagnostic[]
+  body: string
 }
 
 async function readConcept(
@@ -76,7 +78,8 @@ async function readConcept(
 
   return {
     concept: { id, path, kind, grain, summary, links: ids },
-    diagnostics
+    diagnostics,
+    body
   }
 }
 
@@ -137,6 +140,9 @@ export async function compileBundle(
 
   const concepts = results.map(result => result.concept).sort(byId)
   const diagnostics = results.flatMap(result => result.diagnostics)
+  const bodies = new Map(
+    results.map(result => [result.concept.id, result.body])
+  )
 
-  return { concepts, diagnostics, tsv: serialize(concepts, bundle) }
+  return { concepts, diagnostics, tsv: serialize(concepts, bundle), bodies }
 }
