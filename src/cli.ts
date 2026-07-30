@@ -1,13 +1,17 @@
 #!/usr/bin/env bun
 import { parseArgs } from 'node:util'
 
+import { open } from './client/connection.ts'
 import { DEFAULT_SUMMARY_WIDTH, compileBundle } from './compile/manifest.ts'
 import { estimateTokens } from './compile/tokens.ts'
+import { serve } from './server/http.ts'
+import { loadTokens } from './server/tokens.ts'
 import { openTenant } from './store/reader.ts'
 import { putBundle } from './store/writer.ts'
 
 import type { CompileOptions } from './compile/manifest.ts'
 import type { Diagnostic } from './okf/types.ts'
+import type { ServeOptions } from './server/http.ts'
 import type { PutOptions } from './store/writer.ts'
 
 const USAGE = `langonrock - a token-efficient store for OKF knowledge bundles
@@ -17,11 +21,21 @@ usage:
   langonrock put <dir> --data D --tenant T  compile and store a snapshot
   langonrock manifest --data D --tenant T   print the stored manifest
   langonrock get <id...> --data D --tenant T  fetch concepts by id
+  langonrock serve --data D [--socket P]    run the daemon
+  langonrock query <dsn> <verb> [id...]     talk to any transport by dsn
+
+dsn forms:
+  okf:///var/data?tenant=acme               embedded, direct file access
+  okf+unix:///tmp/okf.sock?tenant=acme      local daemon
+  okf+http://127.0.0.1:7777?token=secret    remote, tenant from token
 
 options:
   --data <dir>        store root directory
   --tenant <id>       tenant id, [a-z0-9_-] up to 64 chars
   --section <name>    return only this section of each concept
+  --socket <path>     unix socket for serve (default: <data>/langonrock.sock)
+  --host <name>       bind TCP instead of a socket, requires tokens.json
+  --port <n>          TCP port (default 7777)
   --out <file>        write to a file instead of stdout
   --bundle <name>     bundle name recorded in the header (default: dir name)
   --summary-width <n> max characters per summary cell (default: ${DEFAULT_SUMMARY_WIDTH})
@@ -37,6 +51,9 @@ interface Flags {
   data?: string | undefined
   tenant?: string | undefined
   section?: string | undefined
+  socket?: string | undefined
+  host?: string | undefined
+  port?: string | undefined
   help?: boolean | undefined
 }
 
@@ -181,11 +198,85 @@ const runGet: Command = async (positionals, flags) => {
   return found.size === ids.length ? 0 : 1
 }
 
+function serveOptions(flags: Flags, root: string): ServeOptions {
+  const options: ServeOptions = { root }
+
+  if (flags.host === undefined && flags.port === undefined) {
+    options.unix = flags.socket ?? `${root}/langonrock.sock`
+
+    return options
+  }
+
+  if (flags.host !== undefined) {
+    options.hostname = flags.host
+  }
+
+  if (flags.port !== undefined) {
+    options.port = Number.parseInt(flags.port, 10)
+  }
+
+  return options
+}
+
+const runServe: Command = async (_positionals, flags) => {
+  const root = required(flags.data, '--data')
+  const options = serveOptions(flags, root)
+
+  options.tokens = await loadTokens(root)
+
+  const server = serve(options)
+  const where =
+    options.unix === undefined
+      ? `${server.hostname}:${server.port}`
+      : options.unix
+
+  console.error(
+    `langonrock serving ${root} on ${where} ` +
+      `(${options.tokens.size} token${options.tokens.size === 1 ? '' : 's'})`
+  )
+
+  await new Promise<never>(() => undefined)
+
+  return 0
+}
+
+const runQuery: Command = async (positionals, flags) => {
+  const dsn = positionalAt(positionals, 1, 'dsn')
+  const verb = positionalAt(positionals, 2, 'verb')
+  const connection = open(dsn)
+
+  if (verb === 'snapshot') {
+    await emit(`${await connection.snapshot()}\n`, flags.out)
+
+    return 0
+  }
+
+  if (verb === 'manifest') {
+    const manifest = await connection.manifest()
+
+    await emit(manifest, flags.out)
+    reportStats(manifest, manifest.split('\n').length - 3)
+
+    return 0
+  }
+
+  const ids = positionals.slice(3)
+  const found = await connection.get(ids, flags.section)
+  const text = [...found].map(([id, body]) => `@@ ${id}\n${body}`).join('\n')
+
+  await emit(text, flags.out)
+  reportStats(text, found.size)
+
+  return found.size === ids.length ? 0 : 1
+}
+
 const COMMANDS: Record<string, Command> = {
   compile: runCompile,
   put: runPut,
   manifest: runManifest,
-  get: runGet
+  get: runGet,
+  serve: runServe,
+  query: runQuery
 }
 
 async function main(): Promise<number> {
@@ -199,6 +290,9 @@ async function main(): Promise<number> {
       data: { type: 'string' },
       tenant: { type: 'string' },
       section: { type: 'string' },
+      socket: { type: 'string' },
+      host: { type: 'string' },
+      port: { type: 'string' },
       help: { type: 'boolean', short: 'h' }
     },
     allowPositionals: true

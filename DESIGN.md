@@ -2,7 +2,7 @@
 
 A purpose-built, multi-tenant store for Open Knowledge Format bundles, optimized for low token cost and low latency when AI agents read it.
 
-Status: build order steps 1 through 3 are implemented. The compiler, the `.tnt` snapshot format, the copy-on-write writer and the batched reader all work and are exercised against real bundles. Steps 4 through 7, meaning the filesystem watcher, the MCP server, BM25 and GC, are still design only.
+Status: build order steps 1 through 3 are implemented, plus the Part 7 connection layer. The compiler, the `.tnt` snapshot format, the copy-on-write writer, the batched reader, `open(dsn)` and the daemon all work and are exercised against real bundles. Steps 4 through 7, meaning the filesystem watcher, the MCP server, BM25 and GC, are still design only.
 
 ## Summary
 
@@ -332,13 +332,23 @@ Write the core as a library. The daemon and server are thin wrappers of a few hu
 The scheme picks the mode.
 
 ```
-okf:///var/data/okf                    embedded
-okf+unix:///tmp/okf.sock               local daemon
-okf+npipe://./pipe/okf                 local daemon, Windows
-okf+https://host:7777?token=...        remote
+okf:///var/data/okf?tenant=acme        embedded
+okf+unix:///tmp/okf.sock?tenant=acme   local daemon
+okf+npipe://./pipe/okf                 local daemon, Windows (see below)
+okf+https://host:7777?token=...        remote, tenant from the token
 ```
 
-`Open(dsn)` returns the same interface in all four cases. Develop embedded, deploy remote, no code change.
+`open(dsn)` returns the same interface in all cases. Develop embedded, deploy remote, no change at the call site.
+
+The tenant is part of the connection rather than a per-call argument. Embedded and socket connections name it in the DSN because one store holds many tenants. A remote connection can omit it, because the token already identifies one.
+
+### Windows does not get a named pipe
+
+`Bun.serve` exposes a `unix` option and, on Linux, abstract namespace sockets. It documents no Windows named pipe support, so `okf+npipe:` cannot be implemented on this runtime today.
+
+The DSN grammar still parses it, and `open()` fails with the fallback spelled out instead of something obscure. Windows daemon mode is loopback TCP: `okf+http://127.0.0.1:PORT?token=...`.
+
+That fallback forces a security rule the socket case did not need. Loopback TCP is reachable by any local process, while a unix socket is already guarded by file permissions. So tokens are mandatory for every TCP bind, including `127.0.0.1`, and the server refuses to start on TCP without them. A socket is the only transport allowed to run unauthenticated.
 
 ### Wire protocol
 
@@ -356,7 +366,16 @@ JSON-escaping a TSV adds bytes and parse cost to the payload you transfer most. 
 
 ### Auth
 
-Bearer token per tenant, mapped server-side. The tenant in the path is never trusted. Resolve it from the token and check it matches. Once the token carries the tenant, the path is convenience, not authorization.
+Bearer token per tenant, mapped server-side from `<data>/tokens.json`. The tenant in the path is never trusted. Resolve it from the token and check it matches. Once the token carries the tenant, the path is convenience, not authorization.
+
+Both shapes work, and the tenant segment is optional:
+
+```
+GET /v1/manifest            tenant comes from the token
+GET /v1/acme/manifest       same, and the path must agree with the token
+```
+
+A token pointed at another tenant gets 403, not a silent read of the wrong data.
 
 ## Part 8: Cross-platform
 
