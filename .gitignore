@@ -1,6 +1,8 @@
 node_modules/
 dist/
 coverage/
+bench/.corpus/
+bench/.store/
 *.tnt
 .DS_Store
 .agents/
