@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { parseArgs } from 'node:util'
 
+import pkg from '../package.json'
 import { open } from './client/connection.ts'
 import { DEFAULT_SUMMARY_WIDTH, compileBundle } from './compile/manifest.ts'
 import { estimateTokens } from './compile/tokens.ts'
@@ -59,6 +60,7 @@ options:
   --summary-width <n> max characters per summary cell (default: ${DEFAULT_SUMMARY_WIDTH})
   --strict            exit non-zero when any diagnostic is reported
   -h, --help          show this message
+  -v, --version       print the version and exit
 `
 
 interface Flags {
@@ -80,6 +82,7 @@ interface Flags {
   grace?: string | undefined
   'dry-run'?: boolean | undefined
   help?: boolean | undefined
+  version?: boolean | undefined
 }
 
 type Command = (positionals: string[], flags: Flags) => Promise<number>
@@ -480,10 +483,17 @@ async function main(): Promise<number> {
       keep: { type: 'string' },
       grace: { type: 'string' },
       'dry-run': { type: 'boolean' },
-      help: { type: 'boolean', short: 'h' }
+      help: { type: 'boolean', short: 'h' },
+      version: { type: 'boolean', short: 'v' }
     },
     allowPositionals: true
   })
+
+  if (values.version === true) {
+    await Bun.write(Bun.stdout, `${pkg.version}\n`)
+
+    return 0
+  }
 
   if (values.help === true || positionals.length === 0) {
     await Bun.write(Bun.stdout, USAGE)
