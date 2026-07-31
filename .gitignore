@@ -3,3 +3,4 @@ dist/
 coverage/
 *.tnt
 .DS_Store
+.agents/council/
