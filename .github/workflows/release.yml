@@ -16,15 +16,23 @@ jobs:
         include:
           # darwin must build on macOS: Bun writes a broken code signature for
           # every darwin target, and only codesign can repair it.
+          # `smoke: true` marks the targets the runner can execute natively.
+          # It is an explicit flag rather than a condition over the target name
+          # because the first version of that condition excluded every arm64
+          # target, which silently skipped the one binary that most needs
+          # checking: darwin-arm64 is what the codesign repair applies to, and
+          # macos-latest is itself arm64.
           - runner: macos-latest
             target: bun-darwin-arm64
             artifact: langonrock-darwin-arm64
+            smoke: true
           - runner: macos-latest
             target: bun-darwin-x64
             artifact: langonrock-darwin-x64
           - runner: ubuntu-latest
             target: bun-linux-x64
             artifact: langonrock-linux-x64
+            smoke: true
           - runner: ubuntu-latest
             target: bun-linux-arm64
             artifact: langonrock-linux-arm64
@@ -56,9 +64,21 @@ jobs:
 
       - run: bun scripts/build.ts --target ${{ matrix.target }} --outfile dist/${{ matrix.artifact }}
 
+      # Starting is not working. This stores a real bundle and reads it back,
+      # so a binary that launches but cannot compile or read a snapshot fails
+      # here instead of in someone's install.
       - name: Smoke test the binary it just built
-        if: runner.os != 'Windows' && !contains(matrix.target, 'windows') && !contains(matrix.target, 'arm64')
-        run: ./dist/${{ matrix.artifact }} --version
+        if: matrix.smoke
+        shell: bash
+        run: |
+          set -eu
+          bin="./dist/${{ matrix.artifact }}"
+          store="$RUNNER_TEMP/smoke-store"
+
+          "$bin" --version
+          "$bin" put test/fixtures/sales --data "$store" --tenant smoke
+          "$bin" manifest --data "$store" --tenant smoke | grep -q '^# tenant: smoke'
+          "$bin" query "okf://$store?tenant=smoke" search churned | grep -q '^# hits'
 
       - uses: actions/upload-artifact@v4
         with:
