@@ -185,8 +185,28 @@ await knowledge.writeSource('sales', 'metrics/new.md', created) // no hash: must
 const { snapshot } = await knowledge.sync()
 ```
 
+The listing tells you which concept each file becomes, so a client never has to reimplement the naming rule:
+
+```json
+{
+  "bundle": "sales",
+  "path": "tables/orders.md",
+  "id": "sales/orders",
+  "hash": "…",
+  "bytes": 412
+}
+```
+
+A file with no `id` is not a concept: it has no frontmatter, so the compiler skips it. That is how a cloned repository's `README.md` shows up as what it is instead of vanishing without explanation.
+
+`sync` returns what the compiler noticed on the way — a missing `type`, a link resolving to nothing, a file skipped — which is the lint an editor should put in front of whoever is writing:
+
+```ts
+const { snapshot, diagnostics } = await knowledge.sync()
+```
+
 > [!WARNING]
-> Concept ids are the shortest unambiguous form of their path, so **creating** a file can rename a concept nobody touched: adding `staging/orders.md` turns an existing `orders` into `tables/orders`. Re-read the manifest after a sync rather than assuming ids are stable.
+> Concept ids are the shortest unambiguous form of their path, so **creating** a file can rename a concept nobody touched: adding `staging/orders.md` turns an existing `orders` into `tables/orders`. Re-read the listing or the manifest after a sync rather than assuming ids are stable.
 
 `PUT` returns as soon as the file is on disk, so saving is fast; the snapshot follows on the watcher's debounce. Call `sync` when you need the new digest immediately. On a large tenant a compile is a few hundred milliseconds, so an aggressively autosaving editor should raise `--debounce` rather than sync on every keystroke.
 

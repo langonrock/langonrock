@@ -1,4 +1,7 @@
 import type { Transport } from './client/dsn.ts'
+import type { Diagnostic } from './okf/types.ts'
+
+export type { Diagnostic, DiagnosticLevel } from './okf/types.ts'
 
 /**
  * The contract shared by every transport, kept free of any runtime import so a
@@ -16,6 +19,14 @@ export interface SourceEntry {
   path: string
   bytes: number
   hash: string
+  /**
+   * The id this file compiles to, absent when the file is not a concept
+   * because it carries no frontmatter. Ids are the shortest unambiguous form
+   * of a path, so this is the only reliable way to join a file an editor is
+   * showing to the manifest row that describes it, and it moves with the tree:
+   * adding a sibling can change it.
+   */
+  id?: string
 }
 
 export interface SourceFile {
@@ -27,6 +38,13 @@ export interface SyncResult {
   snapshot: string
   concepts: number
   bundles: string[]
+  /**
+   * What the compiler noticed while building this snapshot: a missing `type`,
+   * a link that resolves to nothing, a file skipped for having no frontmatter.
+   * It is the lint an editor should show, and it is produced whether or not
+   * anyone asks for it.
+   */
+  diagnostics: Diagnostic[]
 }
 
 /**

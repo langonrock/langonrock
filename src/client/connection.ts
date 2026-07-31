@@ -117,7 +117,8 @@ function embeddedConnection(target: Target): Connection {
       return {
         snapshot: result.snapshot,
         concepts: result.concepts,
-        bundles: result.bundles
+        bundles: result.bundles,
+        diagnostics: result.diagnostics
       }
     },
     close: async () => undefined

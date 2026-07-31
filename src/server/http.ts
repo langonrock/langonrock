@@ -279,7 +279,8 @@ async function dispatchWrite(
     return Response.json({
       snapshot: result.snapshot,
       concepts: result.concepts,
-      bundles: result.bundles
+      bundles: result.bundles,
+      diagnostics: result.diagnostics
     })
   }
 
