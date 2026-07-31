@@ -191,6 +191,19 @@ const { snapshot } = await knowledge.sync()
 
 `PUT` returns as soon as the file is on disk, so saving is fast; the snapshot follows on the watcher's debounce. Call `sync` when you need the new digest immediately. On a large tenant a compile is a few hundred milliseconds, so an aggressively autosaving editor should raise `--debounce` rather than sync on every keystroke.
 
+The same verbs are on the command line against any connection string, so you can edit a local store and a remote one the same way:
+
+```sh
+langonrock query "$DSN" source                              # list, with hashes
+langonrock query "$DSN" read sales tables/orders.md         # content out, hash on stderr
+langonrock query "$DSN" write sales metrics/new.md --create < new.md
+langonrock query "$DSN" write sales tables/orders.md --replaces "$HASH" < edited.md
+langonrock query "$DSN" delete sales tables/old.md --force
+langonrock query "$DSN" sync
+```
+
+`--create`, `--replaces <hash>` and `--force` are the command-line spelling of the same precondition. There is no default: a write that says nothing is refused, and `--force` is the honest name for taking whatever is there right now.
+
 ## Large tenants
 
 The manifest costs roughly 35 tokens per concept, so it stops being worth reading whole somewhere past a few thousand concepts. Narrow instead of paginating:

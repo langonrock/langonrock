@@ -17,6 +17,8 @@ import { putBundle, putTenantRoot } from './store/writer.ts'
 
 import type { CompileOptions } from './compile/manifest.ts'
 import type { Diagnostic } from './okf/types.ts'
+import type { Connection } from './client/connection.ts'
+import type { SearchOptions } from './search/tenant.ts'
 import type { ServeOptions } from './server/http.ts'
 import type { GcOptions, GcResult } from './store/gc.ts'
 import type { WatchOptions, Watcher } from './store/watch.ts'
@@ -35,6 +37,12 @@ usage:
   langonrock query <dsn> manifest|snapshot  read the index by dsn
   langonrock query <dsn> search <words...>  rank concepts by relevance
   langonrock query <dsn> get <id...>        fetch concepts by dsn
+  langonrock query <dsn> source             list the source markdown
+  langonrock query <dsn> read <bundle> <path>   print one source file
+  langonrock query <dsn> write <bundle> <path>  write one, from stdin or --from
+  langonrock query <dsn> delete <bundle> <path> remove one source file
+  langonrock query <dsn> delete-bundle <bundle> remove a whole bundle
+  langonrock query <dsn> sync               recompile and report the snapshot
   langonrock mcp <dsn>                      serve MCP over stdio
   langonrock gc --data D [--tenant T]       collect old and partial snapshots
 
@@ -55,6 +63,10 @@ options:
   --debounce <ms>     coalesce filesystem events (default 200)
   --rescan <ms>       full rescan backstop interval (default 30000)
   --k <n>             ranked matches to return from search (default 8)
+  --from <file>       write only: read the content from a file, not stdin
+  --replaces <hash>   write/delete: the hash the change is based on
+  --create            write only: the concept must not exist yet
+  --force             write/delete: use whatever hash is there right now
   --keep <n>          snapshots to retain per tenant on gc (default 10)
   --grace <ms>        never collect anything newer than this (default 3600000)
   --dry-run           gc only: report what would be removed
@@ -81,6 +93,10 @@ interface Flags {
   debounce?: string | undefined
   rescan?: string | undefined
   k?: string | undefined
+  from?: string | undefined
+  replaces?: string | undefined
+  create?: boolean | undefined
+  force?: boolean | undefined
   keep?: string | undefined
   grace?: string | undefined
   'dry-run'?: boolean | undefined
@@ -400,50 +416,193 @@ function countRows(tsv: string): number {
     ).length
 }
 
-const runQuery: Command = async (positionals, flags) => {
-  const dsn = positionalAt(positionals, 1, 'dsn')
-  const verb = positionalAt(positionals, 2, 'verb')
-  const connection = open(dsn)
+type QueryVerb = (
+  connection: Connection,
+  positionals: string[],
+  flags: Flags
+) => Promise<number>
 
-  if (verb === 'snapshot') {
+async function readContent(flags: Flags): Promise<string> {
+  return flags.from === undefined
+    ? Bun.stdin.text()
+    : Bun.file(flags.from).text()
+}
+
+/**
+ * The server refuses a write that does not say which version it replaces, and
+ * the CLI keeps that honest rather than quietly reading the current hash first.
+ * `--force` exists for the case where clobbering is the intent, and it is named
+ * so that it reads like one.
+ */
+async function replacedBy(
+  connection: Connection,
+  bundle: string,
+  path: string,
+  flags: Flags
+): Promise<string | undefined> {
+  if (flags.create === true) {
+    return undefined
+  }
+
+  if (flags.replaces !== undefined) {
+    return flags.replaces
+  }
+
+  if (flags.force === true) {
+    return (await connection.readSource(bundle, path))?.hash
+  }
+
+  throw new Error(
+    'a write needs --replaces <hash> to update, --create for a new concept, or --force to overwrite whatever is there'
+  )
+}
+
+const QUERY_VERBS: Record<string, QueryVerb> = {
+  snapshot: async (connection, _positionals, flags) => {
     await emit(`${await connection.snapshot()}\n`, flags.out)
 
     return 0
-  }
+  },
 
-  if (verb === 'manifest') {
-    const manifest = await connection.manifest()
+  manifest: async (connection, _positionals, flags) => {
+    const manifest = await connection.manifest(flags.bundle)
 
     await emit(manifest, flags.out)
     reportStats(manifest, countRows(manifest))
 
     return 0
-  }
+  },
 
-  if (verb === 'search') {
+  search: async (connection, positionals, flags) => {
     const query = positionals.slice(3).join(' ')
 
     if (query === '') {
       throw new Error('search requires a query')
     }
 
-    const options = flags.k === undefined ? {} : { k: parseWidth(flags.k) }
+    const options: SearchOptions = {}
+
+    if (flags.k !== undefined) {
+      options.k = parseWidth(flags.k)
+    }
+
+    if (flags.bundle !== undefined) {
+      options.bundle = flags.bundle
+    }
+
     const hits = await connection.search(query, options)
 
     await emit(hits, flags.out)
     reportStats(hits, countRows(hits))
 
     return 0
+  },
+
+  get: async (connection, positionals, flags) => {
+    const ids = positionals.slice(3)
+    const found = await connection.get(ids, flags.section)
+    const text = [...found].map(([id, body]) => `@@ ${id}\n${body}`).join('\n')
+
+    await emit(text, flags.out)
+    reportStats(text, found.size)
+
+    return found.size === ids.length ? 0 : 1
+  },
+
+  source: async (connection, _positionals, flags) => {
+    const entries = await connection.listSource()
+    const text = entries
+      .map(
+        entry => `${entry.hash}\t${entry.bytes}\t${entry.bundle}/${entry.path}`
+      )
+      .join('\n')
+
+    await emit(`${text}\n`, flags.out)
+    console.error(`${entries.length} files`)
+
+    return 0
+  },
+
+  read: async (connection, positionals, flags) => {
+    const bundle = positionalAt(positionals, 3, 'bundle')
+    const path = positionalAt(positionals, 4, 'path')
+    const found = await connection.readSource(bundle, path)
+
+    if (found === undefined) {
+      throw new Error(`no such concept ${bundle}/${path}`)
+    }
+
+    await emit(found.content, flags.out)
+    console.error(found.hash)
+
+    return 0
+  },
+
+  write: async (connection, positionals, flags) => {
+    const bundle = positionalAt(positionals, 3, 'bundle')
+    const path = positionalAt(positionals, 4, 'path')
+    const replaces = await replacedBy(connection, bundle, path, flags)
+    const hash = await connection.writeSource(
+      bundle,
+      path,
+      await readContent(flags),
+      replaces
+    )
+
+    console.error(`wrote ${bundle}/${path} ${hash}`)
+
+    return 0
+  },
+
+  delete: async (connection, positionals, flags) => {
+    const bundle = positionalAt(positionals, 3, 'bundle')
+    const path = positionalAt(positionals, 4, 'path')
+    const replaces = await replacedBy(connection, bundle, path, flags)
+
+    if (replaces === undefined) {
+      throw new Error('delete needs --replaces <hash> or --force')
+    }
+
+    await connection.deleteSource(bundle, path, replaces)
+    console.error(`deleted ${bundle}/${path}`)
+
+    return 0
+  },
+
+  'delete-bundle': async (connection, positionals) => {
+    const bundle = positionalAt(positionals, 3, 'bundle')
+
+    await connection.deleteBundle(bundle)
+    console.error(`deleted bundle ${bundle}`)
+
+    return 0
+  },
+
+  sync: async connection => {
+    const result = await connection.sync()
+
+    console.error(
+      `snapshot ${result.snapshot.slice(0, 12)}, ` +
+        `${result.bundles.length} bundle${result.bundles.length === 1 ? '' : 's'}, ` +
+        `${result.concepts} concepts`
+    )
+
+    return 0
+  }
+}
+
+const runQuery: Command = async (positionals, flags) => {
+  const dsn = positionalAt(positionals, 1, 'dsn')
+  const verb = positionalAt(positionals, 2, 'verb')
+  const run = QUERY_VERBS[verb]
+
+  if (run === undefined) {
+    throw new Error(
+      `unknown verb "${verb}": expected one of ${Object.keys(QUERY_VERBS).sort().join(', ')}`
+    )
   }
 
-  const ids = positionals.slice(3)
-  const found = await connection.get(ids, flags.section)
-  const text = [...found].map(([id, body]) => `@@ ${id}\n${body}`).join('\n')
-
-  await emit(text, flags.out)
-  reportStats(text, found.size)
-
-  return found.size === ids.length ? 0 : 1
+  return run(open(dsn), positionals, flags)
 }
 
 function reportGc(result: GcResult, dryRun: boolean): void {
@@ -537,6 +696,10 @@ async function main(): Promise<number> {
       debounce: { type: 'string' },
       rescan: { type: 'string' },
       k: { type: 'string' },
+      from: { type: 'string' },
+      replaces: { type: 'string' },
+      create: { type: 'boolean' },
+      force: { type: 'boolean' },
       keep: { type: 'string' },
       grace: { type: 'string' },
       'dry-run': { type: 'boolean' },
