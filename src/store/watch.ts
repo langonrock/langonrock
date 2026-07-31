@@ -49,19 +49,11 @@ export function watchTenant(options: WatchOptions): Watcher {
   const debounceMs = options.debounceMs ?? DEFAULT_DEBOUNCE_MS
   const rescanMs = options.rescanMs ?? DEFAULT_RESCAN_MS
   let timer: ReturnType<typeof setTimeout> | undefined
-  let running = false
-  let dirty = false
+  let inFlight: Promise<void> | undefined
+  let pending: Promise<void> | undefined
   let closed = false
 
-  const sync = async (): Promise<void> => {
-    if (running) {
-      dirty = true
-
-      return
-    }
-
-    running = true
-
+  const runOnce = async (): Promise<void> => {
     try {
       // Bound to a local first: `onSync?.(await put(...))` short-circuits the
       // whole call when onSync is absent, so the sync itself never happens.
@@ -70,14 +62,33 @@ export function watchTenant(options: WatchOptions): Watcher {
       options.onSync?.(result)
     } catch (cause) {
       options.onError?.(toError(cause))
-    } finally {
-      running = false
+    }
+  }
+
+  /**
+   * The returned promise resolves only after a compile that began after this
+   * call, never after one already in flight that may have read the tree before
+   * the caller's write landed. A caller that asks for the new snapshot and gets
+   * the previous digest is the same failure as a write that silently vanishes.
+   *
+   * Calls arriving during a run still coalesce into a single follow-up run.
+   */
+  const sync = (): Promise<void> => {
+    if (inFlight === undefined) {
+      inFlight = runOnce().finally(() => {
+        inFlight = undefined
+      })
+
+      return inFlight
     }
 
-    if (dirty && !closed) {
-      dirty = false
-      await sync()
-    }
+    pending ??= inFlight.then(() => {
+      pending = undefined
+
+      return closed ? undefined : sync()
+    })
+
+    return pending
   }
 
   const schedule = (): void => {

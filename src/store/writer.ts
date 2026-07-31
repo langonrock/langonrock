@@ -1,7 +1,8 @@
-import { appendFile, mkdir, open, rename } from 'node:fs/promises'
+import { appendFile, mkdir, rename } from 'node:fs/promises'
 
 import { splitSections } from '../compile/sections.ts'
 import { compileTenant, discoverBundles } from '../compile/tenant.ts'
+import { syncDir, writeSynced } from './atomic.ts'
 import { encodeTnt } from './format.ts'
 import { acquireWriteLock } from './lock.ts'
 import {
@@ -59,35 +60,6 @@ function digest(bytes: Uint8Array): string {
   hasher.update(bytes)
 
   return hasher.digest('hex')
-}
-
-async function writeSynced(path: string, bytes: Uint8Array): Promise<void> {
-  const handle = await open(path, 'w')
-
-  try {
-    await handle.write(bytes)
-    await handle.sync()
-  } finally {
-    await handle.close()
-  }
-}
-
-/**
- * POSIX needs the parent directory flushed before a rename is durable. Windows
- * offers no equivalent and does not need one.
- */
-async function syncDir(path: string): Promise<void> {
-  if (process.platform === 'win32') {
-    return
-  }
-
-  const handle = await open(path, 'r')
-
-  try {
-    await handle.sync()
-  } finally {
-    await handle.close()
-  }
 }
 
 async function setCurrent(

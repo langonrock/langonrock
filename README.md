@@ -36,6 +36,7 @@ Full numbers, including where the store loses, are in [Benchmarks](#benchmarks).
 - **Multi-tenant.** A tenant is a directory boundary with its own snapshots and its own index.
 - **Three connection modes, one interface.** Embedded, local daemon, or HTTP server, selected by a connection string.
 - **MCP server.** Four verbs for Claude Code, Cursor, or anything else that speaks MCP.
+- **Editable over the network.** Create, change and delete concepts through the API, with a mandatory precondition so two editors cannot silently overwrite each other.
 - **No database.** Two runtime dependencies, both for MCP.
 
 ## Quickstart
@@ -139,6 +140,68 @@ The daemon is usually what you want locally: several clients share one process w
 
 > [!WARNING]
 > Binding TCP always requires tokens, including on `127.0.0.1`, and the server refuses to start without them. A unix socket is already guarded by file permissions and is the only transport allowed to run unauthenticated. Windows has no named pipe support in Bun, so use loopback TCP there.
+
+## Editing over the network
+
+An editor needs to create, change and delete concepts remotely. It does that by writing the **source Markdown**, never a snapshot: the watcher recompiles from source, so a snapshot written directly would be silently replaced within seconds. Writing source is the path the design endorses, and the read API above is untouched by it — no HTTP request ever writes a snapshot.
+
+Tell the server where each tenant's Markdown lives, in `<data>/sources.json`. Folders are never moved into the store; source usually lives in a git repository of its own.
+
+```json
+{ "acme": "/home/me/sources/acme" }
+```
+
+A tenant that is not listed stays readable and refuses writes. Grant writing per token in `<data>/tokens.json`, where a bare string still means read-only:
+
+```json
+{
+  "reader-token": "acme",
+  "editor-token": { "tenant": "acme", "write": true }
+}
+```
+
+```
+GET    /v1/{tenant}/source                 list files with sizes and hashes
+GET    /v1/{tenant}/source/{bundle}/{path} read one, ETag is its content hash
+PUT    /v1/{tenant}/source/{bundle}/{path} write
+DELETE /v1/{tenant}/source/{bundle}/{path} delete
+DELETE /v1/{tenant}/bundles/{bundle}       delete a whole bundle
+POST   /v1/{tenant}/sync                   recompile now, return the new digest
+```
+
+Writing the first file into a folder creates the bundle, and deleting the folder removes it, exactly as it works on disk.
+
+> [!IMPORTANT]
+> A write must name the version it replaces: `If-Match: "<hash>"` to overwrite, or `If-None-Match: *` to insist the concept is new. Neither header is a `428`, a stale hash is a `412`. Two people editing one concept is the normal case for an editor, and a silently lost update is the worst failure this API could have, so the unsafe call is impossible rather than merely discouraged.
+
+Through the library the precondition is an argument, enforced identically whether you are embedded or remote:
+
+```ts
+const knowledge = open('okf+https://host:7777?token=editor-token')
+
+const before = await knowledge.readSource('sales', 'tables/orders.md')
+await knowledge.writeSource('sales', 'tables/orders.md', edited, before?.hash)
+await knowledge.writeSource('sales', 'metrics/new.md', created) // no hash: must not exist
+const { snapshot } = await knowledge.sync()
+```
+
+> [!WARNING]
+> Concept ids are the shortest unambiguous form of their path, so **creating** a file can rename a concept nobody touched: adding `staging/orders.md` turns an existing `orders` into `tables/orders`. Re-read the manifest after a sync rather than assuming ids are stable.
+
+`PUT` returns as soon as the file is on disk, so saving is fast; the snapshot follows on the watcher's debounce. Call `sync` when you need the new digest immediately. On a large tenant a compile is a few hundred milliseconds, so an aggressively autosaving editor should raise `--debounce` rather than sync on every keystroke.
+
+The same verbs are on the command line against any connection string, so you can edit a local store and a remote one the same way:
+
+```sh
+langonrock query "$DSN" source                              # list, with hashes
+langonrock query "$DSN" read sales tables/orders.md         # content out, hash on stderr
+langonrock query "$DSN" write sales metrics/new.md --create < new.md
+langonrock query "$DSN" write sales tables/orders.md --replaces "$HASH" < edited.md
+langonrock query "$DSN" delete sales tables/old.md --force
+langonrock query "$DSN" sync
+```
+
+`--create`, `--replaces <hash>` and `--force` are the command-line spelling of the same precondition. There is no default: a write that says nothing is refused, and `--force` is the honest name for taking whatever is there right now.
 
 ## Large tenants
 
