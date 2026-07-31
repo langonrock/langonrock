@@ -7,6 +7,7 @@ import { estimateTokens } from './compile/tokens.ts'
 import { serveMcp } from './mcp/server.ts'
 import { serve } from './server/http.ts'
 import { loadTokens } from './server/tokens.ts'
+import { collect, collectAll } from './store/gc.ts'
 import { openTenant } from './store/reader.ts'
 import { watchTenant } from './store/watch.ts'
 import { putBundle, putTenantRoot } from './store/writer.ts'
@@ -14,6 +15,7 @@ import { putBundle, putTenantRoot } from './store/writer.ts'
 import type { CompileOptions } from './compile/manifest.ts'
 import type { Diagnostic } from './okf/types.ts'
 import type { ServeOptions } from './server/http.ts'
+import type { GcOptions, GcResult } from './store/gc.ts'
 import type { WatchOptions } from './store/watch.ts'
 import type { PutOptions, PutResult } from './store/writer.ts'
 
@@ -31,6 +33,7 @@ usage:
   langonrock query <dsn> search <words...>  rank concepts by relevance
   langonrock query <dsn> get <id...>        fetch concepts by dsn
   langonrock mcp <dsn>                      serve MCP over stdio
+  langonrock gc --data D [--tenant T]       collect old and partial snapshots
 
 dsn forms:
   okf:///var/data?tenant=acme               embedded, direct file access
@@ -48,6 +51,9 @@ options:
   --debounce <ms>     coalesce filesystem events (default 200)
   --rescan <ms>       full rescan backstop interval (default 30000)
   --k <n>             ranked matches to return from search (default 8)
+  --keep <n>          snapshots to retain per tenant on gc (default 10)
+  --grace <ms>        never collect anything newer than this (default 3600000)
+  --dry-run           gc only: report what would be removed
   --out <file>        write to a file instead of stdout
   --bundle <name>     bundle name recorded in the header (default: dir name)
   --summary-width <n> max characters per summary cell (default: ${DEFAULT_SUMMARY_WIDTH})
@@ -70,6 +76,9 @@ interface Flags {
   debounce?: string | undefined
   rescan?: string | undefined
   k?: string | undefined
+  keep?: string | undefined
+  grace?: string | undefined
+  'dry-run'?: boolean | undefined
   help?: boolean | undefined
 }
 
@@ -377,6 +386,57 @@ const runQuery: Command = async (positionals, flags) => {
   return found.size === ids.length ? 0 : 1
 }
 
+function reportGc(result: GcResult, dryRun: boolean): void {
+  const verb = dryRun ? 'would remove' : 'removed'
+
+  console.error(
+    `${result.tenant}: ${verb} ${result.removed.length} snapshot${result.removed.length === 1 ? '' : 's'} ` +
+      `and ${result.partials.length} partial${result.partials.length === 1 ? '' : 's'}, ` +
+      `kept ${result.kept}, freed ${result.bytesFreed} bytes`
+  )
+
+  for (const skipped of result.skipped) {
+    console.error(`  skipped ${skipped.name}: ${skipped.reason}`)
+  }
+
+  for (const name of result.corrupt) {
+    console.error(`  corrupt ${name}`)
+  }
+
+  if (result.currentCorrupt) {
+    console.error(
+      `  error: ${result.tenant} points at ${result.current}, which is missing or truncated`
+    )
+  }
+}
+
+const runGc: Command = async (_positionals, flags) => {
+  const dryRun = flags['dry-run'] === true
+  const options: Omit<GcOptions, 'tenant'> = {
+    root: required(flags.data, '--data'),
+    dryRun
+  }
+
+  if (flags.keep !== undefined) {
+    options.keep = parseInterval(flags.keep, '--keep')
+  }
+
+  if (flags.grace !== undefined) {
+    options.graceMs = parseInterval(flags.grace, '--grace')
+  }
+
+  const results =
+    flags.tenant === undefined
+      ? await collectAll(options)
+      : [await collect({ ...options, tenant: flags.tenant })]
+
+  for (const result of results) {
+    reportGc(result, dryRun)
+  }
+
+  return results.some(result => result.currentCorrupt) ? 1 : 0
+}
+
 const runMcp: Command = async positionals => {
   const dsn = positionalAt(positionals, 1, 'dsn')
 
@@ -395,7 +455,8 @@ const COMMANDS: Record<string, Command> = {
   get: runGet,
   serve: runServe,
   query: runQuery,
-  mcp: runMcp
+  mcp: runMcp,
+  gc: runGc
 }
 
 async function main(): Promise<number> {
@@ -416,6 +477,9 @@ async function main(): Promise<number> {
       debounce: { type: 'string' },
       rescan: { type: 'string' },
       k: { type: 'string' },
+      keep: { type: 'string' },
+      grace: { type: 'string' },
+      'dry-run': { type: 'boolean' },
       help: { type: 'boolean', short: 'h' }
     },
     allowPositionals: true

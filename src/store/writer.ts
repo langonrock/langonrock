@@ -146,7 +146,13 @@ async function commit(
     const reused = await Bun.file(target).exists()
 
     if (!reused) {
-      await writeSynced(target, bytes)
+      // Never write straight to the digest name. A crash halfway through would
+      // leave a truncated file whose name still claims to be that content, and
+      // the next put would see it, report "reused", and point `current` at a
+      // snapshot that cannot be parsed. Writing to a temp and renaming means a
+      // digest-named file only ever exists complete.
+      await writeSynced(`${target}.tmp`, bytes)
+      await rename(`${target}.tmp`, target)
       await syncDir(snapshotsDir(root, tenant))
     }
 
