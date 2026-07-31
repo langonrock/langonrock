@@ -6,9 +6,9 @@
 
 **A multi-tenant store for [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-catalog) bundles, built so an agent spends as few tokens and as few round trips as possible reading them.**
 
-OKF is a good authoring format: a directory of Markdown with YAML frontmatter, no SDK, no runtime, readable in Obsidian and diffable in git. It is an expensive _reading_ format. Full frontmatter is paid on every read, prose is written for people, and the reference consumption pattern walks the graph one file at a time, spending an inference turn per hop.
+OKF is a good authoring format: a directory of Markdown with YAML frontmatter, no SDK, no runtime, readable in Obsidian and diffable in git. It is an expensive _reading_ format. The agent pays for full frontmatter on every read, the prose is written for people, and the reference consumption pattern walks the graph one file at a time, spending an inference turn per hop.
 
-langonrock keeps your Markdown as the source of truth and compiles it into a dense read-side artifact: a manifest the agent keeps in its cached prompt prefix, and section-addressable concepts it fetches in batches. Your bundles stay conformant, so `okflint`, the visualizer and Obsidian keep working on the same folder.
+langonrock keeps your Markdown as the source of truth and compiles it into a dense read model: a manifest the agent keeps in its cached prompt prefix, and section-addressable concepts it fetches in batches. Your bundles stay conformant, so `okflint`, the visualizer and Obsidian keep working on the same folder.
 
 ## Why
 
@@ -20,7 +20,7 @@ Measured against the OKF reference consumption pattern over the same corpus and 
 | Tool calls                              |            30 |     **17** |
 | Tokens for one concept read             |           594 |    **213** |
 
-The saving is not that TSV is denser than Markdown. It is that the manifest carries the link graph, so the agent knows every id it needs _before_ fetching anything and gets them in one batched call, and that a concept is addressable by section instead of whole.
+The saving comes from the manifest carrying the link graph. The agent knows every id it needs _before_ it fetches anything, so one batched call covers them all, and it can ask for a single section instead of the whole concept. The manifest itself is not smaller than the Markdown it replaces.
 
 Full numbers, including where the store loses, are in [Benchmarks](#benchmarks).
 
@@ -136,14 +136,14 @@ langonrock serve --data ./data --socket /tmp/okf.sock
 langonrock query "okf+unix:///tmp/okf.sock?tenant=acme" search orders
 ```
 
-The daemon is usually what you want locally: several clients share one process with warm indexes, so no agent invocation pays cold start.
+The daemon is usually what you want locally. Several clients share one process with warm indexes, so no agent invocation pays cold start.
 
 > [!WARNING]
 > Binding TCP always requires tokens, including on `127.0.0.1`, and the server refuses to start without them. A unix socket is already guarded by file permissions and is the only transport allowed to run unauthenticated. Windows has no named pipe support in Bun, so use loopback TCP there.
 
 ## Editing over the network
 
-An editor needs to create, change and delete concepts remotely. It does that by writing the **source Markdown**, never a snapshot: the watcher recompiles from source, so a snapshot written directly would be silently replaced within seconds. Writing source is the path the design endorses, and the read API above is untouched by it — no HTTP request ever writes a snapshot.
+An editor needs to create, change and delete concepts remotely. It does that by writing the **source Markdown**, never a snapshot. The watcher recompiles from source, so it would overwrite a snapshot written directly within seconds. Writing source is the path the design endorses, and it leaves the read API above untouched. No HTTP request ever writes a snapshot.
 
 Tell the server where each tenant's Markdown lives, in `<data>/sources.json`. Folders are never moved into the store; source usually lives in a git repository of its own.
 
@@ -172,7 +172,7 @@ POST   /v1/{tenant}/sync                   recompile now, return the new digest
 Writing the first file into a folder creates the bundle, and deleting the folder removes it, exactly as it works on disk.
 
 > [!IMPORTANT]
-> A write must name the version it replaces: `If-Match: "<hash>"` to overwrite, or `If-None-Match: *` to insist the concept is new. Neither header is a `428`, a stale hash is a `412`. Two people editing one concept is the normal case for an editor, and a silently lost update is the worst failure this API could have, so the unsafe call is impossible rather than merely discouraged.
+> A write must name the version it replaces: `If-Match: "<hash>"` to overwrite, or `If-None-Match: *` to insist the concept is new. Neither header is a `428`, a stale hash is a `412`. Two people editing one concept is the normal case for an editor, and a silently lost update is the worst failure this API could have, so the unsafe call is impossible rather than discouraged.
 
 Through the library the precondition is an argument, enforced identically whether you are embedded or remote:
 
@@ -197,9 +197,9 @@ The listing tells you which concept each file becomes, so a client never has to 
 }
 ```
 
-A file with no `id` is not a concept: it has no frontmatter, so the compiler skips it. That is how a cloned repository's `README.md` shows up as what it is instead of vanishing without explanation.
+A file with no `id` is not a concept. It has no frontmatter, so the compiler skips it. That is how a cloned repository's `README.md` shows up as what it is instead of vanishing without explanation.
 
-`sync` returns what the compiler noticed on the way — a missing `type`, a link resolving to nothing, a file skipped — which is the lint an editor should put in front of whoever is writing:
+`sync` returns what the compiler noticed on the way: a missing `type`, a link resolving to nothing, a file skipped. That is the lint an editor should put in front of whoever is writing.
 
 ```ts
 const { snapshot, diagnostics } = await knowledge.sync()
@@ -221,7 +221,7 @@ langonrock query "$DSN" delete sales tables/old.md --force
 langonrock query "$DSN" sync
 ```
 
-`--create`, `--replaces <hash>` and `--force` are the command-line spelling of the same precondition. There is no default: a write that says nothing is refused, and `--force` is the honest name for taking whatever is there right now.
+`--create`, `--replaces <hash>` and `--force` are the command-line spelling of the same precondition. There is no default. The server refuses a write that says nothing, and `--force` is the honest name for taking whatever is there right now.
 
 ## Large tenants
 
@@ -232,7 +232,7 @@ await connection.manifest('sales') // one bundle
 await connection.search('orders', { bundle: 'ops' })
 ```
 
-Rows are grouped by bundle in the snapshot, so one bundle is a contiguous slice the reader hands back without parsing. On a 20,000-concept tenant that is 20,486 tokens against 835,922 for the whole manifest, and the slice stays flat as the tenant grows.
+The snapshot groups rows by bundle, so one bundle is a contiguous slice the reader hands back without parsing. On a 20,000-concept tenant that is 20,486 tokens against 835,922 for the whole manifest, and the slice stays flat as the tenant grows.
 
 ## Library
 
@@ -250,7 +250,7 @@ The compiler, store, reader, watcher and search are all exported too, if you wan
 
 ### From an app that is not on Bun
 
-The package above needs Bun: the store uses `Bun.file`, `Bun.Glob`, `Bun.YAML` and zstd, none of which exist on Node. A desktop editor usually cannot import it, because Electron's main process is Node and Tauri's front end is a webview.
+The package above needs Bun. The store uses `Bun.file`, `Bun.Glob`, `Bun.YAML` and zstd, none of which exist on Node. A desktop editor usually cannot import it, because Electron's main process is Node and Tauri's front end is a webview.
 
 `langonrock/client` is the same `Connection` over the network only, with nothing under it but `fetch`:
 
@@ -264,9 +264,9 @@ await knowledge.writeSource('sales', 'tables/orders.md', edited, before?.hash)
 await knowledge.sync()
 ```
 
-It runs on Node, Deno, Electron, Tauri and the browser, and a test asserts the invariant rather than trusting it: the entry point is bundled for Node and checked for any `Bun.` reference or filesystem import.
+It runs on Node, Deno, Electron, Tauri and the browser, and a test asserts that rather than trusting it. The test bundles the entry point for Node and fails on any `Bun.` reference or filesystem import.
 
-For a desktop app the shape that works is one HTTP client with two configurations. Locally, ship the `langonrock` binary as a sidecar and spawn `langonrock serve --socket <path>`; remotely, point the same client at a server with a token. An embedded `okf://` string is refused with an explanation rather than silently failing, since this client has no filesystem to open.
+For a desktop app the shape that works is one HTTP client with two configurations. Locally, ship the `langonrock` binary as a sidecar and spawn `langonrock serve --socket <path>`; remotely, point the same client at a server with a token. The client refuses an embedded `okf://` string with an explanation rather than failing silently, since it has no filesystem to open.
 
 > [!NOTE]
 > Windows has no unix socket here, so a local sidecar there means loopback TCP, and the server refuses TCP without tokens. Generate one per session and pass it in the connection string.
@@ -287,20 +287,20 @@ A snapshot is one self-contained file: the manifest uncompressed and contiguous,
 
 Because a snapshot is named by its own content, storing an unchanged tree is a no-op and deleting a bundle then restoring it returns to the original snapshot. Rollback is a side effect of the naming scheme rather than a feature.
 
-**Backup** is `cp -r tenants/`. **Restore** is copying it back; the search index rebuilds itself in memory on first use. **Incremental** backup is copying the snapshots you do not have, correct by construction since names are hashes. `langonrock gc` keeps `current` plus the newest N and sweeps partial writes.
+Backup is `cp -r tenants/`. Restore is copying it back; the search index rebuilds itself in memory on first use. Incremental backup is copying the snapshots you do not have, correct by construction since names are hashes. `langonrock gc` keeps `current` plus the newest N and sweeps partial writes.
 
 > [!IMPORTANT]
 > The snapshot holds the compiled read model, not your bundle. Frontmatter is compiled away, so a store is not a backup of your Markdown. Keep the source folder in git.
 
 ## Benchmarks
 
-A corpus generated to match the shape of Google's OKF samples: v0.2 frontmatter, prose written for people, `# Schema` and `# Joins` headings, links between concepts, about 2 KB each. Twenty fixed questions with a stated ground truth, and both paths charged for delivering the same concepts. The baseline is the OKF reference consumption pattern — read `index.md`, read a concept, follow its links — running the same BM25 this project uses over the raw Markdown, given perfect navigation and never taking a wrong turn.
+A corpus generated to match the shape of Google's OKF samples: v0.2 frontmatter, prose written for people, `# Schema` and `# Joins` headings, links between concepts, about 2 KB each. Twenty fixed questions with a stated ground truth, and both paths charged for delivering the same concepts. The baseline is the OKF reference consumption pattern: read `index.md`, read a concept, follow its links. It runs the same BM25 this project uses over the raw Markdown, with perfect navigation and never a wrong turn.
 
 Every number below comes from one script, on one machine. Reproduce it with `bun bench/run.ts <bundles> <concepts per bundle>`, which prints a JSON line: `1 500` for the token tables, `10 500` and `40 500` for the scale rows.
 
 ### Tokens, 500 concepts in one bundle
 
-A session is twenty questions in one conversation, where content read once stays in context and is re-billed at the cache rate on every later call. Both paths pay under that same model.
+A session is twenty questions in one conversation. Content read once stays in context and costs the cache rate on every later call. Both paths pay under that same model.
 
 | Path                | Billed tokens |  Calls |
 | ------------------- | ------------: | -----: |
@@ -344,7 +344,7 @@ A session is twenty questions in one conversation, where content read once stays
 
 `get` is flat: batching a fetch costs the same on a tenant of twenty thousand concepts as on one of five hundred. None of this is where the time goes, though. One saved model round trip is worth about a second, four orders of magnitude more than any row above.
 
-Memory is deliberately absent from that table. The index is rebuilt in memory once per snapshot, and peak process memory at 20,000 concepts landed anywhere between 0.9 and 1.2 GB across runs, too noisy for a single figure to be worth printing. It is still the practical ceiling on how many large tenants one daemon can hold.
+That table leaves memory out on purpose. The store rebuilds the index in memory once per snapshot, and peak process memory at 20,000 concepts landed anywhere between 0.9 and 1.2 GB across runs, too noisy for a single figure to be worth printing. It is still the practical ceiling on how many large tenants one daemon can hold.
 
 ### Retrieval accuracy
 
@@ -359,10 +359,10 @@ Whether the concept that answers the question is in the top eight, over the same
 Queries that describe a concept rather than name it land at 95% on both sides.
 
 > [!IMPORTANT]
-> The store ranks worse than the raw files on mean reciprocal rank, and that is a real cost of compiling. The frontmatter that gets stripped repeated the concept id in its `resource` and `sources` URLs, which happened to help the ranker. Field weighting recovers the hit rate and the one-hop expansion passes it, but the top position is still better on raw Markdown.
+> The store ranks worse than the raw files on mean reciprocal rank, and that is a real cost of compiling. The frontmatter the compiler strips repeated the concept id in its `resource` and `sources` URLs, which happened to help the ranker. Field weighting recovers the hit rate and the one-hop expansion passes it, but the top position is still better on raw Markdown.
 
 > [!NOTE]
-> Numbers come from a synthetic corpus and a deliberately crude `chars / 4` token estimate, and the retrieval table is reported at a single scale because the generator reuses descriptions across bundles, which makes description queries measure the corpus rather than the index. Treat all of this as an order of magnitude and measure your own bundles.
+> Numbers come from a synthetic corpus and a deliberately crude `chars / 4` token estimate. The retrieval table covers a single scale only, because the generator reuses descriptions across bundles, which makes description queries measure the corpus rather than the index. Treat all of this as an order of magnitude and measure your own bundles.
 
 ## CLI
 
