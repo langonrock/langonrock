@@ -51,12 +51,13 @@ afterAll(async () => {
 })
 
 describe('tool surface', () => {
-  test('exposes exactly three verbs', async () => {
+  test('exposes exactly four verbs', async () => {
     const { tools } = await client.listTools()
 
     expect(tools.map(tool => tool.name).sort()).toEqual([
       'get',
       'manifest',
+      'search',
       'snapshot'
     ])
   })
@@ -95,6 +96,38 @@ describe('manifest', () => {
 
     expect(first.mimeType).toBe('text/tab-separated-values')
     expect(first.text.startsWith('# tenant: acme')).toBe(true)
+  })
+})
+
+describe('search', () => {
+  test('returns narrowed manifest rows, not bodies', async () => {
+    const result = await client.callTool({
+      name: 'search',
+      arguments: { query: 'churned' }
+    })
+    const body = firstText(result)
+
+    expect(body).toContain('# query: churned')
+    expect(body).toContain('customers')
+    expect(body).not.toContain('@@')
+  })
+
+  test('honours k', async () => {
+    const result = await client.callTool({
+      name: 'search',
+      arguments: { query: 'orders', k: 1 }
+    })
+
+    expect(firstText(result)).toContain('1 direct')
+  })
+
+  test('rejects an empty query at the schema boundary', async () => {
+    const result = await client.callTool({
+      name: 'search',
+      arguments: { query: '' }
+    })
+
+    expect(result.isError).toBe(true)
   })
 })
 

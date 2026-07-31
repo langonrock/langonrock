@@ -17,6 +17,10 @@ const GET_DESCRIPTION = `Fetch the full text of concepts by id, as listed in the
 
 Pass every id you need in one call rather than calling repeatedly; the batch costs one round trip regardless of size. Pass "section" to retrieve a single named section instead of the whole document, for example "schema" or "joins". Section names come from the concept's own markdown headings, lowercased with underscores.`
 
+const SEARCH_DESCRIPTION = `Rank concepts by relevance to a query and return their manifest rows, not their bodies.
+
+Reach for this instead of reading the whole manifest when the tenant is large, or when you do not already know which concept holds the answer. The result is the same TSV shape as "manifest", narrowed: pick ids from it and fetch them with "get". Results also include concepts one link away from the top matches, which is usually where the join partner, parent dataset, or metric definition lives.`
+
 const SNAPSHOT_DESCRIPTION = `Return the current snapshot digest and concept count.
 
 Call this to check whether the knowledge base changed since you last read the manifest. An unchanged digest means the manifest you already have is still current.`
@@ -107,6 +111,35 @@ function registerGet(server: McpServer, connection: Connection): void {
   )
 }
 
+function registerSearch(server: McpServer, connection: Connection): void {
+  server.registerTool(
+    'search',
+    {
+      title: 'Find concepts by relevance',
+      description: SEARCH_DESCRIPTION,
+      inputSchema: {
+        query: z.string().min(1).describe('Words to rank concepts against.'),
+        k: z
+          .number()
+          .int()
+          .min(1)
+          .max(50)
+          .optional()
+          .describe('How many ranked matches to return before link expansion.')
+      }
+    },
+    async ({ query, k }) => {
+      try {
+        return text(
+          await connection.search(query, k === undefined ? {} : { k })
+        )
+      } catch (cause) {
+        return failure(cause)
+      }
+    }
+  )
+}
+
 function registerSnapshot(server: McpServer, connection: Connection): void {
   server.registerTool(
     'snapshot',
@@ -122,14 +155,15 @@ function registerSnapshot(server: McpServer, connection: Connection): void {
 }
 
 /**
- * Three verbs, deliberately. Every tool definition costs tokens in the client's
- * system prompt, and the manifest already answers "what exists", so discovery
- * needs no verb of its own.
+ * Four verbs, and no more. Every tool definition costs tokens in the client's
+ * system prompt, so each one has to earn its place: manifest and search both
+ * narrow, get fetches, snapshot invalidates.
  */
 export function createMcpServer(connection: Connection): McpServer {
   const server = new McpServer({ name: 'langonrock', version: '0.0.0' })
 
   registerManifest(server, connection)
+  registerSearch(server, connection)
   registerGet(server, connection)
   registerSnapshot(server, connection)
 

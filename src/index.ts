@@ -19,6 +19,14 @@ export { scanBundle } from './okf/scan.ts'
 export { open } from './client/connection.ts'
 export { parseDsn } from './client/dsn.ts'
 export { MANIFEST_URI, createMcpServer, serveMcp } from './mcp/server.ts'
+export { buildIndex, search, tokenize } from './search/bm25.ts'
+export { createSearchCache } from './search/cache.ts'
+export {
+  DEFAULT_K,
+  buildTenantIndex,
+  parseManifest,
+  searchTenant
+} from './search/tenant.ts'
 export { serve } from './server/http.ts'
 export { loadTokens } from './server/tokens.ts'
 export { createReaderCache } from './store/cache.ts'
@@ -30,6 +38,8 @@ export { putBundle, putTenant, putTenantRoot } from './store/writer.ts'
 
 export type { Connection } from './client/connection.ts'
 export type { Target, Transport } from './client/dsn.ts'
+export type { Bm25Index, Document, Hit } from './search/bm25.ts'
+export type { Manifest, SearchOptions, TenantIndex } from './search/tenant.ts'
 export type { ServeOptions } from './server/http.ts'
 export type { CompileOptions, CompileResult } from './compile/manifest.ts'
 export type { Section } from './compile/sections.ts'

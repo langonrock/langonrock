@@ -27,7 +27,9 @@ usage:
   langonrock manifest --data D --tenant T   print the stored manifest
   langonrock get <id...> --data D --tenant T  fetch concepts by id
   langonrock serve --data D [--socket P]    run the daemon
-  langonrock query <dsn> <verb> [id...]     talk to any transport by dsn
+  langonrock query <dsn> manifest|snapshot  read the index by dsn
+  langonrock query <dsn> search <words...>  rank concepts by relevance
+  langonrock query <dsn> get <id...>        fetch concepts by dsn
   langonrock mcp <dsn>                      serve MCP over stdio
 
 dsn forms:
@@ -45,6 +47,7 @@ options:
   --watch <dir>       serve only: also keep --tenant in sync with this folder
   --debounce <ms>     coalesce filesystem events (default 200)
   --rescan <ms>       full rescan backstop interval (default 30000)
+  --k <n>             ranked matches to return from search (default 8)
   --out <file>        write to a file instead of stdout
   --bundle <name>     bundle name recorded in the header (default: dir name)
   --summary-width <n> max characters per summary cell (default: ${DEFAULT_SUMMARY_WIDTH})
@@ -66,6 +69,7 @@ interface Flags {
   watch?: string | undefined
   debounce?: string | undefined
   rescan?: string | undefined
+  k?: string | undefined
   help?: boolean | undefined
 }
 
@@ -319,6 +323,14 @@ const runServe: Command = async (_positionals, flags) => {
   return 0
 }
 
+function countRows(tsv: string): number {
+  return tsv
+    .split('\n')
+    .filter(
+      line => line !== '' && !line.startsWith('#') && !line.startsWith('id\t')
+    ).length
+}
+
 const runQuery: Command = async (positionals, flags) => {
   const dsn = positionalAt(positionals, 1, 'dsn')
   const verb = positionalAt(positionals, 2, 'verb')
@@ -334,7 +346,23 @@ const runQuery: Command = async (positionals, flags) => {
     const manifest = await connection.manifest()
 
     await emit(manifest, flags.out)
-    reportStats(manifest, manifest.split('\n').length - 3)
+    reportStats(manifest, countRows(manifest))
+
+    return 0
+  }
+
+  if (verb === 'search') {
+    const query = positionals.slice(3).join(' ')
+
+    if (query === '') {
+      throw new Error('search requires a query')
+    }
+
+    const options = flags.k === undefined ? {} : { k: parseWidth(flags.k) }
+    const hits = await connection.search(query, options)
+
+    await emit(hits, flags.out)
+    reportStats(hits, countRows(hits))
 
     return 0
   }
@@ -387,6 +415,7 @@ async function main(): Promise<number> {
       watch: { type: 'string' },
       debounce: { type: 'string' },
       rescan: { type: 'string' },
+      k: { type: 'string' },
       help: { type: 'boolean', short: 'h' }
     },
     allowPositionals: true

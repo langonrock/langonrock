@@ -172,6 +172,22 @@ describe('transport parity', () => {
     expect(remote.get('customers')).toBe(embedded.get('customers'))
   })
 
+  test('embedded and socket rank identically', async () => {
+    const embedded = await open(`okf://${root}?tenant=acme`).search('churned')
+
+    expect(embedded).toContain('# query: churned')
+
+    if (!ON_POSIX) {
+      return
+    }
+
+    const remote = await open(`okf+unix://${socket}?tenant=acme`).search(
+      'churned'
+    )
+
+    expect(remote).toBe(embedded)
+  })
+
   test('a section filter survives the wire', async () => {
     if (!ON_POSIX) {
       return
@@ -258,6 +274,31 @@ describe('routing', () => {
     const response = await fetch(`http://127.0.0.1:${tcpServer?.port}/v1/get`, {
       headers: { authorization: 'Bearer secret-acme' }
     })
+
+    expect(response.status).toBe(405)
+  })
+
+  test('search rejects a body without a query', async () => {
+    const response = await fetch(
+      `http://127.0.0.1:${tcpServer?.port}/v1/search`,
+      {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer secret-acme',
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({ k: 3 })
+      }
+    )
+
+    expect(response.status).toBe(400)
+  })
+
+  test('search requires POST', async () => {
+    const response = await fetch(
+      `http://127.0.0.1:${tcpServer?.port}/v1/search`,
+      { headers: { authorization: 'Bearer secret-acme' } }
+    )
 
     expect(response.status).toBe(405)
   })

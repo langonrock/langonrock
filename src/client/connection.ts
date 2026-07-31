@@ -1,6 +1,9 @@
+import { createSearchCache } from '../search/cache.ts'
+import { searchTenant } from '../search/tenant.ts'
 import { createReaderCache } from '../store/cache.ts'
 import { parseDsn } from './dsn.ts'
 
+import type { SearchOptions } from '../search/tenant.ts'
 import type { Target, Transport } from './dsn.ts'
 
 export interface Connection {
@@ -8,6 +11,7 @@ export interface Connection {
   snapshot: () => Promise<string>
   manifest: () => Promise<string>
   get: (ids: string[], section?: string) => Promise<Map<string, string>>
+  search: (query: string, options?: SearchOptions) => Promise<string>
   close: () => Promise<void>
 }
 
@@ -27,12 +31,15 @@ function embeddedConnection(target: Target): Connection {
   const root = required(target.path, 'embedded dsn needs a data root path')
   const tenant = required(target.tenant, 'embedded dsn needs ?tenant=')
   const cache = createReaderCache(root)
+  const indexes = createSearchCache(root)
 
   return {
     transport: 'embedded',
     snapshot: async () => (await cache(tenant)).snapshot,
     manifest: async () => (await cache(tenant)).manifest(),
     get: async (ids, section) => (await cache(tenant)).get(ids, section),
+    search: async (query, options) =>
+      searchTenant(await indexes(tenant), query, options ?? {}),
     close: async () => undefined
   }
 }
@@ -91,7 +98,25 @@ function remoteConnection(target: Target): Connection {
     snapshot: snapshotOf(call, prefix),
     manifest,
     get: getOf(call, prefix),
+    search: searchOf(call, prefix),
     close: async () => undefined
+  }
+}
+
+function searchOf(
+  call: Call,
+  prefix: string
+): (query: string, options?: SearchOptions) => Promise<string> {
+  return async (query, options = {}) => {
+    const response = await assertOk(
+      await call(`${prefix}/search`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ q: query, ...options })
+      })
+    )
+
+    return response.text()
   }
 }
 

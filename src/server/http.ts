@@ -1,10 +1,18 @@
+import { createSearchCache } from '../search/cache.ts'
+import { searchTenant } from '../search/tenant.ts'
 import { createReaderCache } from '../store/cache.ts'
 
+import type { SearchOptions, TenantIndex } from '../search/tenant.ts'
 import type { TenantReader } from '../store/reader.ts'
 
 export type LangonrockServer = ReturnType<typeof Bun.serve>
 
-const VERBS = new Set(['manifest', 'get', 'snapshot'])
+const VERBS = new Set(['manifest', 'get', 'snapshot', 'search'])
+
+interface Resolved {
+  reader: TenantReader
+  index: () => Promise<TenantIndex>
+}
 
 export interface ServeOptions {
   root: string
@@ -123,27 +131,62 @@ async function getResponse(
   return Response.json(Object.fromEntries(found))
 }
 
+interface SearchPayload {
+  q?: unknown
+  k?: unknown
+  expand?: unknown
+}
+
+async function searchResponse(
+  request: Request,
+  resolved: Resolved
+): Promise<Response> {
+  const payload = (await request.json().catch(() => ({}))) as SearchPayload
+
+  if (typeof payload.q !== 'string' || payload.q === '') {
+    throw new HttpError(400, 'body must be {"q": "...", "k"?: n}')
+  }
+
+  const options: SearchOptions = {}
+
+  if (typeof payload.k === 'number') {
+    options.k = payload.k
+  }
+
+  if (typeof payload.expand === 'boolean') {
+    options.expand = payload.expand
+  }
+
+  const body = searchTenant(await resolved.index(), payload.q, options)
+
+  return new Response(body, {
+    headers: { 'content-type': 'text/tab-separated-values' }
+  })
+}
+
 async function dispatch(
   request: Request,
-  reader: TenantReader,
-  verb: string
+  verb: string,
+  resolved: Resolved
 ): Promise<Response> {
   if (verb === 'snapshot') {
     return Response.json({
-      snapshot: reader.snapshot,
-      concepts: reader.ids.length
+      snapshot: resolved.reader.snapshot,
+      concepts: resolved.reader.ids.length
     })
   }
 
   if (verb === 'manifest') {
-    return manifestResponse(request, reader)
+    return manifestResponse(request, resolved.reader)
   }
 
   if (request.method !== 'POST') {
-    throw new HttpError(405, 'get requires POST')
+    throw new HttpError(405, `${verb} requires POST`)
   }
 
-  return getResponse(request, reader)
+  return verb === 'search'
+    ? searchResponse(request, resolved)
+    : getResponse(request, resolved.reader)
 }
 
 function toResponse(cause: unknown): Response {
@@ -173,6 +216,7 @@ export function serve(options: ServeOptions): LangonrockServer {
   }
 
   const cache = createReaderCache(options.root)
+  const indexes = createSearchCache(options.root)
   const listener =
     options.unix === undefined
       ? {
@@ -193,7 +237,10 @@ export function serve(options: ServeOptions): LangonrockServer {
 
         const tenant = resolveTenant(request, matched.tenant, tokens)
 
-        return await dispatch(request, await cache(tenant), matched.verb)
+        return await dispatch(request, matched.verb, {
+          reader: await cache(tenant),
+          index: () => indexes(tenant)
+        })
       } catch (cause) {
         return toResponse(cause)
       }
