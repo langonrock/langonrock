@@ -245,6 +245,57 @@ describe('watchTenant', () => {
     local.close()
   })
 
+  /**
+   * A caller asking for a sync wants a compile that began after it asked, so
+   * returning the run already in flight would hand back a digest taken before
+   * their write. One follow-up serves every caller that waited for it.
+   */
+  test('overlapping syncs share a single follow-up compile', async () => {
+    const { source, root } = await seed('coalesce')
+    const syncs: PutResult[] = []
+    const local = watchTenant({
+      source,
+      root,
+      tenant: 'acme',
+      debounceMs: 5000,
+      rescanMs: 60_000,
+      onSync: result => syncs.push(result)
+    })
+
+    await local.ready
+
+    const before = syncs.length
+
+    await Promise.all([local.sync(), local.sync(), local.sync()])
+
+    expect(syncs.length - before).toBe(2)
+
+    local.close()
+  })
+
+  test('closing while a sync is queued cancels the follow-up', async () => {
+    const { source, root } = await seed('coalesce-close')
+    const syncs: PutResult[] = []
+    const local = watchTenant({
+      source,
+      root,
+      tenant: 'acme',
+      debounceMs: 5000,
+      rescanMs: 60_000,
+      onSync: result => syncs.push(result)
+    })
+
+    await local.ready
+
+    const before = syncs.length
+    const overlapping = [local.sync(), local.sync()]
+
+    local.close()
+    await Promise.all(overlapping)
+
+    expect(syncs.length - before).toBe(1)
+  })
+
   test('stops syncing after close', async () => {
     const { source, root } = await seed('closed')
     const syncs: PutResult[] = []

@@ -5,7 +5,7 @@ export interface Grant {
   write: boolean
 }
 
-function toGrant(value: unknown, token: string, path: string): Grant {
+function toGrant(value: unknown, path: string): Grant {
   if (typeof value === 'string') {
     return { tenant: value, write: false }
   }
@@ -41,7 +41,7 @@ function assertTokenMap(parsed: unknown, path: string): Map<string, Grant> {
       throw new Error(`${path} has an empty token`)
     }
 
-    grants.set(token, toGrant(value, token, path))
+    grants.set(token, toGrant(value, path))
   }
 
   return grants

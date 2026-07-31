@@ -234,7 +234,17 @@ async function dispatch(
     : getResponse(request, resolved.reader)
 }
 
-function toResponse(cause: unknown): Response {
+/**
+ * A rejection that never read the body — a bad precondition, a token without
+ * write scope, a path that would escape the bundle — leaves those bytes on the
+ * socket, where the next request over that keep-alive connection reads them as
+ * its own headers and hangs instead of being told what went wrong.
+ */
+async function toResponse(request: Request, cause: unknown): Promise<Response> {
+  if (!request.bodyUsed) {
+    await request.body?.cancel().catch(() => undefined)
+  }
+
   if (cause instanceof HttpError) {
     return new Response(cause.message, { status: cause.status })
   }
@@ -338,7 +348,7 @@ export function serve(options: ServeOptions): LangonrockServer {
           index: () => indexes(access.tenant)
         })
       } catch (cause) {
-        return toResponse(cause)
+        return await toResponse(request, cause)
       }
     }
   })
