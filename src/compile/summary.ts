@@ -62,6 +62,20 @@ export function readStringField(data: Frontmatter, key: string): string {
   return typeof value === 'string' ? value : ''
 }
 
+const CURRENT = 'current'
+
+/**
+ * Only a deviation earns a cell. A concept with no status, or one marked
+ * current, is what the agent already assumes; `deprecated` and `draft` are the
+ * ones it has to see before choosing the concept, which is why this is the one
+ * v0.2 trust field that belongs in a row paid for on every turn.
+ */
+export function readStatus(data: Frontmatter): string {
+  const value = sanitizeCell(readStringField(data, 'status'))
+
+  return value.toLowerCase() === CURRENT ? EMPTY_CELL : value
+}
+
 export function deriveSummary(
   data: Frontmatter,
   body: string,

@@ -8,13 +8,13 @@ const FIXTURE = `${import.meta.dir}/fixtures/sales`
 
 const EXPECTED = [
   '# bundle: sales',
-  'id\tkind\tgrain\tsummary\tlinks',
-  'customers\tbigquery_table\tcustomer_id\tRegistered customers, including churned.\ttables/orders',
-  'messy\traw_extract\t-\tHas a tab and a newline plus collapsed spacing.\t-',
-  'metrics/orders\tmetric\t-\tCount of completed orders in the period.\ttables/orders',
-  'orders_db\tdataset\t-\tThe production sales database.\t-',
-  'tables/orders\tbigquery_table\torder_id\tOne row per completed customer order.\tcustomers metrics/orders',
-  'weekly_active_users\t-\t-\tDistinct user_id seen in a trailing 7 day window.\t-',
+  'id\tkind\tstatus\tgrain\tsummary\tlinks',
+  'customers\tbigquery_table\t-\tcustomer_id\tRegistered customers, including churned.\ttables/orders',
+  'messy\traw_extract\t-\t-\tHas a tab and a newline plus collapsed spacing.\t-',
+  'metrics/orders\tmetric\t-\t-\tCount of completed orders in the period.\ttables/orders',
+  'orders_db\tdataset\t-\t-\tThe production sales database.\t-',
+  'tables/orders\tbigquery_table\t-\torder_id\tOne row per completed customer order.\tcustomers metrics/orders',
+  'weekly_active_users\t-\t-\t-\tDistinct user_id seen in a trailing 7 day window.\t-',
   ''
 ].join('\n')
 
@@ -86,27 +86,53 @@ describe('compileBundle', () => {
 describe('serialize', () => {
   test('writes rows in the order given, leaving ordering to the caller', () => {
     const concepts: Concept[] = [
-      { id: 'b', path: 'b.md', kind: 'x', grain: '-', summary: 's', links: [] },
-      { id: 'a', path: 'a.md', kind: 'x', grain: '-', summary: 's', links: [] }
+      {
+        id: 'b',
+        path: 'b.md',
+        kind: 'x',
+        status: '-',
+        grain: '-',
+        summary: 's',
+        links: []
+      },
+      {
+        id: 'a',
+        path: 'a.md',
+        kind: 'x',
+        status: '-',
+        grain: '-',
+        summary: 's',
+        links: []
+      }
     ]
 
     const lines = serialize(concepts, 'demo').split('\n')
 
-    expect(lines[2]).toBe('b\tx\t-\ts\t-')
-    expect(lines[3]).toBe('a\tx\t-\ts\t-')
+    expect(lines[2]).toBe('b\tx\t-\t-\ts\t-')
+    expect(lines[3]).toBe('a\tx\t-\t-\ts\t-')
   })
 
   test('renders an empty link list as the empty cell marker', () => {
     const concepts: Concept[] = [
-      { id: 'a', path: 'a.md', kind: 'x', grain: '-', summary: 's', links: [] }
+      {
+        id: 'a',
+        path: 'a.md',
+        kind: 'x',
+        status: '-',
+        grain: '-',
+        summary: 's',
+        links: []
+      }
     ]
 
-    expect(serialize(concepts, 'demo')).toContain('a\tx\t-\ts\t-\n')
+    expect(serialize(concepts, 'demo')).toContain('a\tx\t-\t-\ts\t-\n')
   })
 
   test('emits no timestamp so prompt caching survives a rebuild', () => {
     const output = serialize([], 'demo')
 
-    expect(output).toBe('# bundle: demo\nid\tkind\tgrain\tsummary\tlinks\n')
+    expect(output).toBe(
+      '# bundle: demo\nid\tkind\tstatus\tgrain\tsummary\tlinks\n'
+    )
   })
 })

@@ -1,4 +1,4 @@
-import { parseFrontmatter } from '../okf/frontmatter.ts'
+import { hasFrontmatter, parseFrontmatter } from '../okf/frontmatter.ts'
 import { deriveIds } from '../okf/ids.ts'
 import { resolveLinks } from '../okf/links.ts'
 import { basename, scanBundle, toPosix } from '../okf/scan.ts'
@@ -6,13 +6,21 @@ import {
   EMPTY_CELL,
   deriveSummary,
   normalizeKind,
+  readStatus,
   readStringField,
   sanitizeCell
 } from './summary.ts'
 
 import type { Concept, Diagnostic } from '../okf/types.ts'
 
-export const COLUMNS = ['id', 'kind', 'grain', 'summary', 'links'] as const
+export const COLUMNS = [
+  'id',
+  'kind',
+  'status',
+  'grain',
+  'summary',
+  'links'
+] as const
 
 export const DEFAULT_SUMMARY_WIDTH = 120
 
@@ -29,7 +37,6 @@ export interface CompileResult {
 }
 
 interface ConceptContext {
-  root: string
   pathToId: Map<string, string>
   summaryWidth: number
 }
@@ -40,12 +47,17 @@ interface ConceptResult {
   body: string
 }
 
-async function readConcept(
-  path: string,
+interface SourceFile {
+  path: string
+  source: string
+}
+
+function toConcept(
+  file: SourceFile,
   id: string,
   context: ConceptContext
-): Promise<ConceptResult> {
-  const source = await Bun.file(`${context.root}/${path}`).text()
+): ConceptResult {
+  const { path, source } = file
   const { data, body, error } = parseFrontmatter(source)
   const diagnostics: Diagnostic[] = []
 
@@ -77,7 +89,15 @@ async function readConcept(
   const summary = deriveSummary(data, body, context.summaryWidth)
 
   return {
-    concept: { id, path, kind, grain, summary, links: ids },
+    concept: {
+      id,
+      path,
+      kind,
+      status: readStatus(data),
+      grain,
+      summary,
+      links: ids
+    },
     diagnostics,
     body
   }
@@ -97,6 +117,7 @@ function toRow(concept: Concept): string {
   return [
     concept.id,
     concept.kind,
+    concept.status,
     concept.grain,
     concept.summary,
     links === '' ? EMPTY_CELL : links
@@ -124,22 +145,53 @@ function defaultBundleName(root: string): string {
   return basename(trimmed) || trimmed
 }
 
+async function readSources(
+  root: string,
+  paths: string[]
+): Promise<SourceFile[]> {
+  return Promise.all(
+    paths.map(async path => ({
+      path,
+      source: await Bun.file(`${root}/${path}`).text()
+    }))
+  )
+}
+
+function skippedDiagnostic(file: SourceFile): Diagnostic {
+  return {
+    level: 'warn',
+    path: file.path,
+    message: 'skipped: no frontmatter, so not an OKF concept'
+  }
+}
+
 export async function compileBundle(
   root: string,
   options: CompileOptions = {}
 ): Promise<CompileResult> {
   const summaryWidth = options.summaryWidth ?? DEFAULT_SUMMARY_WIDTH
   const bundle = options.bundle ?? defaultBundleName(root)
-  const paths = await scanBundle(root)
-  const pathToId = deriveIds(paths)
-  const context: ConceptContext = { root, pathToId, summaryWidth }
+  const sources = await readSources(root, await scanBundle(root))
+  const files: SourceFile[] = []
+  const skipped: SourceFile[] = []
 
-  const results = await Promise.all(
-    paths.map(path => readConcept(path, pathToId.get(path) ?? path, context))
+  for (const file of sources) {
+    ;(hasFrontmatter(file.source) ? files : skipped).push(file)
+  }
+
+  // Ids are derived after the filter so a skipped README cannot push a real
+  // concept from a bare id onto a longer one.
+  const pathToId = deriveIds(files.map(file => file.path))
+  const context: ConceptContext = { pathToId, summaryWidth }
+  const results = files.map(file =>
+    toConcept(file, pathToId.get(file.path) ?? file.path, context)
   )
 
   const concepts = results.map(result => result.concept).sort(byId)
-  const diagnostics = results.flatMap(result => result.diagnostics)
+  const diagnostics = [
+    ...skipped.map(skippedDiagnostic),
+    ...results.flatMap(result => result.diagnostics)
+  ]
   const bodies = new Map(
     results.map(result => [result.concept.id, result.body])
   )

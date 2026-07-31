@@ -94,13 +94,14 @@ function manifestResponse(
   request: Request,
   reader: TenantReader
 ): Promise<Response> | Response {
-  const etag = `"${reader.snapshot}"`
+  const bundle = new URL(request.url).searchParams.get('bundle') ?? undefined
+  const etag = `"${reader.snapshot}${bundle === undefined ? '' : `:${bundle}`}"`
 
   if (request.headers.get('if-none-match') === etag) {
     return new Response(null, { status: 304, headers: { etag } })
   }
 
-  return reader.manifest().then(
+  return reader.manifest(bundle).then(
     body =>
       new Response(body, {
         headers: { etag, 'content-type': 'text/tab-separated-values' }
@@ -135,6 +136,7 @@ interface SearchPayload {
   q?: unknown
   k?: unknown
   expand?: unknown
+  bundle?: unknown
 }
 
 async function searchResponse(
@@ -155,6 +157,10 @@ async function searchResponse(
 
   if (typeof payload.expand === 'boolean') {
     options.expand = payload.expand
+  }
+
+  if (typeof payload.bundle === 'string') {
+    options.bundle = payload.bundle
   }
 
   const body = searchTenant(await resolved.index(), payload.q, options)
