@@ -1,6 +1,7 @@
 import { createSearchCache } from '../search/cache.ts'
 import { searchTenant } from '../search/tenant.ts'
 import { createReaderCache } from '../store/cache.ts'
+import { resolveDataDir } from '../store/datadir.ts'
 import { parseDsn } from './dsn.ts'
 
 import type { SearchOptions } from '../search/tenant.ts'
@@ -28,7 +29,9 @@ function required(value: string | undefined, message: string): string {
 }
 
 function embeddedConnection(target: Target): Connection {
-  const root = required(target.path, 'embedded dsn needs a data root path')
+  // An embedded dsn with no path means the default store, so `okf://?tenant=x`
+  // works the same way `--data` being absent does.
+  const root = resolveDataDir(target.path)
   const tenant = required(target.tenant, 'embedded dsn needs ?tenant=')
   const cache = createReaderCache(root)
   const indexes = createSearchCache(root)

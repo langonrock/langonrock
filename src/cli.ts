@@ -8,6 +8,7 @@ import { estimateTokens } from './compile/tokens.ts'
 import { serveMcp } from './mcp/server.ts'
 import { serve } from './server/http.ts'
 import { loadTokens } from './server/tokens.ts'
+import { resolveDataDir } from './store/datadir.ts'
 import { collect, collectAll } from './store/gc.ts'
 import { openTenant } from './store/reader.ts'
 import { watchTenant } from './store/watch.ts'
@@ -42,7 +43,8 @@ dsn forms:
   okf+http://127.0.0.1:7777?token=secret    remote, tenant from token
 
 options:
-  --data <dir>        store root directory
+  --data <dir>        store root (default: $LANGONROCK_DATA, else the
+                      platform data directory)
   --tenant <id>       tenant id, [a-z0-9_-] up to 64 chars
   --section <name>    return only this section of each concept
   --socket <path>     unix socket for serve (default: <data>/langonrock.sock)
@@ -164,7 +166,7 @@ const runCompile: Command = async (positionals, flags) => {
 
 function putOptions(flags: Flags): PutOptions {
   const options: PutOptions = {
-    root: required(flags.data, '--data'),
+    root: resolveDataDir(flags.data),
     tenant: required(flags.tenant, '--tenant'),
     summaryWidth: parseWidth(flags['summary-width'])
   }
@@ -218,7 +220,7 @@ function parseInterval(raw: string | undefined, flag: string): number {
 function watchOptions(flags: Flags, source: string): WatchOptions {
   const options: WatchOptions = {
     source,
-    root: required(flags.data, '--data'),
+    root: resolveDataDir(flags.data),
     tenant: required(flags.tenant, '--tenant'),
     summaryWidth: parseWidth(flags['summary-width']),
     onSync: reportPut,
@@ -249,7 +251,7 @@ const runWatch: Command = async (positionals, flags) => {
 
 const runManifest: Command = async (_positionals, flags) => {
   const reader = await openTenant(
-    required(flags.data, '--data'),
+    resolveDataDir(flags.data),
     required(flags.tenant, '--tenant')
   )
   const manifest = await reader.manifest()
@@ -268,7 +270,7 @@ const runGet: Command = async (positionals, flags) => {
   }
 
   const reader = await openTenant(
-    required(flags.data, '--data'),
+    resolveDataDir(flags.data),
     required(flags.tenant, '--tenant')
   )
   const found = await reader.get(ids, flags.section)
@@ -309,7 +311,7 @@ function serveOptions(flags: Flags, root: string): ServeOptions {
 }
 
 const runServe: Command = async (_positionals, flags) => {
-  const root = required(flags.data, '--data')
+  const root = resolveDataDir(flags.data)
   const options = serveOptions(flags, root)
 
   options.tokens = await loadTokens(root)
@@ -416,7 +418,7 @@ function reportGc(result: GcResult, dryRun: boolean): void {
 const runGc: Command = async (_positionals, flags) => {
   const dryRun = flags['dry-run'] === true
   const options: Omit<GcOptions, 'tenant'> = {
-    root: required(flags.data, '--data'),
+    root: resolveDataDir(flags.data),
     dryRun
   }
 

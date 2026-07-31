@@ -32,6 +32,12 @@ export { loadTokens } from './server/tokens.ts'
 export { createReaderCache } from './store/cache.ts'
 export { encodeTnt, parseDir, parseHeader } from './store/format.ts'
 export {
+  APP,
+  DATA_ENV,
+  platformDataDir,
+  resolveDataDir
+} from './store/datadir.ts'
+export {
   DEFAULT_GRACE_MS,
   DEFAULT_KEEP,
   collect,
