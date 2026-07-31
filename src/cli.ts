@@ -7,6 +7,7 @@ import { DEFAULT_SUMMARY_WIDTH, compileBundle } from './compile/manifest.ts'
 import { estimateTokens } from './compile/tokens.ts'
 import { serveMcp } from './mcp/server.ts'
 import { serve } from './server/http.ts'
+import { loadSources } from './server/sources.ts'
 import { loadTokens } from './server/tokens.ts'
 import { resolveDataDir } from './store/datadir.ts'
 import { collect, collectAll } from './store/gc.ts'
@@ -18,7 +19,7 @@ import type { CompileOptions } from './compile/manifest.ts'
 import type { Diagnostic } from './okf/types.ts'
 import type { ServeOptions } from './server/http.ts'
 import type { GcOptions, GcResult } from './store/gc.ts'
-import type { WatchOptions } from './store/watch.ts'
+import type { WatchOptions, Watcher } from './store/watch.ts'
 import type { PutOptions, PutResult } from './store/writer.ts'
 
 const USAGE = `langonrock - a token-efficient store for OKF knowledge bundles
@@ -310,11 +311,64 @@ function serveOptions(flags: Flags, root: string): ServeOptions {
   return options
 }
 
+/**
+ * One watcher per writable tenant, kept rather than discarded, so a client that
+ * writes through the API can ask for the recompile and be told the new digest.
+ * The result arrives through onSync, which is why it is captured here.
+ */
+async function startWatchers(
+  root: string,
+  sources: Map<string, string>,
+  flags: Flags
+): Promise<(tenant: string) => Promise<PutResult>> {
+  const watchers = new Map<string, Watcher>()
+  const results = new Map<string, PutResult>()
+
+  for (const [tenant, source] of sources) {
+    const options = watchOptions({ ...flags, tenant }, source)
+
+    options.onSync = result => {
+      results.set(tenant, result)
+      reportPut(result)
+    }
+
+    const watcher = watchTenant(options)
+
+    await watcher.ready
+    watchers.set(tenant, watcher)
+    console.error(`watching ${source} for tenant ${tenant}`)
+  }
+
+  return async tenant => {
+    const watcher = watchers.get(tenant)
+
+    if (watcher === undefined) {
+      throw new Error(`tenant "${tenant}" is not writable`)
+    }
+
+    await watcher.sync()
+
+    const result = results.get(tenant)
+
+    if (result === undefined) {
+      throw new Error(`sync for "${tenant}" produced no result`)
+    }
+
+    return result
+  }
+}
+
 const runServe: Command = async (_positionals, flags) => {
   const root = resolveDataDir(flags.data)
   const options = serveOptions(flags, root)
+  const sources = await loadSources(root)
 
   options.tokens = await loadTokens(root)
+  options.sources = sources
+
+  if (sources.size > 0) {
+    options.sync = await startWatchers(root, sources, flags)
+  }
 
   const server = serve(options)
   const where =
@@ -324,7 +378,8 @@ const runServe: Command = async (_positionals, flags) => {
 
   console.error(
     `langonrock serving ${root} on ${where} ` +
-      `(${options.tokens.size} token${options.tokens.size === 1 ? '' : 's'})`
+      `(${options.tokens.size} token${options.tokens.size === 1 ? '' : 's'}, ` +
+      `${sources.size} writable tenant${sources.size === 1 ? '' : 's'})`
   )
 
   if (flags.watch !== undefined) {

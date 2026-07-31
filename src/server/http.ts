@@ -1,13 +1,21 @@
 import { createSearchCache } from '../search/cache.ts'
 import { searchTenant } from '../search/tenant.ts'
 import { createReaderCache } from '../store/cache.ts'
+import { HttpError } from './errors.ts'
+import { bundlesResponse, sourceResponse } from './sourceroutes.ts'
 
 import type { SearchOptions, TenantIndex } from '../search/tenant.ts'
 import type { TenantReader } from '../store/reader.ts'
+import type { PutResult } from '../store/writer.ts'
+import type { Grant } from './tokens.ts'
 
 export type LangonrockServer = ReturnType<typeof Bun.serve>
 
-const VERBS = new Set(['manifest', 'get', 'snapshot', 'search'])
+const READ_VERBS = new Set(['manifest', 'get', 'snapshot', 'search'])
+
+const WRITE_VERBS = new Set(['source', 'bundles', 'sync'])
+
+const VERBS = new Set([...READ_VERBS, ...WRITE_VERBS])
 
 interface Resolved {
   reader: TenantReader
@@ -16,42 +24,64 @@ interface Resolved {
 
 export interface ServeOptions {
   root: string
-  tokens?: Map<string, string>
+  tokens?: Map<string, Grant>
+  /** Tenant to the directory holding its OKF Markdown. Absent means read only. */
+  sources?: Map<string, string>
+  /** Recompiles a tenant now, so a client can make its write visible. */
+  sync?: (tenant: string) => Promise<PutResult>
   unix?: string
   hostname?: string
   port?: number
 }
 
-class HttpError extends Error {
-  constructor(
-    readonly status: number,
-    message: string
-  ) {
-    super(message)
-  }
-}
-
 interface Route {
   tenant?: string
   verb: string
+  bundle?: string
+  path?: string
+}
+
+function toRoute(parts: string[], tenant?: string): Route | undefined {
+  const [verb, ...rest] = parts
+
+  if (verb === undefined || !VERBS.has(verb)) {
+    return undefined
+  }
+
+  const route: Route = tenant === undefined ? { verb } : { tenant, verb }
+
+  if (verb !== 'source' && verb !== 'bundles') {
+    return rest.length === 0 ? route : undefined
+  }
+
+  const [bundle, ...segments] = rest
+
+  if (bundle !== undefined) {
+    route.bundle = bundle
+  }
+
+  if (segments.length > 0) {
+    route.path = segments.join('/')
+  }
+
+  return route
 }
 
 function route(pathname: string): Route | undefined {
-  const parts = pathname.split('/').filter(part => part !== '')
+  const parts = pathname
+    .split('/')
+    .filter(part => part !== '')
+    .map(part => decodeURIComponent(part))
 
   if (parts[0] !== 'v1') {
     return undefined
   }
 
-  if (parts.length === 2 && VERBS.has(parts[1] ?? '')) {
-    return { verb: parts[1] ?? '' }
-  }
+  const rest = parts.slice(1)
 
-  if (parts.length === 3 && VERBS.has(parts[2] ?? '')) {
-    return { tenant: parts[1] ?? '', verb: parts[2] ?? '' }
-  }
-
-  return undefined
+  return VERBS.has(rest[0] ?? '')
+    ? toRoute(rest)
+    : toRoute(rest.slice(1), rest[0])
 }
 
 function bearer(request: Request): string {
@@ -60,34 +90,43 @@ function bearer(request: Request): string {
   return header.startsWith('Bearer ') ? header.slice(7) : ''
 }
 
+interface Access {
+  tenant: string
+  write: boolean
+}
+
 /**
  * The token decides the tenant. A tenant in the path is only ever a convenience
  * that must agree with the token, never a way to reach another tenant's data.
+ *
+ * With no tokens the server is on a unix socket, where file permissions already
+ * decide who may connect, so that caller may write. Over TCP a write needs a
+ * token that says so.
  */
-function resolveTenant(
+function resolveAccess(
   request: Request,
   pathTenant: string | undefined,
-  tokens: Map<string, string>
-): string {
+  tokens: Map<string, Grant>
+): Access {
   if (tokens.size === 0) {
     if (pathTenant === undefined) {
       throw new HttpError(401, 'tenant required in path when no tokens exist')
     }
 
-    return pathTenant
+    return { tenant: pathTenant, write: true }
   }
 
-  const tenant = tokens.get(bearer(request))
+  const grant = tokens.get(bearer(request))
 
-  if (tenant === undefined) {
+  if (grant === undefined) {
     throw new HttpError(401, 'invalid or missing bearer token')
   }
 
-  if (pathTenant !== undefined && pathTenant !== tenant) {
+  if (pathTenant !== undefined && pathTenant !== grant.tenant) {
     throw new HttpError(403, 'token does not grant access to that tenant')
   }
 
-  return tenant
+  return { tenant: grant.tenant, write: grant.write }
 }
 
 function manifestResponse(
@@ -210,8 +249,54 @@ function toResponse(cause: unknown): Response {
  * can reach the port. A unix socket is already guarded by file permissions, so
  * it is the only transport allowed to run unauthenticated.
  */
+/**
+ * Write routes never touch the reader. A tenant whose first concept is being
+ * created has no snapshot yet, and opening one would fail before the write ever
+ * happened.
+ */
+async function dispatchWrite(
+  request: Request,
+  matched: Route,
+  access: Access,
+  options: ServeOptions
+): Promise<Response> {
+  const dir = options.sources?.get(access.tenant)
+
+  if (dir === undefined) {
+    throw new HttpError(
+      409,
+      `tenant "${access.tenant}" has no source directory: add it to sources.json to make it writable`
+    )
+  }
+
+  if (matched.verb === 'sync') {
+    if (options.sync === undefined) {
+      throw new HttpError(409, 'this server cannot recompile on request')
+    }
+
+    const result = await options.sync(access.tenant)
+
+    return Response.json({
+      snapshot: result.snapshot,
+      concepts: result.concepts,
+      bundles: result.bundles
+    })
+  }
+
+  const context = {
+    dir,
+    write: access.write,
+    bundle: matched.bundle,
+    path: matched.path
+  }
+
+  return matched.verb === 'bundles'
+    ? bundlesResponse(request, context)
+    : sourceResponse(request, context)
+}
+
 export function serve(options: ServeOptions): LangonrockServer {
-  const tokens = options.tokens ?? new Map<string, string>()
+  const tokens = options.tokens ?? new Map<string, Grant>()
   const listensOnTcp =
     options.port !== undefined || options.hostname !== undefined
 
@@ -241,11 +326,15 @@ export function serve(options: ServeOptions): LangonrockServer {
           throw new HttpError(404, 'no such route')
         }
 
-        const tenant = resolveTenant(request, matched.tenant, tokens)
+        const access = resolveAccess(request, matched.tenant, tokens)
+
+        if (WRITE_VERBS.has(matched.verb)) {
+          return await dispatchWrite(request, matched, access, options)
+        }
 
         return await dispatch(request, matched.verb, {
-          reader: await cache(tenant),
-          index: () => indexes(tenant)
+          reader: await cache(access.tenant),
+          index: () => indexes(access.tenant)
         })
       } catch (cause) {
         return toResponse(cause)
