@@ -9,6 +9,7 @@ const EMPTY_CELL = '-'
 
 export interface ManifestRow {
   id: string
+  bundle: string
   cells: string[]
   links: string[]
 }
@@ -29,6 +30,7 @@ export function parseManifest(tsv: string): Manifest {
   const comments: string[] = []
   const rows = new Map<string, ManifestRow>()
   let columns = ''
+  let bundleColumn = -1
 
   for (const line of tsv.split('\n')) {
     if (line === '') {
@@ -38,6 +40,7 @@ export function parseManifest(tsv: string): Manifest {
     if (columns === '') {
       if (line.startsWith('id\t')) {
         columns = line
+        bundleColumn = line.split('\t').indexOf('bundle')
       } else {
         comments.push(line)
       }
@@ -50,6 +53,7 @@ export function parseManifest(tsv: string): Manifest {
 
     rows.set(cells[0] ?? '', {
       id: cells[0] ?? '',
+      bundle: cells[bundleColumn] ?? '',
       cells,
       links: links === EMPTY_CELL ? [] : links.split(' ')
     })
@@ -72,7 +76,7 @@ export async function buildTenantIndex(
     const row = manifest.rows.get(id)
     const fields = row === undefined ? id : row.cells.slice(0, -1).join(' ')
 
-    return { id, text: `${fields}\n${bodies.get(id) ?? ''}` }
+    return { id, fields, text: bodies.get(id) ?? '' }
   })
 
   return {
@@ -111,13 +115,22 @@ function byInbound(a: Inbound, b: Inbound): number {
  * which is most of the manifest. Search that does not narrow is worse than
  * reading the manifest directly.
  */
-function expand(manifest: Manifest, direct: string[], k: number): string[] {
+function expand(
+  manifest: Manifest,
+  direct: string[],
+  k: number,
+  keep?: (id: string) => boolean
+): string[] {
   const hits = new Set(direct)
   const inbound = new Map<string, Inbound>()
 
   for (const [rank, id] of direct.entries()) {
     for (const target of manifest.rows.get(id)?.links ?? []) {
-      if (hits.has(target) || !manifest.rows.has(target)) {
+      if (
+        hits.has(target) ||
+        !manifest.rows.has(target) ||
+        (keep !== undefined && !keep(target))
+      ) {
         continue
       }
 
@@ -147,6 +160,16 @@ function rowsFor(manifest: Manifest, ids: string[]): string[] {
 export interface SearchOptions {
   k?: number
   expand?: boolean
+  bundle?: string
+}
+
+function keeper(
+  manifest: Manifest,
+  bundle: string | undefined
+): ((id: string) => boolean) | undefined {
+  return bundle === undefined
+    ? undefined
+    : id => manifest.rows.get(id)?.bundle === bundle
 }
 
 /**
@@ -159,12 +182,14 @@ export function searchTenant(
   options: SearchOptions = {}
 ): string {
   const k = options.k ?? DEFAULT_K
-  const direct = search(built.index, query, k).map(hit => hit.id)
+  const keep = keeper(built.manifest, options.bundle)
+  const direct = search(built.index, query, k, keep).map(hit => hit.id)
   const linked =
-    options.expand === false ? [] : expand(built.manifest, direct, k)
+    options.expand === false ? [] : expand(built.manifest, direct, k, keep)
 
   const lines = [
     ...built.manifest.comments,
+    ...(options.bundle === undefined ? [] : [`# bundle: ${options.bundle}`]),
     `# query: ${query}`,
     `# hits: ${direct.length} direct, ${linked.length} linked`,
     built.manifest.columns,

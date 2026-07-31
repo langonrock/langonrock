@@ -7,11 +7,62 @@ import type { DirEntry, TntHeader } from './format.ts'
 
 const decoder = new TextDecoder()
 
+const BUNDLE_COLUMN = 'bundle'
+
 export interface TenantReader {
   snapshot: string
   ids: string[]
-  manifest: () => Promise<string>
+  manifest: (bundle?: string) => Promise<string>
   get: (ids: string[], section?: string) => Promise<Map<string, string>>
+}
+
+/**
+ * Rows arrive grouped by bundle, so one bundle is one run of lines. Splitting
+ * happens once per reader and only when a filtered manifest is first asked
+ * for; the unfiltered read stays a straight slice of the snapshot.
+ */
+function splitByBundle(manifest: string): Map<string, string> {
+  const preamble: string[] = []
+  const rows = new Map<string, string[]>()
+  let column = -1
+  let inRows = false
+
+  for (const line of manifest.split('\n')) {
+    if (line === '') {
+      continue
+    }
+
+    if (!inRows) {
+      preamble.push(line)
+
+      if (line.startsWith('id\t')) {
+        inRows = true
+        column = line.split('\t').indexOf(BUNDLE_COLUMN)
+      }
+
+      continue
+    }
+
+    const name = line.split('\t')[column] ?? ''
+    const existing = rows.get(name)
+
+    if (existing === undefined) {
+      rows.set(name, [line])
+    } else {
+      existing.push(line)
+    }
+  }
+
+  if (column === -1) {
+    throw new Error('manifest has no bundle column')
+  }
+
+  return new Map(
+    [...rows].map(([name, lines]) => [
+      name,
+      `${[...preamble, ...lines].join('\n')}\n`
+    ])
+  )
 }
 
 async function slice(
@@ -82,10 +133,32 @@ export async function openTenant(
   )
   const byId = new Map(entries.map(entry => [entry.id, entry]))
 
-  const manifest = async (): Promise<string> =>
-    decoder.decode(
+  // A snapshot never changes, so the manifest it holds is worth keeping once it
+  // has been read: it is the one region asked for on every turn.
+  let text: string | undefined
+  let byBundle: Map<string, string> | undefined
+
+  const manifest = async (bundle?: string): Promise<string> => {
+    text ??= decoder.decode(
       await slice(path, header.manifestOffset, header.manifestLength)
     )
+
+    if (bundle === undefined) {
+      return text
+    }
+
+    byBundle ??= splitByBundle(text)
+
+    const found = byBundle.get(bundle)
+
+    if (found === undefined) {
+      throw new Error(
+        `no bundle "${bundle}" in this tenant: found ${[...byBundle.keys()].join(', ')}`
+      )
+    }
+
+    return found
+  }
 
   const get = async (
     ids: string[],

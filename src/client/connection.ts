@@ -10,7 +10,7 @@ import type { Target, Transport } from './dsn.ts'
 export interface Connection {
   readonly transport: Transport
   snapshot: () => Promise<string>
-  manifest: () => Promise<string>
+  manifest: (bundle?: string) => Promise<string>
   get: (ids: string[], section?: string) => Promise<Map<string, string>>
   search: (query: string, options?: SearchOptions) => Promise<string>
   close: () => Promise<void>
@@ -39,7 +39,7 @@ function embeddedConnection(target: Target): Connection {
   return {
     transport: 'embedded',
     snapshot: async () => (await cache(tenant)).snapshot,
-    manifest: async () => (await cache(tenant)).manifest(),
+    manifest: async bundle => (await cache(tenant)).manifest(bundle),
     get: async (ids, section) => (await cache(tenant)).get(ids, section),
     search: async (query, options) =>
       searchTenant(await indexes(tenant), query, options ?? {}),
@@ -75,25 +75,41 @@ async function assertOk(response: Response): Promise<Response> {
   )
 }
 
+interface Cached {
+  etag: string | undefined
+  body: string
+}
+
 function remoteConnection(target: Target): Connection {
   const call = makeCall(target)
   const prefix = target.tenant === undefined ? '/v1' : `/v1/${target.tenant}`
-  let etag: string | undefined
-  let cached: string | undefined
+  // Keyed by bundle: a filtered manifest and the whole one are different
+  // documents, and reusing one etag for both would serve the wrong bytes.
+  const cache = new Map<string, Cached>()
 
-  const manifest = async (): Promise<string> => {
-    const headers = etag === undefined ? {} : { 'if-none-match': etag }
-    const response = await call(`${prefix}/manifest`, { headers })
+  const manifest = async (bundle?: string): Promise<string> => {
+    const key = bundle ?? ''
+    const previous = cache.get(key)
+    const query =
+      bundle === undefined ? '' : `?bundle=${encodeURIComponent(bundle)}`
+    const headers =
+      previous?.etag === undefined ? {} : { 'if-none-match': previous.etag }
+    const response = await call(`${prefix}/manifest${query}`, { headers })
 
-    if (response.status === 304 && cached !== undefined) {
-      return cached
+    if (response.status === 304 && previous !== undefined) {
+      return previous.body
     }
 
     await assertOk(response)
-    etag = response.headers.get('etag') ?? undefined
-    cached = await response.text()
 
-    return cached
+    const body = await response.text()
+
+    cache.set(key, {
+      etag: response.headers.get('etag') ?? undefined,
+      body
+    })
+
+    return body
   }
 
   return {

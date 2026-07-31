@@ -5,13 +5,18 @@ import { z } from 'zod'
 import { open } from '../client/connection.ts'
 
 import type { Connection } from '../client/connection.ts'
+import type { SearchOptions } from '../search/tenant.ts'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 
 export const MANIFEST_URI = 'okf://manifest'
 
-const MANIFEST_DESCRIPTION = `Read the tenant's knowledge manifest: one dense TSV row per concept with its id, bundle, kind, grain, a one-line summary, and outgoing links.
+const MANIFEST_DESCRIPTION = `Read the tenant's knowledge manifest: one dense TSV row per concept with its id, bundle, kind, status, grain, a one-line summary, and outgoing links.
 
-Call this before anything else whenever you need to know what knowledge exists. It is the index: pick ids from it, then fetch those ids with "get". Never guess an id.`
+Call this before anything else whenever you need to know what knowledge exists. It is the index: pick ids from it, then fetch those ids with "get". Never guess an id.
+
+A status cell other than "-" means the concept is not current, for example "deprecated" or "draft"; prefer a current concept and say so if you use one that is not.
+
+Pass "bundle" to read one bundle instead of the whole tenant. On a large tenant the whole manifest can be too big to be worth reading, so narrow with "bundle" when you know the domain, or use "search" when you do not.`
 
 const GET_DESCRIPTION = `Fetch the full text of concepts by id, as listed in the manifest.
 
@@ -19,7 +24,9 @@ Pass every id you need in one call rather than calling repeatedly; the batch cos
 
 const SEARCH_DESCRIPTION = `Rank concepts by relevance to a query and return their manifest rows, not their bodies.
 
-Reach for this instead of reading the whole manifest when the tenant is large, or when you do not already know which concept holds the answer. The result is the same TSV shape as "manifest", narrowed: pick ids from it and fetch them with "get". Results also include concepts one link away from the top matches, which is usually where the join partner, parent dataset, or metric definition lives.`
+Reach for this instead of reading the whole manifest when the tenant is large, or when you do not already know which concept holds the answer. The result is the same TSV shape as "manifest", narrowed: pick ids from it and fetch them with "get". Results also include concepts one link away from the top matches, which is usually where the join partner, parent dataset, or metric definition lives.
+
+Pass "bundle" to rank only within one bundle.`
 
 const SNAPSHOT_DESCRIPTION = `Return the current snapshot digest and concept count.
 
@@ -52,10 +59,21 @@ function renderConcepts(
 function registerManifest(server: McpServer, connection: Connection): void {
   server.registerTool(
     'manifest',
-    { title: 'Read the knowledge manifest', description: MANIFEST_DESCRIPTION },
-    async () => {
+    {
+      title: 'Read the knowledge manifest',
+      description: MANIFEST_DESCRIPTION,
+      inputSchema: {
+        bundle: z
+          .string()
+          .optional()
+          .describe(
+            'Optional bundle name, from the bundle column, to read only that bundle.'
+          )
+      }
+    },
+    async ({ bundle }) => {
       try {
-        return text(await connection.manifest())
+        return text(await connection.manifest(bundle))
       } catch (cause) {
         return failure(cause)
       }
@@ -125,14 +143,26 @@ function registerSearch(server: McpServer, connection: Connection): void {
           .min(1)
           .max(50)
           .optional()
-          .describe('How many ranked matches to return before link expansion.')
+          .describe('How many ranked matches to return before link expansion.'),
+        bundle: z
+          .string()
+          .optional()
+          .describe('Optional bundle name to rank within.')
       }
     },
-    async ({ query, k }) => {
+    async ({ query, k, bundle }) => {
       try {
-        return text(
-          await connection.search(query, k === undefined ? {} : { k })
-        )
+        const options: SearchOptions = {}
+
+        if (k !== undefined) {
+          options.k = k
+        }
+
+        if (bundle !== undefined) {
+          options.bundle = bundle
+        }
+
+        return text(await connection.search(query, options))
       } catch (cause) {
         return failure(cause)
       }

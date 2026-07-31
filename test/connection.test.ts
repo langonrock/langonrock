@@ -198,6 +198,28 @@ describe('transport parity', () => {
 
     expect(found.size).toBe(0)
   })
+
+  test('a bundle filter survives the wire', async () => {
+    if (!ON_POSIX) {
+      return
+    }
+
+    const remote = open(`okf+unix://${socket}?tenant=acme`)
+
+    expect(await remote.manifest('sales')).toBe(
+      await open(`okf://${root}?tenant=acme`).manifest('sales')
+    )
+  })
+
+  test('reports an unknown bundle instead of returning nothing', async () => {
+    if (!ON_POSIX) {
+      return
+    }
+
+    const remote = open(`okf+unix://${socket}?tenant=acme`)
+
+    expect(remote.manifest('nope')).rejects.toThrow(/no bundle "nope"/)
+  })
 })
 
 describe('authentication', () => {

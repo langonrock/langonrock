@@ -10,6 +10,15 @@ function isPlainObject(value: unknown): value is Frontmatter {
   )
 }
 
+/**
+ * An OKF concept carries frontmatter. A Markdown file with none is repository
+ * furniture, and a cloned bundle always brings some: README, CONTRIBUTING,
+ * LICENSE. Indexing those as knowledge pollutes both the manifest and search.
+ */
+export function hasFrontmatter(source: string): boolean {
+  return FRONTMATTER.test(source)
+}
+
 export function parseFrontmatter(source: string): ParsedFile {
   const match = FRONTMATTER.exec(source)
 

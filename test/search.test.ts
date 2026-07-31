@@ -114,6 +114,45 @@ describe('bm25 scoring', () => {
 
     expect(search(index, 'x', 2)).toHaveLength(2)
   })
+
+  test('filters before the cut to k, not after', () => {
+    const index = buildIndex([
+      { id: 'a', text: 'orders orders orders' },
+      { id: 'b', text: 'orders orders' },
+      { id: 'c', text: 'orders' }
+    ])
+
+    expect(search(index, 'orders', 1, id => id === 'c').map(h => h.id)).toEqual(
+      ['c']
+    )
+  })
+})
+
+describe('field weighting', () => {
+  test('a manifest match outranks an incidental body mention', () => {
+    const index = buildIndex([
+      {
+        id: 'orders',
+        fields: 'orders bigquery_table order_id Completed customer orders.',
+        text: 'The grain is one row per completed purchase, described below.'
+      },
+      {
+        id: 'notes',
+        fields: 'notes doc - Weekly meeting notes.',
+        text: 'We discussed orders, then orders again, and closed on orders.'
+      }
+    ])
+
+    expect(search(index, 'orders', 2)[0]?.id).toBe('orders')
+  })
+
+  test('leaves a document with no fields scored on its text alone', () => {
+    const weighted = buildIndex([{ id: 'a', fields: 'orders', text: 'x y z' }])
+    const plain = buildIndex([{ id: 'a', text: 'x y z' }])
+
+    expect(search(plain, 'orders', 1)).toEqual([])
+    expect(search(weighted, 'orders', 1).map(hit => hit.id)).toEqual(['a'])
+  })
 })
 
 describe('parseManifest', () => {

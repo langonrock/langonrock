@@ -3,9 +3,24 @@ const TOKEN = /[a-z0-9]+/g
 export const K1 = 1.2
 export const B = 0.75
 
+/**
+ * How many times a manifest cell counts against a word of prose. Compiling the
+ * frontmatter away removes the id repetitions that `resource` and `sources`
+ * URLs used to contribute, so an id or summary match has to be told apart from
+ * an incidental body match.
+ *
+ * Swept over a 500 concept corpus, hit rate at 8 for queries naming a concept:
+ * 65% unweighted, 75% at 2, and no further gain above it. Weights of 4 and up
+ * start costing recall on queries that describe a concept instead of naming
+ * one, so this is the smallest value that captures the gain.
+ */
+export const FIELD_WEIGHT = 2
+
 export interface Document {
   id: string
   text: string
+  /** Manifest cells, counted FIELD_WEIGHT times against the body text. */
+  fields?: string
 }
 
 export interface Hit {
@@ -44,18 +59,35 @@ function countTerms(tokens: string[]): Map<string, number> {
   return counts
 }
 
+function weigh(
+  fields: Map<string, number>,
+  body: Map<string, number>
+): Map<string, number> {
+  const counts = new Map(body)
+
+  for (const [term, frequency] of fields) {
+    counts.set(term, (counts.get(term) ?? 0) + frequency * FIELD_WEIGHT)
+  }
+
+  return counts
+}
+
 export function buildIndex(documents: Document[]): Bm25Index {
   const ids: string[] = []
   const lengths: number[] = []
   const postings = new Map<string, Posting[]>()
 
   for (const [document, entry] of documents.entries()) {
-    const tokens = tokenize(entry.text)
+    const body = tokenize(entry.text)
+    const fields = entry.fields === undefined ? [] : tokenize(entry.fields)
 
     ids.push(entry.id)
-    lengths.push(tokens.length)
+    lengths.push(body.length + fields.length * FIELD_WEIGHT)
 
-    for (const [term, frequency] of countTerms(tokens)) {
+    for (const [term, frequency] of weigh(
+      countTerms(fields),
+      countTerms(body)
+    )) {
       const list = postings.get(term) ?? []
 
       list.push({ document, frequency })
@@ -116,7 +148,16 @@ function byScoreThenId(a: Hit, b: Hit): number {
   return a.id < b.id ? -1 : 1
 }
 
-export function search(index: Bm25Index, query: string, k: number): Hit[] {
+/**
+ * `keep` filters before the cut to k, so a narrowed search still returns k
+ * matches rather than whatever survives of the global top k.
+ */
+export function search(
+  index: Bm25Index,
+  query: string,
+  k: number,
+  keep?: (id: string) => boolean
+): Hit[] {
   const scores = new Map<number, number>()
 
   for (const term of new Set(tokenize(query))) {
@@ -128,7 +169,7 @@ export function search(index: Bm25Index, query: string, k: number): Hit[] {
   for (const [document, score] of scores) {
     const id = index.ids[document]
 
-    if (id !== undefined) {
+    if (id !== undefined && (keep === undefined || keep(id))) {
       hits.push({ id, score })
     }
   }

@@ -68,9 +68,9 @@ describe('compileTenant', () => {
 
     expect(lines[0]).toBe('# tenant: acme')
     expect(lines[1]).toBe('# bundles: ops sales')
-    expect(lines[2]).toBe('id\tbundle\tkind\tgrain\tsummary\tlinks')
-    expect(lines[3]).toBe('deploy\tops\trunbook\t-\tDeploy.\t-')
-    expect(lines[4]).toBe('orders\tsales\ttable\t-\tOrders.\t-')
+    expect(lines[2]).toBe('id\tbundle\tkind\tstatus\tgrain\tsummary\tlinks')
+    expect(lines[3]).toBe('deploy\tops\trunbook\t-\t-\tDeploy.\t-')
+    expect(lines[4]).toBe('orders\tsales\ttable\t-\t-\tOrders.\t-')
   })
 
   test('prefixes only the ids that collide across bundles', async () => {
@@ -85,7 +85,7 @@ describe('compileTenant', () => {
     const result = await compileTenant(await discoverBundles(dir), 'acme')
     const ids = result.concepts.map(concept => concept.id)
 
-    expect(ids).toEqual(['customers', 'ops/orders', 'sales/orders'])
+    expect(ids).toEqual(['ops/orders', 'customers', 'sales/orders'])
   })
 
   test('rewrites links to the global ids', async () => {

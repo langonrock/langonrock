@@ -10,6 +10,7 @@ export interface Concept {
   id: string
   path: string
   kind: string
+  status: string
   grain: string
   summary: string
   links: string[]
