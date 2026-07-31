@@ -10,7 +10,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { compileBundle } from '../src/compile/manifest.ts'
+import { compileTenant } from '../src/compile/tenant.ts'
 import { acquireWriteLock } from '../src/store/lock.ts'
 import { assertTenantId, currentFile, logFile } from '../src/store/paths.ts'
 import { openTenant } from '../src/store/reader.ts'
@@ -154,7 +154,10 @@ describe('openTenant', () => {
     await putBundle(FIXTURE, { root, tenant: 'read', bundle: 'sales' })
 
     const reader = await openTenant(root, 'read')
-    const compiled = await compileBundle(FIXTURE, { bundle: 'sales' })
+    const compiled = await compileTenant(
+      [{ name: 'sales', dir: FIXTURE }],
+      'read'
+    )
 
     expect(await reader.manifest()).toBe(compiled.tsv)
   })

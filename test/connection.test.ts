@@ -119,7 +119,7 @@ describe('transport parity', () => {
   test('embedded and socket return the same manifest', async () => {
     const embedded = open(`okf://${root}?tenant=acme`)
 
-    expect((await embedded.manifest()).startsWith('# bundle: sales')).toBe(true)
+    expect((await embedded.manifest()).startsWith('# tenant: acme')).toBe(true)
 
     if (!ON_POSIX) {
       return
@@ -166,7 +166,7 @@ describe('authentication', () => {
   test('resolves the tenant from the token with no tenant in the path', async () => {
     const connection = open(tcpDsn('/?token=secret-acme'))
 
-    expect((await connection.manifest()).startsWith('# bundle: sales')).toBe(
+    expect((await connection.manifest()).startsWith('# tenant: acme')).toBe(
       true
     )
   })

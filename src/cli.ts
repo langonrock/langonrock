@@ -7,18 +7,22 @@ import { estimateTokens } from './compile/tokens.ts'
 import { serve } from './server/http.ts'
 import { loadTokens } from './server/tokens.ts'
 import { openTenant } from './store/reader.ts'
-import { putBundle } from './store/writer.ts'
+import { watchTenant } from './store/watch.ts'
+import { putBundle, putTenantRoot } from './store/writer.ts'
 
 import type { CompileOptions } from './compile/manifest.ts'
 import type { Diagnostic } from './okf/types.ts'
 import type { ServeOptions } from './server/http.ts'
-import type { PutOptions } from './store/writer.ts'
+import type { WatchOptions } from './store/watch.ts'
+import type { PutOptions, PutResult } from './store/writer.ts'
 
 const USAGE = `langonrock - a token-efficient store for OKF knowledge bundles
 
 usage:
   langonrock compile <dir> [options]        compile a bundle to a manifest
-  langonrock put <dir> --data D --tenant T  compile and store a snapshot
+  langonrock put <dir> --data D --tenant T  store one directory as one bundle
+  langonrock sync <dir> --data D --tenant T store every subdirectory as a bundle
+  langonrock watch <dir> --data D --tenant T  keep a tenant in sync with a folder
   langonrock manifest --data D --tenant T   print the stored manifest
   langonrock get <id...> --data D --tenant T  fetch concepts by id
   langonrock serve --data D [--socket P]    run the daemon
@@ -36,6 +40,9 @@ options:
   --socket <path>     unix socket for serve (default: <data>/langonrock.sock)
   --host <name>       bind TCP instead of a socket, requires tokens.json
   --port <n>          TCP port (default 7777)
+  --watch <dir>       serve only: also keep --tenant in sync with this folder
+  --debounce <ms>     coalesce filesystem events (default 200)
+  --rescan <ms>       full rescan backstop interval (default 30000)
   --out <file>        write to a file instead of stdout
   --bundle <name>     bundle name recorded in the header (default: dir name)
   --summary-width <n> max characters per summary cell (default: ${DEFAULT_SUMMARY_WIDTH})
@@ -54,6 +61,9 @@ interface Flags {
   socket?: string | undefined
   host?: string | undefined
   port?: string | undefined
+  watch?: string | undefined
+  debounce?: string | undefined
+  rescan?: string | undefined
   help?: boolean | undefined
 }
 
@@ -134,7 +144,7 @@ const runCompile: Command = async (positionals, flags) => {
   return exitCode(flags, result.diagnostics)
 }
 
-const runPut: Command = async (positionals, flags) => {
+function putOptions(flags: Flags): PutOptions {
   const options: PutOptions = {
     root: required(flags.data, '--data'),
     tenant: required(flags.tenant, '--tenant'),
@@ -145,16 +155,78 @@ const runPut: Command = async (positionals, flags) => {
     options.bundle = flags.bundle
   }
 
-  const source = positionalAt(positionals, 1, 'directory')
-  const result = await putBundle(source, options)
+  return options
+}
 
-  report(result.diagnostics)
+function reportPut(result: PutResult): void {
   console.error(
     `snapshot ${result.snapshot.slice(0, 12)} ${result.reused ? '(reused)' : '(new)'}, ` +
-      `${result.concepts} concepts, ${result.bytes} bytes on disk`
+      `${result.bundles.length} bundle${result.bundles.length === 1 ? '' : 's'} ` +
+      `[${result.bundles.join(' ')}], ${result.concepts} concepts, ` +
+      `${result.bytes} bytes on disk`
   )
+}
+
+const runPut: Command = async (positionals, flags) => {
+  const source = positionalAt(positionals, 1, 'directory')
+  const result = await putBundle(source, putOptions(flags))
+
+  report(result.diagnostics)
+  reportPut(result)
 
   return exitCode(flags, result.diagnostics)
+}
+
+const runSync: Command = async (positionals, flags) => {
+  const source = positionalAt(positionals, 1, 'directory')
+  const result = await putTenantRoot(source, putOptions(flags))
+
+  report(result.diagnostics)
+  reportPut(result)
+
+  return exitCode(flags, result.diagnostics)
+}
+
+function parseInterval(raw: string | undefined, flag: string): number {
+  const value = Number.parseInt(raw ?? '', 10)
+
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`${flag} must be a non-negative integer, got "${raw}"`)
+  }
+
+  return value
+}
+
+function watchOptions(flags: Flags, source: string): WatchOptions {
+  const options: WatchOptions = {
+    source,
+    root: required(flags.data, '--data'),
+    tenant: required(flags.tenant, '--tenant'),
+    summaryWidth: parseWidth(flags['summary-width']),
+    onSync: reportPut,
+    onError: error => console.error(`error: ${error.message}`)
+  }
+
+  if (flags.debounce !== undefined) {
+    options.debounceMs = parseInterval(flags.debounce, '--debounce')
+  }
+
+  if (flags.rescan !== undefined) {
+    options.rescanMs = parseInterval(flags.rescan, '--rescan')
+  }
+
+  return options
+}
+
+const runWatch: Command = async (positionals, flags) => {
+  const source = positionalAt(positionals, 1, 'directory')
+  const watcher = watchTenant(watchOptions(flags, source))
+
+  await watcher.ready
+  console.error(`watching ${source} for tenant ${flags.tenant ?? ''}`)
+  await new Promise<never>(() => undefined)
+
+  return 0
 }
 
 const runManifest: Command = async (_positionals, flags) => {
@@ -235,6 +307,11 @@ const runServe: Command = async (_positionals, flags) => {
       `(${options.tokens.size} token${options.tokens.size === 1 ? '' : 's'})`
   )
 
+  if (flags.watch !== undefined) {
+    await watchTenant(watchOptions(flags, flags.watch)).ready
+    console.error(`watching ${flags.watch} for tenant ${flags.tenant ?? ''}`)
+  }
+
   await new Promise<never>(() => undefined)
 
   return 0
@@ -273,6 +350,8 @@ const runQuery: Command = async (positionals, flags) => {
 const COMMANDS: Record<string, Command> = {
   compile: runCompile,
   put: runPut,
+  sync: runSync,
+  watch: runWatch,
   manifest: runManifest,
   get: runGet,
   serve: runServe,
@@ -293,6 +372,9 @@ async function main(): Promise<number> {
       socket: { type: 'string' },
       host: { type: 'string' },
       port: { type: 'string' },
+      watch: { type: 'string' },
+      debounce: { type: 'string' },
+      rescan: { type: 'string' },
       help: { type: 'boolean', short: 'h' }
     },
     allowPositionals: true

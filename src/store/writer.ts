@@ -1,7 +1,7 @@
 import { appendFile, mkdir, open, rename } from 'node:fs/promises'
 
-import { compileBundle } from '../compile/manifest.ts'
 import { splitSections } from '../compile/sections.ts'
+import { compileTenant, discoverBundles } from '../compile/tenant.ts'
 import { encodeTnt } from './format.ts'
 import { acquireWriteLock } from './lock.ts'
 import {
@@ -13,7 +13,7 @@ import {
   tenantDir
 } from './paths.ts'
 
-import type { CompileOptions, CompileResult } from '../compile/manifest.ts'
+import type { BundleSource, TenantCompileResult } from '../compile/tenant.ts'
 import type { Diagnostic } from '../okf/types.ts'
 import type { SectionRange, TntConcept } from './format.ts'
 
@@ -28,6 +28,7 @@ export interface PutOptions {
 
 export interface PutResult {
   snapshot: string
+  bundles: string[]
   concepts: number
   bytes: number
   reused: boolean
@@ -44,7 +45,7 @@ function sectionMap(body: string): Record<string, SectionRange> {
   return map
 }
 
-function toTntConcepts(compiled: CompileResult): TntConcept[] {
+function toTntConcepts(compiled: TenantCompileResult): TntConcept[] {
   return compiled.concepts.map(concept => {
     const content = compiled.bodies.get(concept.id) ?? ''
 
@@ -102,34 +103,40 @@ async function setCurrent(
   await syncDir(tenantDir(root, tenant))
 }
 
-function compileOptions(options: PutOptions): CompileOptions {
-  const compile: CompileOptions = {}
-
-  if (options.bundle !== undefined) {
-    compile.bundle = options.bundle
-  }
-
-  if (options.summaryWidth !== undefined) {
-    compile.summaryWidth = options.summaryWidth
-  }
-
-  return compile
+async function logSync(
+  options: PutOptions,
+  source: string,
+  result: PutResult
+): Promise<void> {
+  await appendFile(
+    logFile(options.root, options.tenant),
+    `${JSON.stringify({
+      at: new Date().toISOString(),
+      tenant: options.tenant,
+      source,
+      bundles: result.bundles,
+      snapshot: result.snapshot,
+      concepts: result.concepts,
+      bytes: result.bytes,
+      reused: result.reused
+    })}\n`
+  )
 }
 
 /**
- * Copy on write. A new snapshot is a new immutable file, and only the tiny
- * `current` pointer is replaced, by rename. Readers therefore never observe a
- * partial state and never need a lock.
+ * Copy on write. A new snapshot is a new immutable file named by its own
+ * digest, and only the tiny `current` pointer is replaced, by rename. Readers
+ * therefore never observe a partial state and never need a lock.
  */
-export async function putBundle(
-  source: string,
-  options: PutOptions
+async function commit(
+  compiled: TenantCompileResult,
+  options: PutOptions,
+  source: string
 ): Promise<PutResult> {
   const { root, tenant } = options
 
   await mkdir(snapshotsDir(root, tenant), { recursive: true })
 
-  const compiled = await compileBundle(source, compileOptions(options))
   const bytes = encodeTnt(compiled.tsv, toTntConcepts(compiled))
   const snapshot = digest(bytes)
   const target = snapshotFile(root, tenant, snapshot)
@@ -144,27 +151,71 @@ export async function putBundle(
     }
 
     await setCurrent(root, tenant, snapshot)
-    await appendFile(
-      logFile(root, tenant),
-      `${JSON.stringify({
-        at: new Date().toISOString(),
-        tenant,
-        source,
-        snapshot,
-        concepts: compiled.concepts.length,
-        bytes: bytes.byteLength,
-        reused
-      })}\n`
-    )
 
-    return {
+    const result: PutResult = {
       snapshot,
+      bundles: compiled.bundles,
       concepts: compiled.concepts.length,
       bytes: bytes.byteLength,
       reused,
       diagnostics: compiled.diagnostics
     }
+
+    await logSync(options, source, result)
+
+    return result
   } finally {
     await release()
   }
+}
+
+function widthOf(options: PutOptions): TenantCompileOptionsShape {
+  return options.summaryWidth === undefined
+    ? {}
+    : { summaryWidth: options.summaryWidth }
+}
+
+type TenantCompileOptionsShape = { summaryWidth?: number }
+
+export async function putTenant(
+  sources: BundleSource[],
+  options: PutOptions
+): Promise<PutResult> {
+  const compiled = await compileTenant(
+    sources,
+    options.tenant,
+    widthOf(options)
+  )
+
+  return commit(compiled, options, sources.map(source => source.dir).join(' '))
+}
+
+function basename(path: string): string {
+  const segments = path.replaceAll('\\', '/').replace(/\/+$/, '').split('/')
+
+  return segments[segments.length - 1] ?? path
+}
+
+/** Stores one directory as a single bundle inside the tenant. */
+export async function putBundle(
+  source: string,
+  options: PutOptions
+): Promise<PutResult> {
+  const name = options.bundle ?? basename(source)
+
+  return putTenant([{ name, dir: source }], options)
+}
+
+/** Stores every immediate subdirectory of `sourceRoot` as its own bundle. */
+export async function putTenantRoot(
+  sourceRoot: string,
+  options: PutOptions
+): Promise<PutResult> {
+  const compiled = await compileTenant(
+    await discoverBundles(sourceRoot),
+    options.tenant,
+    widthOf(options)
+  )
+
+  return commit(compiled, options, sourceRoot)
 }

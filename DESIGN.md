@@ -2,7 +2,7 @@
 
 A purpose-built, multi-tenant store for Open Knowledge Format bundles, optimized for low token cost and low latency when AI agents read it.
 
-Status: build order steps 1 through 3 are implemented, plus the Part 7 connection layer. The compiler, the `.tnt` snapshot format, the copy-on-write writer, the batched reader, `open(dsn)` and the daemon all work and are exercised against real bundles. Steps 4 through 7, meaning the filesystem watcher, the MCP server, BM25 and GC, are still design only.
+Status: build order steps 1 through 4 are implemented, plus the Part 7 connection layer. The compiler, multi-bundle tenant merge, the `.tnt` snapshot format, the copy-on-write writer, the batched reader, `open(dsn)`, the daemon and the filesystem watcher all work and are exercised against real bundles. Steps 5 through 7, meaning the MCP server, BM25 and GC, are still design only.
 
 ## Summary
 
@@ -228,6 +228,20 @@ The easiest way to give users CRUD is to not build CRUD. Source of truth is a di
 
 Add a bundle by creating a folder. Remove it by deleting the folder. Modify it by saving a file.
 
+```
+sources/acme/          <- watch this
+  sales/               <- a bundle
+    tables/orders.md
+  ops/                 <- another bundle
+    runbooks/deploy.md
+```
+
+Every immediate subdirectory is a bundle. They compile together into one snapshot for the tenant, and the manifest carries a `bundle` column so an agent can filter without loading anything extra.
+
+Ids stay bare while they are unique across the whole tenant. Only the ones that clash between bundles pay for a `bundle/` prefix, and links are rewritten to match. Measured on two real Google samples merged into one tenant, nothing collided; forcing a collision by duplicating a bundle produced `ga4/events_` and left the other bundle's ids untouched.
+
+Deleting a folder and putting it back returns to the original snapshot rather than writing a new one, because snapshots are named by content. Rollback is a side effect of the naming scheme, not a feature anyone built.
+
 The store is the compiled read side.
 
 ### Three layers
@@ -313,7 +327,7 @@ put(bundle, changes)        -> only if agents write
 
 Batching `get` is what kills latency. The agent reads the manifest, picks three ids, fetches all three in one call. Two round trips total.
 
-Add a `bundle` column to the manifest so the agent filters without loading anything extra.
+The manifest carries a `bundle` column so the agent filters without loading anything extra.
 
 ## Part 7: Connection modes and protocol
 
@@ -405,7 +419,11 @@ Git on Windows converts LF to CRLF and changes the content hash. Put `* -text` i
 
 ### File watching
 
-`fsnotify` covers all three platforms with different temperaments. FSEvents on macOS coalesces events, `ReadDirectoryChangesW` on Windows overflows its buffer under bursts, and inotify on Linux has a watch limit. Debounce, and run a periodic full rescan as a backstop. Never trust watch events alone.
+`fs.watch` with `recursive: true` covers all three platforms with different temperaments. FSEvents on macOS coalesces events, `ReadDirectoryChangesW` on Windows overflows its buffer under bursts, and inotify on Linux has a watch limit. Debounce, and run a periodic full rescan as a backstop. Never trust watch events alone.
+
+One temperament worth naming, because it surfaced immediately: **macOS replays recent changes when a recursive watch starts.** Files written moments before the watcher existed arrive as fresh events, so the first sync after startup is usually spurious. It is harmless here only because an unchanged tree hashes to the snapshot that already exists and the write is skipped. A watcher that blindly rewrote on every event would churn on every boot.
+
+Writes inside dot directories are ignored. `.git` and `.obsidian` change constantly, and rebuilding on them would never stop.
 
 ### Data directories
 
@@ -505,10 +523,10 @@ Run the restore in CI weekly. An untested backup is not a backup.
 
 ## Part 12: Build order
 
-1. Compiler from an OKF folder to `manifest.tsv`. On its own this captures most of the token win.
-2. `.tnt` format, copy-on-write writer, atomic rename
-3. Reader with batched `get`
-4. Filesystem watcher for automatic sync
+1. Compiler from an OKF folder to `manifest.tsv`. On its own this captures most of the token win. **Done.**
+2. `.tnt` format, copy-on-write writer, atomic rename. **Done.**
+3. Reader with batched `get`. **Done.**
+4. Filesystem watcher for automatic sync. **Done**, and it pulled multi-bundle tenant merge forward with it, since "add a bundle by creating a folder" has no meaning without it.
 5. MCP server with the four verbs
 6. Per-tenant BM25
 7. GC for orphan snapshots and blobs
