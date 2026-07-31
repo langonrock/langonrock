@@ -1,6 +1,9 @@
 import { buildIndex, search } from './bm25.ts'
 
+export type { SearchOptions } from '../types.ts'
+
 import type { TenantReader } from '../store/reader.ts'
+import type { SearchOptions } from '../types.ts'
 import type { Bm25Index } from './bm25.ts'
 
 export const DEFAULT_K = 8
@@ -155,12 +158,6 @@ function rowsFor(manifest: Manifest, ids: string[]): string[] {
     .map(id => manifest.rows.get(id))
     .filter((row): row is ManifestRow => row !== undefined)
     .map(row => row.cells.join('\t'))
-}
-
-export interface SearchOptions {
-  k?: number
-  expand?: boolean
-  bundle?: string
 }
 
 function keeper(

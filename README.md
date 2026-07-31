@@ -228,6 +228,29 @@ const concepts = await knowledge.get(['orders', 'customers'], 'schema')
 
 The compiler, store, reader, watcher and search are all exported too, if you want the pieces rather than the connection.
 
+### From an app that is not on Bun
+
+The package above needs Bun: the store uses `Bun.file`, `Bun.Glob`, `Bun.YAML` and zstd, none of which exist on Node. A desktop editor usually cannot import it, because Electron's main process is Node and Tauri's front end is a webview.
+
+`langonrock/client` is the same `Connection` over the network only, with nothing under it but `fetch`:
+
+```ts
+import { connect } from 'langonrock/client'
+
+const knowledge = connect('okf+http://127.0.0.1:7777?token=...')
+const before = await knowledge.readSource('sales', 'tables/orders.md')
+
+await knowledge.writeSource('sales', 'tables/orders.md', edited, before?.hash)
+await knowledge.sync()
+```
+
+It runs on Node, Deno, Electron, Tauri and the browser, and a test asserts the invariant rather than trusting it: the entry point is bundled for Node and checked for any `Bun.` reference or filesystem import.
+
+For a desktop app the shape that works is one HTTP client with two configurations. Locally, ship the `langonrock` binary as a sidecar and spawn `langonrock serve --socket <path>`; remotely, point the same client at a server with a token. An embedded `okf://` string is refused with an explanation rather than silently failing, since this client has no filesystem to open.
+
+> [!NOTE]
+> Windows has no unix socket here, so a local sidecar there means loopback TCP, and the server refuses TCP without tokens. Generate one per session and pass it in the connection string.
+
 ## How it is stored
 
 ```

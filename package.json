@@ -11,7 +11,8 @@
     "langonrock": "./src/cli.ts"
   },
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./client": "./src/client/client.ts"
   },
   "files": [
     "src"

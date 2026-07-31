@@ -3,19 +3,11 @@ import { mkdir, rm, stat, unlink } from 'node:fs/promises'
 import { writeAtomic } from './atomic.ts'
 import { assertBundleName, bundleDir, sourceFile } from './sourcepaths.ts'
 
+import type { SourceEntry, SourceFile } from '../types.ts'
+
+export type { SourceEntry, SourceFile } from '../types.ts'
+
 const encoder = new TextEncoder()
-
-export interface SourceEntry {
-  bundle: string
-  path: string
-  bytes: number
-  hash: string
-}
-
-export interface SourceFile {
-  content: string
-  hash: string
-}
 
 /**
  * The same primitive the snapshot writer uses for its digest, so a source hash
