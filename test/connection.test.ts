@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { open } from '../src/client/connection.ts'
-import { parseDsn } from '../src/client/dsn.ts'
+import { normalizeDsn, parseDsn } from '../src/client/dsn.ts'
 import { serve } from '../src/server/http.ts'
 import { loadTokens } from '../src/server/tokens.ts'
 import { putBundle } from '../src/store/writer.ts'
@@ -102,6 +102,34 @@ describe('parseDsn', () => {
     expect(() => parseDsn('okf:///data?tenant=../evil')).toThrow(
       'invalid tenant id'
     )
+  })
+
+  test('accepts a windows path written with backslashes', () => {
+    const target = parseDsn('okf://C:\\Users\\me\\data?tenant=acme')
+
+    expect(target.transport).toBe('embedded')
+    expect(target.path).toBe('C:/Users/me/data')
+    expect(target.tenant).toBe('acme')
+  })
+
+  test('accepts a windows path in the file-url form', () => {
+    expect(parseDsn('okf:///C:/Users/me/data?tenant=acme').path).toBe(
+      'C:/Users/me/data'
+    )
+  })
+
+  test('does not mistake a drive letter for a host', () => {
+    const target = parseDsn('okf://C:/Users/me/data?tenant=acme')
+
+    expect(target.path).toBe('C:/Users/me/data')
+    expect(target.origin).toBe('http://langonrock')
+  })
+
+  test('leaves posix paths and the query string untouched', () => {
+    expect(normalizeDsn('okf:///var/data/okf?tenant=acme')).toBe(
+      'okf:///var/data/okf?tenant=acme'
+    )
+    expect(parseDsn('okf://C:\\data?token=a\\b').token).toBe('a\\b')
   })
 })
 

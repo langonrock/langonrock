@@ -63,7 +63,7 @@ describe('watchTenant', () => {
 
   afterAll(() => watcher?.close())
 
-  test('syncs once before ready resolves', async () => {
+  test('populates the store before ready resolves', async () => {
     const { source, root } = await seed('initial')
     const syncs: PutResult[] = []
 
@@ -78,7 +78,10 @@ describe('watchTenant', () => {
 
     await watcher.ready
 
-    expect(syncs).toHaveLength(1)
+    // Not an exact count: every platform replays or coalesces startup events
+    // differently, so extra syncs may already have landed. What must hold is
+    // that the first one did real work and the store is readable.
+    expect(syncs.length).toBeGreaterThanOrEqual(1)
     expect(syncs[0]?.reused).toBe(false)
     expect((await openTenant(root, 'acme')).ids).toEqual(['orders'])
 
@@ -118,11 +121,13 @@ describe('watchTenant', () => {
     await local.ready
     await mkdir(join(source, 'ops'), { recursive: true })
     await writeFile(join(source, 'ops', 'deploy.md'), md('Deploy.'))
-    await waitFor(() => syncs.length > 1)
 
-    const latest = syncs[syncs.length - 1]
+    // Wait on the observable outcome, not a sync counter. Startup events can
+    // land an extra sync before the new folder exists, which would satisfy a
+    // count-based wait while the tree is still one bundle.
+    await waitFor(() => syncs.at(-1)?.bundles.length === 2)
 
-    expect(latest?.bundles).toEqual(['ops', 'sales'])
+    expect(syncs.at(-1)?.bundles).toEqual(['ops', 'sales'])
     expect((await openTenant(root, 'acme')).ids.sort()).toEqual([
       'deploy',
       'orders'
