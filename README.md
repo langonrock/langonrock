@@ -16,14 +16,13 @@ Measured against the OKF reference consumption pattern over the same corpus and 
 
 |                                         | OKF navigator | langonrock |
 | --------------------------------------- | ------------: | ---------: |
-| Tokens billed for a 20-question session |       109,315 | **58,819** |
+| Tokens billed for a 20-question session |       116,357 | **64,355** |
 | Tool calls                              |            30 |     **17** |
-| Tokens for one concept read             |           631 |    **226** |
+| Tokens for one concept read             |           594 |    **213** |
 
 The saving is not that TSV is denser than Markdown. It is that the manifest carries the link graph, so the agent knows every id it needs _before_ fetching anything and gets them in one batched call, and that a concept is addressable by section instead of whole.
 
-> [!NOTE]
-> These numbers come from a 500-concept corpus generated to match the shape of Google's sample bundles, scored with a deliberately crude `chars / 4` token estimate applied to both sides. Treat them as an order of magnitude, and measure your own corpus.
+Full numbers, including where the store loses, are in [Benchmarks](#benchmarks).
 
 ## Features
 
@@ -143,14 +142,14 @@ The daemon is usually what you want locally: several clients share one process w
 
 ## Large tenants
 
-The manifest costs roughly 35 tokens per concept, so it stops being worth reading whole somewhere past a few thousand concepts. Narrow instead of paginating:
+The manifest costs around 40 tokens per concept, so it stops being worth reading whole somewhere past a few thousand of them. Narrow instead of paginating:
 
 ```ts
 await connection.manifest('sales') // one bundle
 await connection.search('orders', { bundle: 'ops' })
 ```
 
-Rows are grouped by bundle in the snapshot, so one bundle is a contiguous slice the reader hands back without parsing. On a 20,000-concept tenant that is 17,914 tokens against 732,986 for the whole manifest, and it stays flat as the tenant grows.
+Rows are grouped by bundle in the snapshot, so one bundle is a contiguous slice the reader hands back without parsing. On a 20,000-concept tenant that is 20,486 tokens against 835,922 for the whole manifest, and the slice stays flat as the tenant grows.
 
 ## Library
 
@@ -186,6 +185,78 @@ Because a snapshot is named by its own content, storing an unchanged tree is a n
 
 > [!IMPORTANT]
 > The snapshot holds the compiled read model, not your bundle. Frontmatter is compiled away, so a store is not a backup of your Markdown. Keep the source folder in git.
+
+## Benchmarks
+
+A corpus generated to match the shape of Google's OKF samples: v0.2 frontmatter, prose written for people, `# Schema` and `# Joins` headings, links between concepts, about 2 KB each. Twenty fixed questions with a stated ground truth, and both paths charged for delivering the same concepts. The baseline is the OKF reference consumption pattern — read `index.md`, read a concept, follow its links — running the same BM25 this project uses over the raw Markdown, given perfect navigation and never taking a wrong turn.
+
+Every number below comes from one script, on one machine. Reproduce it with `bun bench/run.ts <bundles> <concepts per bundle>`, which prints a JSON line: `1 500` for the token tables, `10 500` and `40 500` for the scale rows.
+
+### Tokens, 500 concepts in one bundle
+
+A session is twenty questions in one conversation, where content read once stays in context and is re-billed at the cache rate on every later call. Both paths pay under that same model.
+
+| Path                | Billed tokens |  Calls |
+| ------------------- | ------------: | -----: |
+| OKF index navigator |       116,357 |     30 |
+| langonrock          |    **64,355** | **17** |
+
+| What a read costs                    |  Tokens |
+| ------------------------------------ | ------: |
+| OKF `read_concept`, the whole file   |     594 |
+| `get(id)`, frontmatter compiled away |     445 |
+| `get(id, "schema")`                  | **213** |
+| One search result, eight rows        |     719 |
+
+| What can go in the prompt |  Tokens |
+| ------------------------- | ------: |
+| The bundle in full        | 264,744 |
+| `index.md`                |  16,575 |
+| `manifest.tsv`            |  20,549 |
+
+> [!NOTE]
+> The manifest is **larger** than a well-kept `index.md` here. Density is not where the saving comes from; batching and section addressing are.
+
+### Scale
+
+| Concepts         |    500 |   5,000 |  20,000 |
+| ---------------- | -----: | ------: | ------: |
+| Whole manifest   | 20,549 | 205,851 | 835,922 |
+| One bundle slice | 20,549 |  20,419 |  20,486 |
+| Snapshot on disk | 0.5 MB |  5.0 MB | 20.1 MB |
+
+### Latency, median milliseconds
+
+| Operation                    |   500 | 5,000 | 20,000 |
+| ---------------------------- | ----: | ----: | -----: |
+| Compile and write a snapshot |    32 |   211 |    782 |
+| Open a snapshot, cold        |  0.54 |  3.74 |   16.3 |
+| Read the manifest, warm      | <0.01 | <0.01 |  <0.01 |
+| Batched `get` of 3 sections  |  0.07 |  0.08 |   0.08 |
+| Build the BM25 index         |    29 |   251 |  1,047 |
+| BM25 query                   |  0.14 |  1.38 |   7.09 |
+
+`get` is flat: batching a fetch costs the same on a tenant of twenty thousand concepts as on one of five hundred. None of this is where the time goes, though. One saved model round trip is worth about a second, four orders of magnitude more than any row above.
+
+Memory is deliberately absent from that table. The index is rebuilt in memory once per snapshot, and peak process memory at 20,000 concepts landed anywhere between 0.9 and 1.2 GB across runs, too noisy for a single figure to be worth printing. It is still the practical ceiling on how many large tenants one daemon can hold.
+
+### Retrieval accuracy
+
+Whether the concept that answers the question is in the top eight, over the same twenty questions on 500 concepts.
+
+| Retrieval                                  | Hit rate |  MRR |
+| ------------------------------------------ | -------: | ---: |
+| OKF BM25 over raw Markdown                 |      70% | 0.43 |
+| langonrock BM25                            |      65% | 0.26 |
+| langonrock BM25 plus the one-hop expansion |  **75%** | 0.27 |
+
+Queries that describe a concept rather than name it land at 95% on both sides.
+
+> [!IMPORTANT]
+> The store ranks worse than the raw files on mean reciprocal rank, and that is a real cost of compiling. The frontmatter that gets stripped repeated the concept id in its `resource` and `sources` URLs, which happened to help the ranker. Field weighting recovers the hit rate and the one-hop expansion passes it, but the top position is still better on raw Markdown.
+
+> [!NOTE]
+> Numbers come from a synthetic corpus and a deliberately crude `chars / 4` token estimate, and the retrieval table is reported at a single scale because the generator reuses descriptions across bundles, which makes description queries measure the corpus rather than the index. Treat all of this as an order of magnitude and measure your own bundles.
 
 ## CLI
 
