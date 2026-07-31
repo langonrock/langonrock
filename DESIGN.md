@@ -2,7 +2,9 @@
 
 A purpose-built, multi-tenant store for Open Knowledge Format bundles, optimized for low token cost and low latency when AI agents read it.
 
-Status: build order steps 1 through 4 are implemented, plus the Part 7 connection layer. The compiler, multi-bundle tenant merge, the `.tnt` snapshot format, the copy-on-write writer, the batched reader, `open(dsn)`, the daemon and the filesystem watcher all work and are exercised against real bundles. Steps 5 through 7, meaning the MCP server, BM25 and GC, are still design only.
+Status: build order steps 1 through 5 are implemented, plus the Part 7 connection layer. The compiler, multi-bundle tenant merge, the `.tnt` snapshot format, the copy-on-write writer, the batched reader, `open(dsn)`, the daemon, the filesystem watcher and the MCP server all work and are exercised against real bundles. Steps 6 and 7, meaning BM25 and GC, are still design only.
+
+Everything up to here has zero runtime dependencies. The MCP server adds two, `@modelcontextprotocol/sdk` and `zod`, because MCP is a moving specification and hand-rolling its framing would be a maintenance liability rather than a saving.
 
 ## Summary
 
@@ -319,15 +321,31 @@ If analytical queries over metadata ever become a requirement, SQLite per tenant
 Few verbs, all deterministic. Tool count is itself a token cost, since 4 tools run about 200 tokens of schema and 15 run about 1500.
 
 ```
-manifest(tenant)            -> TSV, usually already in the cached prefix
+manifest()                  -> TSV, usually already in the cached prefix
 get(ids[], section?)        -> batch, one round trip for N concepts
-search(query, k)            -> BM25 plus deterministic one-hop expansion
-put(bundle, changes)        -> only if agents write
+snapshot()                  -> digest, to check whether the manifest is stale
+search(query, k)            -> BM25 plus one-hop expansion. Not built yet, waits on step 6.
 ```
 
 Batching `get` is what kills latency. The agent reads the manifest, picks three ids, fetches all three in one call. Two round trips total.
 
 The manifest carries a `bundle` column so the agent filters without loading anything extra.
+
+### Why there is no `put` verb
+
+An earlier draft listed `put(bundle, changes)` as the fourth verb, "only if agents write". The watcher settled that question by making it incoherent.
+
+The source folder is the truth, and the watcher recompiles from it. An agent that wrote a snapshot through `put` would have that snapshot silently replaced by the next filesystem event or the next rescan, at most 30 seconds later. The write would look like it succeeded and then quietly vanish, which is worse than not offering it.
+
+Agents that should change knowledge edit the source markdown like a human does, and the watcher picks it up. That keeps one writer and one source of truth instead of two that race.
+
+### The MCP server
+
+`langonrock mcp <dsn>` speaks MCP over stdio on top of `Connection`, so it works against an embedded path, a local daemon, or a remote server without knowing which.
+
+Tool descriptions state **when** to call, not just what the tool does: "call this before anything else", "pass every id you need in one call". A description that only describes gets under-triggered.
+
+The manifest is exposed twice on purpose: as a tool for every client, and as an MCP **resource** at `okf://manifest` for clients that preload resources into context. The resource path is the one that actually delivers the design's central claim, since a preloaded manifest lands in the cacheable prefix rather than arriving mid-conversation as a tool result.
 
 ## Part 7: Connection modes and protocol
 
@@ -527,7 +545,7 @@ Run the restore in CI weekly. An untested backup is not a backup.
 2. `.tnt` format, copy-on-write writer, atomic rename. **Done.**
 3. Reader with batched `get`. **Done.**
 4. Filesystem watcher for automatic sync. **Done**, and it pulled multi-bundle tenant merge forward with it, since "add a bundle by creating a folder" has no meaning without it.
-5. MCP server with the four verbs
+5. MCP server with the four verbs. **Done**, with three verbs rather than four: `search` waits on step 6, and `put` was dropped for the reason in Part 6.
 6. Per-tenant BM25
 7. GC for orphan snapshots and blobs
 

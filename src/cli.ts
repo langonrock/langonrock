@@ -4,6 +4,7 @@ import { parseArgs } from 'node:util'
 import { open } from './client/connection.ts'
 import { DEFAULT_SUMMARY_WIDTH, compileBundle } from './compile/manifest.ts'
 import { estimateTokens } from './compile/tokens.ts'
+import { serveMcp } from './mcp/server.ts'
 import { serve } from './server/http.ts'
 import { loadTokens } from './server/tokens.ts'
 import { openTenant } from './store/reader.ts'
@@ -27,6 +28,7 @@ usage:
   langonrock get <id...> --data D --tenant T  fetch concepts by id
   langonrock serve --data D [--socket P]    run the daemon
   langonrock query <dsn> <verb> [id...]     talk to any transport by dsn
+  langonrock mcp <dsn>                      serve MCP over stdio
 
 dsn forms:
   okf:///var/data?tenant=acme               embedded, direct file access
@@ -347,6 +349,15 @@ const runQuery: Command = async (positionals, flags) => {
   return found.size === ids.length ? 0 : 1
 }
 
+const runMcp: Command = async positionals => {
+  const dsn = positionalAt(positionals, 1, 'dsn')
+
+  console.error(`langonrock mcp serving ${dsn} over stdio`)
+  await serveMcp(dsn)
+
+  return 0
+}
+
 const COMMANDS: Record<string, Command> = {
   compile: runCompile,
   put: runPut,
@@ -355,7 +366,8 @@ const COMMANDS: Record<string, Command> = {
   manifest: runManifest,
   get: runGet,
   serve: runServe,
-  query: runQuery
+  query: runQuery,
+  mcp: runMcp
 }
 
 async function main(): Promise<number> {

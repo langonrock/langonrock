@@ -1,0 +1,208 @@
+import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+import { open } from '../src/client/connection.ts'
+import { MANIFEST_URI, createMcpServer } from '../src/mcp/server.ts'
+import { putBundle } from '../src/store/writer.ts'
+
+const FIXTURE = `${import.meta.dir}/fixtures/sales`
+const CLI = `${import.meta.dir}/../src/cli.ts`
+
+let scratch = ''
+let root = ''
+let dsn = ''
+let client: Client
+
+async function connect(target: string): Promise<Client> {
+  const [clientSide, serverSide] = InMemoryTransport.createLinkedPair()
+  const connected = new Client({ name: 'test', version: '0.0.0' })
+
+  await Promise.all([
+    createMcpServer(open(target)).connect(serverSide),
+    connected.connect(clientSide)
+  ])
+
+  return connected
+}
+
+function firstText(result: unknown): string {
+  const content = (result as { content: { type: string; text?: string }[] })
+    .content
+
+  return content.map(block => block.text ?? '').join('')
+}
+
+beforeAll(async () => {
+  scratch = await mkdtemp(join(tmpdir(), 'lr-mcp-'))
+  root = join(scratch, 'data')
+  dsn = `okf://${root}?tenant=acme`
+
+  await putBundle(FIXTURE, { root, tenant: 'acme', bundle: 'sales' })
+  client = await connect(dsn)
+})
+
+afterAll(async () => {
+  await client.close()
+  await rm(scratch, { recursive: true, force: true })
+})
+
+describe('tool surface', () => {
+  test('exposes exactly three verbs', async () => {
+    const { tools } = await client.listTools()
+
+    expect(tools.map(tool => tool.name).sort()).toEqual([
+      'get',
+      'manifest',
+      'snapshot'
+    ])
+  })
+
+  test('tells the model when to call each tool, not just what it does', async () => {
+    const { tools } = await client.listTools()
+    const byName = new Map(tools.map(tool => [tool.name, tool.description]))
+
+    expect(byName.get('manifest')).toContain('before anything else')
+    expect(byName.get('get')).toContain('one call')
+    expect(byName.get('snapshot')).toContain('changed')
+  })
+
+  test('declares the ids argument as required', async () => {
+    const { tools } = await client.listTools()
+    const get = tools.find(tool => tool.name === 'get')
+
+    expect(get?.inputSchema.required).toEqual(['ids'])
+  })
+})
+
+describe('manifest', () => {
+  test('returns the stored manifest', async () => {
+    const result = await client.callTool({ name: 'manifest', arguments: {} })
+
+    expect(firstText(result).startsWith('# tenant: acme')).toBe(true)
+  })
+
+  test('is also readable as a resource for clients that preload', async () => {
+    const result = await client.readResource({ uri: MANIFEST_URI })
+    const first = result.contents[0]
+
+    if (first === undefined || !('text' in first)) {
+      throw new Error('manifest resource returned no text content')
+    }
+
+    expect(first.mimeType).toBe('text/tab-separated-values')
+    expect(first.text.startsWith('# tenant: acme')).toBe(true)
+  })
+})
+
+describe('get', () => {
+  test('returns a batch of concepts in one call', async () => {
+    const result = await client.callTool({
+      name: 'get',
+      arguments: { ids: ['customers', 'tables/orders'] }
+    })
+    const body = firstText(result)
+
+    expect(body).toContain('@@ customers')
+    expect(body).toContain('@@ tables/orders')
+  })
+
+  test('returns only the requested section', async () => {
+    const whole = firstText(
+      await client.callTool({ name: 'get', arguments: { ids: ['orders_db'] } })
+    )
+    const section = firstText(
+      await client.callTool({
+        name: 'get',
+        arguments: { ids: ['orders_db'], section: 'orders_db' }
+      })
+    )
+
+    expect(section.length).toBeLessThan(whole.length)
+    expect(section).toContain('# Orders DB')
+  })
+
+  test('names ids it could not find instead of failing silently', async () => {
+    const result = await client.callTool({
+      name: 'get',
+      arguments: { ids: ['customers', 'nope'] }
+    })
+    const body = firstText(result)
+
+    expect(body).toContain('@@ customers')
+    expect(body).toContain('@@ missing\nnope')
+  })
+
+  test('rejects an empty id list at the schema boundary', async () => {
+    const result = await client.callTool({
+      name: 'get',
+      arguments: { ids: [] }
+    })
+
+    expect(result.isError).toBe(true)
+  })
+})
+
+describe('snapshot', () => {
+  test('returns the current digest', async () => {
+    const result = await client.callTool({ name: 'snapshot', arguments: {} })
+
+    expect(firstText(result)).toMatch(/^[0-9a-f]{64}$/)
+  })
+})
+
+describe('failures', () => {
+  test('reports a missing tenant as a tool error, not a protocol crash', async () => {
+    const broken = await connect(`okf://${root}?tenant=absent`)
+    const result = await broken.callTool({ name: 'manifest', arguments: {} })
+
+    expect(result.isError).toBe(true)
+    expect(firstText(result)).toContain('ENOENT')
+
+    await broken.close()
+  })
+})
+
+describe('stdio transport', () => {
+  test('writes nothing but JSON-RPC frames to stdout', async () => {
+    const proc = Bun.spawn(['bun', CLI, 'mcp', dsn], {
+      stdin: 'pipe',
+      stdout: 'pipe',
+      stderr: 'pipe'
+    })
+
+    proc.stdin.write(
+      `${JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2024-11-05',
+          capabilities: {},
+          clientInfo: { name: 'probe', version: '0.0.0' }
+        }
+      })}\n`
+    )
+    await proc.stdin.flush()
+
+    const reader = proc.stdout.getReader()
+    const { value } = await reader.read()
+    const line = new TextDecoder().decode(value).split('\n')[0] ?? ''
+    const frame = JSON.parse(line) as {
+      jsonrpc: string
+      result?: { serverInfo?: { name?: string } }
+    }
+
+    expect(frame.jsonrpc).toBe('2.0')
+    expect(frame.result?.serverInfo?.name).toBe('langonrock')
+
+    await reader.cancel()
+    proc.kill()
+    await proc.exited
+
+    expect(await new Response(proc.stderr).text()).toContain('over stdio')
+  })
+})
