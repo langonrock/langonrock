@@ -114,6 +114,21 @@ describe('bm25 scoring', () => {
     expect(search(index, 'x', 10).map(hit => hit.id)).toEqual(['a', 'b'])
   })
 
+  test('bounded selection matches the full ordering at every k', () => {
+    const documents = Array.from({ length: 40 }, (_, index) => ({
+      id: `doc_${String(index).padStart(2, '0')}`,
+      text: `${'orders '.repeat((index % 5) + 1)}${'filler '.repeat(index % 7)}x`
+    }))
+    const index = buildIndex(documents)
+    const full = search(index, 'orders filler', documents.length)
+
+    expect(full).toHaveLength(documents.length)
+
+    for (const k of [1, 3, 8, 17, 40]) {
+      expect(search(index, 'orders filler', k)).toEqual(full.slice(0, k))
+    }
+  })
+
   test('returns nothing for an unknown term or an empty index', () => {
     expect(search(buildIndex([{ id: 'a', text: 'x' }]), 'zzz', 10)).toEqual([])
     expect(search(buildIndex([]), 'x', 10)).toEqual([])

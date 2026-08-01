@@ -234,12 +234,48 @@ function accumulate(
  * Ties break by id so the same query against the same snapshot always returns
  * the same order. An agent that reruns a search should not see results shuffle.
  */
-function byScoreThenId(a: Hit, b: Hit): number {
-  if (a.score !== b.score) {
-    return b.score - a.score
+function ranksBefore(id: string, score: number, hit: Hit): boolean {
+  if (score !== hit.score) {
+    return score > hit.score
   }
 
-  return a.id < b.id ? -1 : 1
+  return id < hit.id
+}
+
+/**
+ * Bounded selection: keeps the best k seen so far in rank order, so a query
+ * matching most of a large tenant costs one comparison per match instead of
+ * sorting every match. Same total order as a full sort, identical results.
+ */
+function insertBounded(top: Hit[], id: string, score: number, k: number): void {
+  const last = top[top.length - 1]
+
+  if (
+    top.length === k &&
+    (last === undefined || !ranksBefore(id, score, last))
+  ) {
+    return
+  }
+
+  let low = 0
+  let high = top.length
+
+  while (low < high) {
+    const middle = (low + high) >>> 1
+    const there = top[middle]
+
+    if (there === undefined || ranksBefore(id, score, there)) {
+      high = middle
+    } else {
+      low = middle + 1
+    }
+  }
+
+  top.splice(low, 0, { id, score })
+
+  if (top.length > k) {
+    top.pop()
+  }
 }
 
 /**
@@ -258,15 +294,15 @@ export function search(
     accumulate(index, term, scores)
   }
 
-  const hits: Hit[] = []
+  const top: Hit[] = []
 
   for (const [document, score] of scores) {
     const id = index.ids[document]
 
     if (id !== undefined && (keep === undefined || keep(id))) {
-      hits.push({ id, score })
+      insertBounded(top, id, score, k)
     }
   }
 
-  return hits.sort(byScoreThenId).slice(0, k)
+  return top
 }
