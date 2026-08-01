@@ -54,6 +54,20 @@ describe('tokenize', () => {
   test('returns nothing for text with no word characters', () => {
     expect(tokenize('   --- ')).toEqual([])
   })
+
+  test('folds accents so both spellings tokenize identically', () => {
+    expect(tokenize('operações')).toEqual(['operacoes'])
+    expect(tokenize('operacoes')).toEqual(['operacoes'])
+    expect(tokenize('Métrica de Conversão')).toEqual([
+      'metrica',
+      'de',
+      'conversao'
+    ])
+  })
+
+  test('keeps non-latin letters instead of dropping them', () => {
+    expect(tokenize('売上高 2024')).toEqual(['売上高', '2024'])
+  })
 })
 
 describe('bm25 scoring', () => {
@@ -113,6 +127,16 @@ describe('bm25 scoring', () => {
     ])
 
     expect(search(index, 'x', 2)).toHaveLength(2)
+  })
+
+  test('matches across accented and plain spellings both ways', () => {
+    const index = buildIndex([
+      { id: 'accented', text: 'Relatório de operações da região sul' },
+      { id: 'plain', text: 'relatorio de operacoes da regiao norte' }
+    ])
+
+    expect(search(index, 'operações', 10)).toHaveLength(2)
+    expect(search(index, 'operacoes', 10)).toHaveLength(2)
   })
 
   test('filters before the cut to k, not after', () => {

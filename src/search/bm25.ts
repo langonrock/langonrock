@@ -1,4 +1,7 @@
-const TOKEN = /[a-z0-9]+/g
+const ASCII_TOKEN = /[a-z0-9]+/g
+const TOKEN = /[\p{L}\p{N}]+/gu
+const NON_ASCII = /[^\x00-\x7f]/
+const MARKS = /\p{M}+/gu
 
 export const K1 = 1.2
 export const B = 0.75
@@ -44,9 +47,20 @@ export interface Bm25Index {
  * Splitting on every non-alphanumeric run means `order_id` and `order id`
  * tokenize identically, so a query written either way matches either form.
  * The query goes through this same function, which is what keeps that true.
+ *
+ * Accents fold away before splitting, so `operações` and `operacoes` are the
+ * same token whichever way the document or the query spells it. Pure ASCII
+ * text skips the normalization and keeps the exact behaviour and cost the
+ * index build always had.
  */
 export function tokenize(text: string): string[] {
-  return text.toLowerCase().match(TOKEN) ?? []
+  const lowered = text.toLowerCase()
+
+  if (!NON_ASCII.test(lowered)) {
+    return lowered.match(ASCII_TOKEN) ?? []
+  }
+
+  return lowered.normalize('NFKD').replace(MARKS, '').match(TOKEN) ?? []
 }
 
 function countTerms(tokens: string[]): Map<string, number> {
