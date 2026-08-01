@@ -16,6 +16,12 @@ export interface TenantReader {
   titles: Map<string, string>
   manifest: (bundle?: string) => Promise<string>
   get: (ids: string[], section?: string) => Promise<Map<string, string>>
+  /**
+   * Every body in id order, decompressed one at a time off a single read of
+   * the blobs region. For whole-tenant consumers like the search index build,
+   * where per-id `get` would cost one file read per concept.
+   */
+  bodies: () => Promise<Iterable<[string, string]>>
 }
 
 /**
@@ -104,6 +110,35 @@ function sliceSection(
   return range === undefined ? undefined : content.slice(range.start, range.end)
 }
 
+async function readBodies(
+  path: string,
+  header: TntHeader,
+  entries: DirEntry[]
+): Promise<Iterable<[string, string]>> {
+  const region = await slice(path, header.blobsOffset, header.blobsLength)
+
+  return (function* (): Generator<[string, string]> {
+    for (const entry of entries) {
+      yield [
+        entry.id,
+        decodeBlob(region.subarray(entry.offset, entry.offset + entry.length))
+      ]
+    }
+  })()
+}
+
+function titlesOf(entries: DirEntry[]): Map<string, string> {
+  const titles = new Map<string, string>()
+
+  for (const entry of entries) {
+    if (entry.title !== undefined) {
+      titles.set(entry.id, entry.title)
+    }
+  }
+
+  return titles
+}
+
 async function readEntry(
   path: string,
   header: TntHeader,
@@ -187,19 +222,12 @@ export async function openTenant(
     return found
   }
 
-  const titles = new Map<string, string>()
-
-  for (const entry of entries) {
-    if (entry.title !== undefined) {
-      titles.set(entry.id, entry.title)
-    }
-  }
-
   return {
     snapshot,
     ids: entries.map(entry => entry.id),
-    titles,
+    titles: titlesOf(entries),
     manifest,
-    get
+    get,
+    bodies: () => readBodies(path, header, entries)
   }
 }

@@ -1,4 +1,4 @@
-import { buildIndex, search } from './bm25.ts'
+import { createIndexBuilder, search } from './bm25.ts'
 
 export type { SearchOptions } from '../types.ts'
 
@@ -77,24 +77,25 @@ export async function buildTenantIndex(
   reader: TenantReader
 ): Promise<TenantIndex> {
   const manifest = parseManifest(await reader.manifest())
-  const bodies = await reader.get(reader.ids)
-  const documents = reader.ids.map(id => {
+  const builder = createIndexBuilder()
+
+  for (const [id, text] of await reader.bodies()) {
     const title = reader.titles.get(id)
     const names = title === undefined ? id : `${id} ${title}`
     const cells = manifest.rows.get(id)?.cells.slice(1, -1).join(' ') ?? ''
-    const document: Document = { id, names, text: bodies.get(id) ?? '' }
+    const document: Document = { id, names, text }
 
     if (cells !== '') {
       document.fields = cells
     }
 
-    return document
-  })
+    builder.add(document)
+  }
 
   return {
     snapshot: reader.snapshot,
     manifest,
-    index: buildIndex(documents)
+    index: builder.build()
   }
 }
 

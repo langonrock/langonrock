@@ -233,6 +233,16 @@ describe('openTenant', () => {
     expect(reader.titles.size).toBe(0)
   })
 
+  test('streams every body in id order from one region read', async () => {
+    await putBundle(FIXTURE, { root, tenant: 'stream' })
+
+    const reader = await openTenant(root, 'stream')
+    const streamed = new Map(await reader.bodies())
+
+    expect([...streamed.keys()]).toEqual(reader.ids)
+    expect(streamed).toEqual(await reader.get(reader.ids))
+  })
+
   test('reads the snapshot the current pointer names', async () => {
     const put = await putBundle(FIXTURE, { root, tenant: 'pointer' })
     const reader = await openTenant(root, 'pointer')

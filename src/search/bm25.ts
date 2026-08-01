@@ -47,16 +47,22 @@ export interface Hit {
   score: number
 }
 
-interface Posting {
-  document: number
-  frequency: number
+/**
+ * Postings are parallel typed arrays, not one object per posting. At twenty
+ * thousand concepts the index holds millions of postings, and the per-object
+ * overhead was most of the process's memory ceiling.
+ */
+interface PostingList {
+  documents: Uint32Array
+  frequencies: Uint32Array
+  length: number
 }
 
 export interface Bm25Index {
   ids: string[]
   lengths: number[]
   averageLength: number
-  postings: Map<string, Posting[]>
+  postings: Map<string, PostingList>
 }
 
 /**
@@ -89,43 +95,110 @@ function addWeighted(
   }
 }
 
-export function buildIndex(documents: Document[]): Bm25Index {
-  const ids: string[] = []
-  const lengths: number[] = []
-  const postings = new Map<string, Posting[]>()
+function createList(): PostingList {
+  return {
+    documents: new Uint32Array(2),
+    frequencies: new Uint32Array(2),
+    length: 0
+  }
+}
 
-  for (const [document, entry] of documents.entries()) {
-    const body = tokenize(entry.text)
-    const fields = entry.fields === undefined ? [] : tokenize(entry.fields)
-    const names = entry.names === undefined ? [] : tokenize(entry.names)
+function push(list: PostingList, document: number, frequency: number): void {
+  if (list.length === list.documents.length) {
+    const documents = new Uint32Array(list.length * 2)
+    const frequencies = new Uint32Array(list.length * 2)
 
-    ids.push(entry.id)
-    lengths.push(
-      body.length + fields.length * FIELD_WEIGHT + names.length * NAME_WEIGHT
-    )
-
-    const counts = new Map<string, number>()
-
-    addWeighted(counts, body, 1)
-    addWeighted(counts, fields, FIELD_WEIGHT)
-    addWeighted(counts, names, NAME_WEIGHT)
-
-    for (const [term, frequency] of counts) {
-      const list = postings.get(term) ?? []
-
-      list.push({ document, frequency })
-      postings.set(term, list)
-    }
+    documents.set(list.documents)
+    frequencies.set(list.frequencies)
+    list.documents = documents
+    list.frequencies = frequencies
   }
 
-  const total = lengths.reduce((sum, length) => sum + length, 0)
+  list.documents[list.length] = document
+  list.frequencies[list.length] = frequency
+  list.length += 1
+}
+
+function trim(list: PostingList): PostingList {
+  if (list.length === list.documents.length) {
+    return list
+  }
 
   return {
-    ids,
-    lengths,
-    averageLength: ids.length === 0 ? 0 : total / ids.length,
-    postings
+    documents: list.documents.slice(0, list.length),
+    frequencies: list.frequencies.slice(0, list.length),
+    length: list.length
   }
+}
+
+export interface IndexBuilder {
+  add: (document: Document) => void
+  build: () => Bm25Index
+}
+
+/**
+ * Documents are added one at a time so the caller never has to hold every
+ * body in memory at once: tokenize, count, drop the text, move on.
+ */
+export function createIndexBuilder(): IndexBuilder {
+  const ids: string[] = []
+  const lengths: number[] = []
+  const postings = new Map<string, PostingList>()
+
+  return {
+    add: entry => {
+      const document = ids.length
+      const body = tokenize(entry.text)
+      const fields = entry.fields === undefined ? [] : tokenize(entry.fields)
+      const names = entry.names === undefined ? [] : tokenize(entry.names)
+
+      ids.push(entry.id)
+      lengths.push(
+        body.length + fields.length * FIELD_WEIGHT + names.length * NAME_WEIGHT
+      )
+
+      const counts = new Map<string, number>()
+
+      addWeighted(counts, body, 1)
+      addWeighted(counts, fields, FIELD_WEIGHT)
+      addWeighted(counts, names, NAME_WEIGHT)
+
+      for (const [term, frequency] of counts) {
+        let list = postings.get(term)
+
+        if (list === undefined) {
+          list = createList()
+          postings.set(term, list)
+        }
+
+        push(list, document, frequency)
+      }
+    },
+    build: () => {
+      for (const [term, list] of postings) {
+        postings.set(term, trim(list))
+      }
+
+      const total = lengths.reduce((sum, length) => sum + length, 0)
+
+      return {
+        ids,
+        lengths,
+        averageLength: ids.length === 0 ? 0 : total / ids.length,
+        postings
+      }
+    }
+  }
+}
+
+export function buildIndex(documents: Document[]): Bm25Index {
+  const builder = createIndexBuilder()
+
+  for (const document of documents) {
+    builder.add(document)
+  }
+
+  return builder.build()
 }
 
 function inverseDocumentFrequency(matching: number, total: number): number {
@@ -145,17 +218,15 @@ function accumulate(
 
   const idf = inverseDocumentFrequency(list.length, index.ids.length)
 
-  for (const posting of list) {
-    const length = index.lengths[posting.document] ?? 0
+  for (let entry = 0; entry < list.length; entry++) {
+    const document = list.documents[entry] ?? 0
+    const frequency = list.frequencies[entry] ?? 0
+    const length = index.lengths[document] ?? 0
     const norm =
       index.averageLength === 0 ? 1 : 1 - B + (B * length) / index.averageLength
-    const weight =
-      (posting.frequency * (K1 + 1)) / (posting.frequency + K1 * norm)
+    const weight = (frequency * (K1 + 1)) / (frequency + K1 * norm)
 
-    scores.set(
-      posting.document,
-      (scores.get(posting.document) ?? 0) + idf * weight
-    )
+    scores.set(document, (scores.get(document) ?? 0) + idf * weight)
   }
 }
 
