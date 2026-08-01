@@ -1,6 +1,7 @@
 node_modules/
 dist/
 coverage/
+bench/.cache/
 bench/.corpus/
 bench/.store/
 *.tnt

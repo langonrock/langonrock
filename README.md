@@ -22,7 +22,7 @@ Measured against the OKF reference consumption pattern over the same corpus and 
 
 The saving comes from the manifest carrying the link graph. The agent knows every id it needs _before_ it fetches anything, so one batched call covers them all, and it can ask for a single section instead of the whole concept. The manifest itself is not smaller than the Markdown it replaces.
 
-Full numbers, including where the store loses, are in [Benchmarks](#benchmarks).
+That corpus is a warehouse catalogue, and the saving is a property of the documents rather than of the store. The same twenty-question harness over a set of RFCs saves 98 percent; over four novels it saves 2. Full numbers, including where the store loses, are in [Benchmarks](#benchmarks).
 
 ## Features
 
@@ -406,16 +406,19 @@ Backup is `cp -r tenants/`. Restore is copying it back; the search index rebuild
 
 A corpus generated to match the shape of Google's OKF samples: v0.2 frontmatter, prose written for people, `# Schema` and `# Joins` headings, links between concepts, about 2 KB each. Twenty fixed questions with a stated ground truth, and both paths charged for delivering the same concepts. The baseline is the OKF reference consumption pattern: read `index.md`, read a concept, follow its links. It runs the same BM25 this project uses over the raw Markdown, with perfect navigation and never a wrong turn.
 
-Every number below comes from one script, on one machine. Reproduce it with `bun bench/run.ts <bundles> <concepts per bundle>`, which prints a JSON line: `1 500` for the token tables, `10 500` and `40 500` for the scale rows.
+Every number below comes from one script, on one machine. Reproduce it with `bun bench/run.ts [profile] [bundles] [concepts per bundle]`, which prints a JSON line: `1 500` for the token tables, `10 500` and `40 500` for the scale rows, and a profile name for [the other document shapes](#document-shape).
 
 ### Tokens, 500 concepts in one bundle
 
 A session is twenty questions in one conversation. Content read once stays in context and costs the cache rate on every later call. Both paths pay under that same model.
 
-| Path                | Billed tokens |  Calls |
-| ------------------- | ------------: | -----: |
-| OKF index navigator |       116,357 |     30 |
-| langonrock          |    **64,355** | **17** |
+| Path                               | Billed tokens |  Calls |
+| ---------------------------------- | ------------: | -----: |
+| OKF index navigator                |       116,357 |     30 |
+| langonrock, manifest in the prompt |    **64,355** | **17** |
+| langonrock, search first           |        56,394 |     36 |
+
+The store has two strategies and the benchmark bills both. Keeping the manifest in the cached prefix costs the fewest round trips, which is the one this project optimises for. Ranking first and fetching what ranked never reads the manifest at all, which is cheaper in tokens here and much cheaper on a large tenant, at one extra turn per question. [Document shape](#document-shape) has the crossover.
 
 | What a read costs                    |  Tokens |
 | ------------------------------------ | ------: |
@@ -439,42 +442,200 @@ A session is twenty questions in one conversation. Content read once stays in co
 | ---------------- | -----: | ------: | ------: |
 | Whole manifest   | 20,549 | 205,851 | 835,922 |
 | One bundle slice | 20,549 |  20,419 |  20,486 |
-| Snapshot on disk | 0.5 MB |  5.0 MB | 20.1 MB |
+| Snapshot on disk | 0.5 MB |  5.1 MB | 20.7 MB |
 
 ### Latency, median milliseconds
 
 | Operation                    |   500 | 5,000 | 20,000 |
 | ---------------------------- | ----: | ----: | -----: |
-| Compile and write a snapshot |    32 |   211 |    782 |
-| Open a snapshot, cold        |  0.54 |  3.74 |   16.3 |
+| Compile and write a snapshot |    31 |   253 |    829 |
+| Open a snapshot, cold        |  0.55 |  4.45 |   17.6 |
 | Read the manifest, warm      | <0.01 | <0.01 |  <0.01 |
-| Batched `get` of 3 sections  |  0.07 |  0.08 |   0.08 |
-| Build the BM25 index         |    29 |   251 |  1,047 |
-| BM25 query                   |  0.14 |  1.38 |   7.09 |
+| Batched `get` of 3 sections  |  0.08 |  0.11 |   0.09 |
+| Build the BM25 index         |    22 |   193 |    674 |
+| BM25 query                   |  0.10 |  0.55 |   1.83 |
 
 `get` is flat: batching a fetch costs the same on a tenant of twenty thousand concepts as on one of five hundred. None of this is where the time goes, though. One saved model round trip is worth about a second, four orders of magnitude more than any row above.
 
-That table leaves memory out on purpose. The store rebuilds the index in memory once per snapshot, and peak process memory at 20,000 concepts landed anywhere between 0.9 and 1.2 GB across runs, too noisy for a single figure to be worth printing. It is still the practical ceiling on how many large tenants one daemon can hold.
+That table leaves memory mostly out on purpose. The store rebuilds the index in memory once per snapshot, and peak process memory at 20,000 concepts landed around 0.85 GB — down by roughly a third since the postings moved into typed arrays and the build stopped holding every body at once. It is still the practical ceiling on how many large tenants one daemon can hold. The index build itself streams the bodies off a single read of the snapshot's blob region, and `serve` rebuilds the index right after each sync, so the first search after a save does not pay for it.
 
 ### Retrieval accuracy
 
 Whether the concept that answers the question is in the top eight, over the same twenty questions on 500 concepts.
 
-| Retrieval                                  | Hit rate |  MRR |
-| ------------------------------------------ | -------: | ---: |
-| OKF BM25 over raw Markdown                 |      70% | 0.43 |
-| langonrock BM25                            |      65% | 0.26 |
-| langonrock BM25 plus the one-hop expansion |  **75%** | 0.27 |
+| Retrieval                                  | Hit rate |      MRR |
+| ------------------------------------------ | -------: | -------: |
+| OKF BM25 over raw Markdown                 |      70% |     0.43 |
+| langonrock BM25                            |      70% |     0.43 |
+| langonrock BM25 plus the one-hop expansion |  **75%** | **0.44** |
 
 The last row is what you get without configuring anything. Expansion is on unless a caller passes `expand: false`, which is what the middle row measures, and the CLI and the MCP tools offer no way to turn it off at all.
 
 Queries that describe a concept rather than name it land at 95% on both sides.
 
 > [!IMPORTANT]
-> The store ranks worse than the raw files on mean reciprocal rank, and that is a real cost of compiling. The frontmatter the compiler strips repeated the concept id in its `resource` and `sources` URLs, which happened to help the ranker. Field weighting recovers the hit rate and the one-hop expansion passes it, but the top position is still better on raw Markdown.
+> Compiling no longer costs ranking. The frontmatter the compiler strips used to repeat the concept id in its `resource` and `sources` URLs, which happened to help the ranker, and for a while the store ranked worse than the raw files because of it. Indexing the concept's own names — its id and its frontmatter `title`, weighted above the other cells — recovers all of it: the store now matches raw Markdown on mean reciprocal rank and passes it on hit rate with the expansion on.
 
 > [!NOTE]
-> Numbers come from a synthetic corpus and a deliberately crude `chars / 4` token estimate. The retrieval table covers a single scale only, because the generator reuses descriptions across bundles, which makes description queries measure the corpus rather than the index. Treat all of this as an order of magnitude and measure your own bundles.
+> Everything above this point comes from a synthetic corpus and a deliberately crude `chars / 4` token estimate. The retrieval table covers a single scale only, because the generator reuses descriptions across bundles, which makes description queries measure the corpus rather than the index. Treat all of this as an order of magnitude and measure your own bundles.
+
+### Document shape
+
+Everything above describes a warehouse catalogue. To find out what the store does to documents that are not reference tables, the same harness runs over four real public-domain corpora, converted to OKF concepts mechanically: frontmatter is `type` and `title`, headings are the document's own, and no link, table or section is added that the source does not already have.
+
+| Profile             | What it is                                                     | Concepts |
+| ------------------- | -------------------------------------------------------------- | -------: |
+| `reference`         | Generated warehouse catalogue, the corpus used above           |      500 |
+| `scripture`         | The King James Bible, one concept per chapter                  |    1,189 |
+| `scripture-coarse`  | The same text, one concept per book, chapters as headings      |       66 |
+| `book`              | Four novels, one concept per chapter                           |      102 |
+| `book-coarse`       | The same text, one concept per novel, chapters as headings     |        4 |
+| `handbook`          | Mrs Beeton's _Book of Household Management_, one per recipe    |    1,282 |
+| `handbook-untitled` | The same recipes with no `title` field, the name left as an H1 |    1,282 |
+| `spec`              | Twenty-eight IETF RFCs, one concept per document               |       28 |
+
+Twenty questions per profile, ground truth stated the same way, every path charged for delivering the same concepts. `manifest` is the manifest-in-the-prompt strategy, `search` is search-first; the store's cost is the better of the two.
+
+| Profile            |    Corpus | `manifest.tsv` | OKF billed |  `manifest` |   `search` | Saving |
+| ------------------ | --------: | -------------: | ---------: | ----------: | ---------: | -----: |
+| `spec`             |   767,143 |          1,176 |    756,168 |  **13,995** |     52,033 |    98% |
+| `scripture-coarse` | 1,067,694 |          2,028 |  1,278,420 |  **39,395** |     67,020 |    97% |
+| `handbook`         |   613,230 |         26,198 |    125,798 |      71,797 | **19,874** |    84% |
+| `book-coarse`      |   343,265 |            113 |    338,296 | **122,236** |    186,451 |    64% |
+| `scripture`        | 1,076,465 |         38,283 |    159,174 |     148,029 | **75,207** |    53% |
+| `reference`        |   264,744 |         20,549 |    116,357 |      64,355 | **56,394** |    52% |
+| `book`             |   344,540 |          1,772 |    130,101 | **127,077** |    188,093 |     2% |
+
+Round trips are not in that table because they are the same everywhere: the manifest strategy spends 16 to 21 calls, search-first spends 35 to 40. Search-first buys tokens with one extra turn per question, and this project treats a turn as the expensive resource.
+
+| Profile     | OKF `read_concept` | `get(id)` | `get(id, section)` |
+| ----------- | -----------------: | --------: | -----------------: |
+| `spec`      |             23,439 |    23,321 |            **388** |
+| `book`      |              3,261 |     3,244 |              3,244 |
+| `scripture` |                852 |       841 |                841 |
+| `reference` |                594 |       445 |            **213** |
+| `handbook`  |                292 |       279 |             **87** |
+
+The ordering is not by corpus size. It is by how much structure the document already carries, and two things pay:
+
+- **Headings.** `get(id, section)` can only return a slice if the document names its slices. An RFC numbers every subsection, so a question about one costs 388 tokens instead of 23,439. A Bible chapter and a novel chapter have no headings at all, so the section read and the whole read are the same read.
+- **Links.** Batching saves a round trip only when the manifest knows which concepts belong together. Mrs Beeton's "No. 105" cross-references and the RFC citation graph both compile into the `links` column. The Bible and the novels have none, so the store spends exactly as many turns as the navigator.
+
+What is left when a corpus has neither is the frontmatter the compiler strips, and on real prose that is almost nothing: 17 tokens per chapter on the novels, 11 on the Bible, against the 149 a full OKF sample header costs.
+
+> [!IMPORTANT]
+> On prose with no headings and no links, langonrock is worth about two percent. The advantage is not compression and it does not come from having a store; it comes from documents that were already structured. A folder of chapters is better served by reading the files.
+
+#### Which strategy, and when
+
+The manifest is paid once and amortised over the session; a search is paid per question. That puts the crossover at a fixed ratio rather than a corpus size.
+
+| Profile            | `manifest.tsv` | One search result | Ratio | Cheaper  |
+| ------------------ | -------------: | ----------------: | ----: | -------- |
+| `handbook`         |         26,198 |               256 |   102 | search   |
+| `scripture`        |         38,283 |               427 |    90 | search   |
+| `reference`        |         20,549 |               719 |    29 | search   |
+| `book`             |          1,772 |               165 |    11 | manifest |
+| `scripture-coarse` |          2,028 |               288 |     7 | manifest |
+| `spec`             |          1,176 |               649 |     2 | manifest |
+
+Over twenty questions the crossover lands near twenty. Below it, keep the manifest in the prompt and pay for it once; above it, never read the manifest and rank instead. The store already exposes both, and the MCP tool descriptions already say so; nothing here needs a code change, only the right call.
+
+#### Concept grain is a corpus decision with a large price
+
+`scripture` and `scripture-coarse` are the same 1,189 chapters of the same text. The only difference is whether a chapter is a concept or a heading inside a concept.
+
+| Bible, manifest strategy | Manifest | 20 reads | Manifest re-read at cache rate |      Total |
+| ------------------------ | -------: | -------: | -----------------------------: | ---------: |
+| One concept per chapter  |   38,283 |   16,820 |                        ~93,000 |    148,029 |
+| One concept per book     |    2,028 |   16,900 |                        ~20,500 | **39,395** |
+
+Seventy-three percent cheaper, and the store is byte-for-byte the same. What changed is that 1,189 rows re-read on every turn became 66, while the read stayed one chapter (845 tokens against 841) because chapters became addressable sections. Nearly two thirds of the original bill was the manifest, not the text.
+
+It does not generalise to the novels: `book` to `book-coarse` saves 4 percent, because their manifest was 1,772 tokens to begin with and the cost is the 3,244-token chapter itself. Coarsening helps a corpus whose manifest is large, not one whose documents are large. For the novels, the smallest addressable unit is still a whole chapter, and only sub-document sections would change that.
+
+> [!NOTE]
+> The OKF column moves too, and against the baseline. At book grain `read_concept` returns a whole book of the Bible, 34,430 tokens, so the baseline's bill goes from 159,174 to 1,278,420. The honest comparison for a grain change is store against store.
+
+Retrieval over the same questions, top eight:
+
+| Profile     | OKF raw Markdown | langonrock |  plus expansion |
+| ----------- | ---------------: | ---------: | --------------: |
+| `spec`      |       95% / 0.74 | 95% / 0.80 | **100% / 0.81** |
+| `handbook`  |       90% / 0.71 | 95% / 0.83 | **100% / 0.83** |
+| `scripture` |       90% / 0.80 | 90% / 0.80 |      90% / 0.80 |
+| `reference` |       70% / 0.43 | 70% / 0.43 |  **75% / 0.44** |
+| `book`      |       80% / 0.72 | 80% / 0.69 |      80% / 0.69 |
+
+The store meets or beats the raw files everywhere except the novels' top position, where prose with no headings and no links gives the compiler nothing to work with. `handbook` is the profile that used to prove the opposite — 50% against the baseline's 90% — and what it was measuring was a design cost, not noise: Mrs Beeton numbers her recipes, so the id is `recipe_181` and the words "rabbit soup" lived only in the `title` the compiler strips. The index now folds every concept's title in next to its id, weighted above the other fields, and the penalty is gone.
+
+`handbook-untitled` is the same bundle with the title moved out of the frontmatter and into the body as an H1, which is what a document that was downloaded rather than authored looks like. It used to beat the titled bundle by thirty-five points; now it is the control that shows the fold works:
+
+| Where the title lives      | langonrock | plus expansion |  MRR |
+| -------------------------- | ---------: | -------------: | ---: |
+| `title:` frontmatter       |    **95%** |       **100%** | 0.83 |
+| An H1 in the body          |        85% |            90% | 0.71 |
+| Raw Markdown, the baseline |        90% |              — | 0.71 |
+
+Indexing the title costs zero prompt tokens and no manifest width: it rides in the snapshot directory, never in a row the agent pays for on every turn.
+
+> [!NOTE]
+> The real corpora are downloaded on first run and cached in `bench/.cache`, so only the first run needs a network. They are converted by parsers written against one edition of each text; the harness fails loudly if an edition stops matching rather than benchmarking a corpus it silently mangled.
+
+### The serving layer
+
+Everything above measures reading. The rest of the store is a serving layer, and it has its own costs. `bun bench/ops.ts [profile] [bundles] [concepts per bundle]` prints these; they are medians over repeated runs on one machine.
+
+|                                | 500 concepts | 1,189, `scripture` | 5,000 concepts |
+| ------------------------------ | -----------: | -----------------: | -------------: |
+| Snapshot on disk               |      0.52 MB |            2.08 MB |        5.24 MB |
+| Sync an unchanged tree         |      21.9 ms |            51.6 ms |       189.2 ms |
+| Sync after editing one concept |      22.3 ms |            51.8 ms |       184.0 ms |
+| Edit on disk, read to visible  |      23.1 ms |            52.3 ms |       197.4 ms |
+| Resident memory per tenant     |      1.77 MB |            33.0 MB |        64.4 MB |
+
+One query, by how you reached it. Cold is a fresh embedded invocation that has to build the index first; warm is the same question against an index already in memory in the same process; the socket row is a real `serve` over a unix socket, so it carries serialisation and IPC.
+
+|                                   | 500 concepts | 1,189, `scripture` | 5,000 concepts |
+| --------------------------------- | -----------: | -----------------: | -------------: |
+| Cold: open, index, one query      |      27.5 ms |           151.9 ms |       237.0 ms |
+| Warm, in process                  |     0.107 ms |           0.300 ms |       1.359 ms |
+| Over a unix socket, a real daemon |     0.281 ms |           0.456 ms |       1.458 ms |
+| Over a socket, read the manifest  |     0.101 ms |           0.117 ms |       0.119 ms |
+| Over a socket, batched `get`      |     0.205 ms |           0.185 ms |       0.137 ms |
+| Through MCP, the same search      |     0.272 ms |           0.490 ms |       1.450 ms |
+| The same search, no MCP layer     |     0.158 ms |           0.330 ms |       1.403 ms |
+
+**A daemon is worth 98 to 333 times.** Cold against the socket row, which is the honest pair: 27.5 against 0.281, 151.9 against 0.456, 237.0 against 1.458. An embedded invocation rebuilds the BM25 index from nothing before it can answer anything, and that is the whole of the difference.
+
+**Transport is a fixed cost, not a proportional one.** The socket adds 0.10 to 0.17 ms over the in-process figure at every size, and the MCP layer adds another 0.05 to 0.16 ms. Neither grows with the corpus, so the larger the tenant the less either matters: at 5,000 concepts the socket costs 7 percent on top of the query and MCP costs 3.
+
+The write path, through the HTTP source routes where the precondition lives:
+
+|                                      | 500 concepts | 1,189, `scripture` | 5,000 concepts |
+| ------------------------------------ | -----------: | -----------------: | -------------: |
+| Read, then write naming its hash     |     0.656 ms |           0.664 ms |       0.797 ms |
+| A write naming a stale hash, refused |     0.340 ms |           0.121 ms |       0.117 ms |
+| Stale writes actually refused        |        5 / 5 |              5 / 5 |          5 / 5 |
+
+**Losing a write race is cheap to discover.** A write that names the version it replaces costs under a millisecond end to end, and one that names a stale version is refused for less than that, because nothing is written. Every stale write in every run was refused rather than merged.
+
+> [!NOTE]
+> Those two tables are the corrected ones. An earlier revision reported the speed-up as 170 to 530 times by comparing cold start against the in-process warm figure, without ever starting a daemon. That excluded the transport a daemon actually adds, and overstated it by roughly 1.7 times.
+
+**Immutability is paid in disk, linearly in edits.** A snapshot is one file named by its own hash and nothing is shared between two of them, so a one-line change writes a full copy. Ten edits leave eleven snapshots and eleven times the corpus on disk at every scale tested, which is 57.6 MB from a 5.2 MB corpus. Rollback really is free and a backup really is a file copy, but `gc` is not optional housekeeping; it is what makes the design affordable.
+
+**A sync that changes nothing costs the same as one that changes something.** 21.9 ms against 22.3 ms, 189.2 against 184.0. Content addressing detects the no-op and correctly declines to write a new snapshot, but only after recompiling the whole tree. That is the watcher's steady-state cost per burst of filesystem events, and at 5,000 concepts it is 190 ms of work to conclude that nothing happened.
+
+**Determinism holds.** Identical input compiled twice produces the same snapshot hash and the writer reuses it, at every size tested. That is what keeps the manifest in the client's prompt cache across a rebuild.
+
+**Memory tracks bytes, not concepts.** Twelve to sixteen times the snapshot size resides in memory once indexed, so one daemon holds roughly fifteen tenants of 5,000 concepts per gigabyte. The heap delta around a single index build is unusable — it comes back negative as often as positive — so this is the slope of resident memory across tenants loaded one at a time.
+
+| Registering the MCP server           | Tokens |
+| ------------------------------------ | -----: |
+| Four tool definitions, every session |    833 |
+
+That is the entry fee, paid in the client's system prompt whether or not the model ever asks about knowledge, and it does not change with corpus size. It costs about one search result. Worth it when knowledge is consulted repeatedly, which is the same conclusion the tip above reaches, now with a number on it.
 
 ## CLI
 

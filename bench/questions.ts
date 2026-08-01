@@ -1,4 +1,4 @@
-import type { GeneratedConcept } from './corpus.ts'
+import type { GeneratedConcept } from './okf.ts'
 
 export interface Question {
   targets: { id: string; section: string }[]

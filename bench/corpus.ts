@@ -1,5 +1,7 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 
+import type { Corpus, GeneratedConcept } from './okf.ts'
+
 /**
  * A corpus shaped like Google's OKF samples: v0.2 frontmatter, prose written
  * for people, headings the compiler can address, and links between concepts.
@@ -105,17 +107,6 @@ const STATUS = [
   'draft',
   'deprecated'
 ] as const
-
-export interface GeneratedConcept {
-  id: string
-  path: string
-  bundle: string
-  kind: 'table' | 'metric'
-  grain: string
-  links: string[]
-  title: string
-  description: string
-}
 
 function titleCase(value: string): string {
   return value
@@ -350,12 +341,6 @@ function indexFile(bundle: string, items: GeneratedConcept[]): string {
       item => `- [${item.title}](./${item.path}) — ${item.description}`
     )
   ].join('\n')
-}
-
-export interface Corpus {
-  root: string
-  concepts: GeneratedConcept[]
-  bundles: string[]
 }
 
 export async function generate(
