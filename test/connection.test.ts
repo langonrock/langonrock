@@ -5,10 +5,12 @@ import { join } from 'node:path'
 
 import { open } from '../src/client/connection.ts'
 import { normalizeDsn, parseDsn } from '../src/client/dsn.ts'
+import { createSearchCache } from '../src/search/cache.ts'
 import { serve } from '../src/server/http.ts'
 import { loadTokens } from '../src/server/tokens.ts'
 import { putBundle } from '../src/store/writer.ts'
 
+import type { SearchCache } from '../src/search/cache.ts'
 import type { LangonrockServer } from '../src/server/http.ts'
 
 const FIXTURE = `${import.meta.dir}/fixtures/sales`
@@ -439,5 +441,38 @@ describe('loadTokens', () => {
     await expect(loadTokens(bad)).rejects.toThrow('has an empty token')
 
     await rm(bad, { recursive: true, force: true })
+  })
+})
+
+describe('injected search cache', () => {
+  test('serve answers search through the cache the caller shares', async () => {
+    const warmed: string[] = []
+    const indexes = createSearchCache(root)
+
+    const counting: SearchCache = tenant => {
+      warmed.push(tenant)
+
+      return indexes(tenant)
+    }
+
+    const server = serve({
+      root,
+      port: 0,
+      hostname: '127.0.0.1',
+      tokens: await loadTokens(root),
+      indexes: counting
+    })
+
+    try {
+      const connection = open(
+        `okf+http://127.0.0.1:${server.port}?token=secret-acme`
+      )
+      const hits = await connection.search('churned')
+
+      expect(hits).toContain('customers')
+      expect(warmed).toEqual(['acme'])
+    } finally {
+      server.stop(true)
+    }
   })
 })

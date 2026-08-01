@@ -6,6 +6,7 @@ import { open } from './client/connection.ts'
 import { DEFAULT_SUMMARY_WIDTH, compileBundle } from './compile/manifest.ts'
 import { estimateTokens } from './compile/tokens.ts'
 import { serveMcp } from './mcp/server.ts'
+import { createSearchCache } from './search/cache.ts'
 import { serve } from './server/http.ts'
 import { loadSources } from './server/sources.ts'
 import { TOKENS_FILE, addToken, loadTokens } from './server/tokens.ts'
@@ -372,7 +373,8 @@ async function serveOptions(flags: Flags, root: string): Promise<ServeOptions> {
 async function startWatchers(
   root: string,
   sources: Map<string, string>,
-  flags: Flags
+  flags: Flags,
+  warm: (tenant: string) => void
 ): Promise<(tenant: string) => Promise<PutResult>> {
   const watchers = new Map<string, Watcher>()
   const results = new Map<string, PutResult>()
@@ -383,6 +385,7 @@ async function startWatchers(
     options.onSync = result => {
       results.set(tenant, result)
       reportPut(result)
+      warm(tenant)
     }
 
     const watcher = watchTenant(options)
@@ -439,8 +442,18 @@ const runServe: Command = async (_positionals, flags) => {
   options.tokens = await loadTokens(root)
   options.sources = sources
 
+  // Rebuilding right after a sync moves the index build off the query path:
+  // the first search after a save finds the index already warm.
+  const indexes = createSearchCache(root)
+
+  const warm = (tenant: string): void => {
+    void indexes(tenant).catch(() => undefined)
+  }
+
+  options.indexes = indexes
+
   if (sources.size > 0) {
-    options.sync = await startWatchers(root, sources, flags)
+    options.sync = await startWatchers(root, sources, flags, warm)
   }
 
   const server = serve(options)
@@ -456,8 +469,16 @@ const runServe: Command = async (_positionals, flags) => {
   )
 
   if (flags.watch !== undefined) {
-    await watchTenant(watchOptions(flags, flags.watch)).ready
-    console.error(`watching ${flags.watch} for tenant ${flags.tenant ?? ''}`)
+    const tenant = required(flags.tenant, '--tenant')
+    const watching = watchOptions(flags, flags.watch)
+
+    watching.onSync = result => {
+      reportPut(result)
+      warm(tenant)
+    }
+
+    await watchTenant(watching).ready
+    console.error(`watching ${flags.watch} for tenant ${tenant}`)
   }
 
   await new Promise<never>(() => undefined)
