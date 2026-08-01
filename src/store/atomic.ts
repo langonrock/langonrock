@@ -2,11 +2,19 @@ import { open, rename } from 'node:fs/promises'
 
 export async function writeSynced(
   path: string,
-  bytes: Uint8Array
+  bytes: Uint8Array,
+  mode?: number
 ): Promise<void> {
-  const handle = await open(path, 'w')
+  const handle = await open(path, 'w', mode)
 
   try {
+    // `open` only applies a mode when it creates the file, so a temp left
+    // behind by a crash would keep its old one and the bytes about to be
+    // written would inherit it.
+    if (mode !== undefined) {
+      await handle.chmod(mode)
+    }
+
     await handle.write(bytes)
     await handle.sync()
   } finally {
@@ -45,11 +53,15 @@ function parentOf(path: string): string {
  */
 export async function writeAtomic(
   path: string,
-  bytes: Uint8Array
+  bytes: Uint8Array,
+  mode?: number
 ): Promise<void> {
   const temp = `${path}.tmp`
 
-  await writeSynced(temp, bytes)
+  // The mode goes on the temp file, not on the target after the rename: a
+  // secret written world-readable and tightened a moment later was still
+  // readable for that moment.
+  await writeSynced(temp, bytes, mode)
   await rename(temp, path)
   await syncDir(parentOf(path))
 }

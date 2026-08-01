@@ -2,7 +2,7 @@ import { createSearchCache } from '../search/cache.ts'
 import { searchTenant } from '../search/tenant.ts'
 import { createReaderCache } from '../store/cache.ts'
 import { HttpError } from './errors.ts'
-import { bundlesResponse, sourceResponse } from './sourceroutes.ts'
+import { MAX_BYTES, bundlesResponse, sourceResponse } from './sourceroutes.ts'
 
 import type { SearchOptions, TenantIndex } from '../search/tenant.ts'
 import type { TenantReader } from '../store/reader.ts'
@@ -17,9 +17,22 @@ const WRITE_VERBS = new Set(['source', 'bundles', 'sync'])
 
 const VERBS = new Set([...READ_VERBS, ...WRITE_VERBS])
 
+const DEFAULT_HOSTNAME = '127.0.0.1'
+
+const DEFAULT_PORT = 7777
+
+/** Addresses no other machine can reach, so a token on them stays local. */
+const LOOPBACK = new Set([DEFAULT_HOSTNAME, '::1', 'localhost'])
+
 interface Resolved {
   reader: TenantReader
   index: () => Promise<TenantIndex>
+}
+
+/** PEM contents, not paths, so this module never touches the filesystem. */
+export interface Tls {
+  cert: string
+  key: string
 }
 
 export interface ServeOptions {
@@ -32,6 +45,8 @@ export interface ServeOptions {
   unix?: string
   hostname?: string
   port?: number
+  /** Absent serves plain HTTP, which is only allowed on loopback. */
+  tls?: Tls
 }
 
 interface Route {
@@ -306,29 +321,79 @@ async function dispatchWrite(
     : sourceResponse(request, context)
 }
 
-export function serve(options: ServeOptions): LangonrockServer {
-  const tokens = options.tokens ?? new Map<string, Grant>()
-  const listensOnTcp =
-    options.port !== undefined || options.hostname !== undefined
+/**
+ * Read from `unix` rather than from `port` and `hostname`: with all three
+ * absent this still binds TCP on the defaults, and deciding from the ones that
+ * happen to be set left that case unguarded.
+ */
+function listensOnTcp(options: ServeOptions): boolean {
+  return options.unix === undefined
+}
 
-  if (listensOnTcp && tokens.size === 0) {
+/**
+ * A unix socket is guarded by file permissions, so it is the only transport
+ * allowed to run unauthenticated. Over TCP a token is the only thing standing
+ * between a caller and someone else's knowledge, and it is only as private as
+ * the connection carrying it. Loopback keeps it on the machine and a proxy
+ * terminating tls in front binds loopback too, so both stay allowed. Any other
+ * address in cleartext puts the token on the wire for whoever is in the path.
+ */
+function assertSafeToBind(
+  options: ServeOptions,
+  tokens: Map<string, Grant>
+): void {
+  if (!listensOnTcp(options)) {
+    return
+  }
+
+  if (tokens.size === 0) {
     throw new Error(
       'refusing to listen on TCP without tokens: pass tokens or use a unix socket'
     )
   }
 
+  const hostname = options.hostname ?? DEFAULT_HOSTNAME
+
+  if (options.tls === undefined && !LOOPBACK.has(hostname)) {
+    throw new Error(
+      `refusing to serve ${hostname} without tls: every request would carry ` +
+        'its token in cleartext. Pass tls, or bind 127.0.0.1 and terminate ' +
+        'tls in a proxy in front'
+    )
+  }
+}
+
+function listenerFor(options: ServeOptions): Record<string, unknown> {
+  if (!listensOnTcp(options)) {
+    return { unix: options.unix }
+  }
+
+  const listener: Record<string, unknown> = {
+    hostname: options.hostname ?? DEFAULT_HOSTNAME,
+    port: options.port ?? DEFAULT_PORT
+  }
+
+  if (options.tls !== undefined) {
+    listener.tls = options.tls
+  }
+
+  return listener
+}
+
+export function serve(options: ServeOptions): LangonrockServer {
+  const tokens = options.tokens ?? new Map<string, Grant>()
+
+  assertSafeToBind(options, tokens)
+
   const cache = createReaderCache(options.root)
   const indexes = createSearchCache(options.root)
-  const listener =
-    options.unix === undefined
-      ? {
-          hostname: options.hostname ?? '127.0.0.1',
-          port: options.port ?? 7777
-        }
-      : { unix: options.unix }
 
   return Bun.serve({
-    ...listener,
+    ...listenerFor(options),
+    // Enforced here rather than by reading `content-length` in the route: the
+    // transport knows how to refuse an oversize body and still leave the
+    // connection usable, which a handler answering mid-upload does not.
+    maxRequestBodySize: MAX_BYTES,
     fetch: async request => {
       try {
         const matched = route(new URL(request.url).pathname)

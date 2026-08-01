@@ -9,7 +9,7 @@ import {
 import { HttpError } from './errors.ts'
 
 /** A concept is prose. Anything this large is a mistake or an attack. */
-const MAX_BYTES = 1_000_000
+export const MAX_BYTES = 1_000_000
 
 export interface SourceContext {
   dir: string
@@ -67,13 +67,15 @@ function assertPrecondition(
   }
 }
 
+/**
+ * The size is checked after reading, not from `content-length` before it.
+ * Answering while the body is still arriving leaves it on a keep-alive
+ * connection, where the next request reads it as its own headers and hangs, and
+ * an oversize body is a rare enough mistake to be worth reading and dropping.
+ * The server caps the transport at the same number, so nothing unbounded is
+ * ever buffered to get here.
+ */
 async function bodyOf(request: Request): Promise<string> {
-  const declared = Number(request.headers.get('content-length') ?? '0')
-
-  if (declared > MAX_BYTES) {
-    throw new HttpError(413, `a concept may not exceed ${MAX_BYTES} bytes`)
-  }
-
   const content = await request.text()
 
   if (Buffer.byteLength(content) > MAX_BYTES) {

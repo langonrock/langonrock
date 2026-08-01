@@ -1,4 +1,11 @@
+import { writeAtomic } from '../store/atomic.ts'
+
 export const TOKENS_FILE = 'tokens.json'
+
+/** Nobody but the owner reads a file of bearer tokens. */
+const TOKENS_MODE = 0o600
+
+const TOKEN_BYTES = 32
 
 export interface Grant {
   tenant: string
@@ -60,4 +67,44 @@ export async function loadTokens(root: string): Promise<Map<string, Grant>> {
   }
 
   return assertTokenMap(await file.json(), path)
+}
+
+/**
+ * A token is the whole password, so it is worth more entropy than anyone types
+ * by hand. 32 random bytes leave nothing to guess, and hex keeps it safe to
+ * paste into a connection string without escaping.
+ */
+export function generateToken(): string {
+  return Array.from(crypto.getRandomValues(new Uint8Array(TOKEN_BYTES)), byte =>
+    byte.toString(16).padStart(2, '0')
+  ).join('')
+}
+
+/** The shape `loadTokens` reads back, keeping a read-only grant a bare string. */
+function toJson(grants: Map<string, Grant>): string {
+  const record: Record<string, string | Grant> = {}
+
+  for (const [token, grant] of grants) {
+    record[token] = grant.write ? grant : grant.tenant
+  }
+
+  return `${JSON.stringify(record, undefined, 2)}\n`
+}
+
+/**
+ * Mints a token, records its grant and returns it. The caller never sees it
+ * again, because the file is the only copy and nothing here logs it.
+ */
+export async function addToken(root: string, grant: Grant): Promise<string> {
+  const token = generateToken()
+  const grants = await loadTokens(root)
+
+  grants.set(token, grant)
+  await writeAtomic(
+    `${root}/${TOKENS_FILE}`,
+    new TextEncoder().encode(toJson(grants)),
+    TOKENS_MODE
+  )
+
+  return token
 }

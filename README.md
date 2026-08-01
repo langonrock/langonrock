@@ -35,6 +35,7 @@ Full numbers, including where the store loses, are in [Benchmarks](#benchmarks).
 - **Immutable, content-addressed snapshots.** A backup is a file copy, a restore is a file copy back, and a rollback is a side effect of naming files by their own hash.
 - **Multi-tenant.** A tenant is a directory boundary with its own snapshots and its own index.
 - **Three connection modes, one interface.** Embedded, local daemon, or HTTP server, selected by a connection string.
+- **Refuses to leak its own credentials.** TCP needs a token, and any address past loopback needs TLS, or the server declines to start.
 - **MCP server.** Four verbs for Claude Code, Cursor, or anything else that speaks MCP.
 - **Editable over the network.** Create, change and delete concepts through the API, with a mandatory precondition so two editors cannot silently overwrite each other.
 - **No database.** Two runtime dependencies, both for MCP.
@@ -98,7 +99,7 @@ To keep the store following your edits, run the watcher instead of syncing by ha
 langonrock watch sources/acme --data ./data --tenant acme
 ```
 
-Add a bundle by creating a folder, remove it by deleting the folder, change one by saving a file.
+Add a bundle by creating a folder, remove it by deleting the folder, change one by saving a file. If you are going to run the daemon anyway, skip this command: [`serve` starts the same watcher itself](#running-a-server).
 
 ## Use it from an agent
 
@@ -110,6 +111,12 @@ For Claude Code, register it once:
 
 ```sh
 claude mcp add langonrock -- langonrock mcp "okf:///abs/path/to/data?tenant=acme"
+```
+
+Any connection string works here, so point it at a [running daemon](#running-a-server) instead and every agent invocation shares one process with warm indexes rather than paying cold start:
+
+```sh
+claude mcp add langonrock -- langonrock mcp "okf+unix:///tmp/okf.sock?tenant=acme"
 ```
 
 Four tools, and no more, because every tool definition costs tokens in the client's system prompt:
@@ -129,36 +136,128 @@ The scheme picks the mode, and `open(dsn)` returns the same interface for all of
 okf:///var/data?tenant=acme            embedded, direct file access
 okf+unix:///tmp/okf.sock?tenant=acme   local daemon over a unix socket
 okf+http://host:7777?token=...         remote, tenant resolved from the token
-```
-
-```sh
-langonrock serve --data ./data --socket /tmp/okf.sock
-langonrock query "okf+unix:///tmp/okf.sock?tenant=acme" search orders
+okf+https://host:7777?token=...        the same over tls
 ```
 
 The daemon is usually what you want locally. Several clients share one process with warm indexes, so no agent invocation pays cold start.
 
+## Running a server
+
+This needs two directories. Your Markdown lives wherever you already keep it, and the store is a separate folder the server owns.
+
+```sh
+mkdir -p ~/okf/sources/acme/sales ~/okf/data
+echo '{ "acme": "/home/me/okf/sources/acme" }' > ~/okf/data/sources.json
+```
+
+`sources.json` maps each tenant to its folder. Write that path in full, because nothing expands `~` inside a JSON string. The file does two things at once: it makes the tenant writable over the API, and it tells `serve` to compile the folder at startup and keep watching it.
+
+```sh
+langonrock serve --data ~/okf/data --socket /tmp/okf.sock
+```
+
+```
+snapshot 9ac37f10832c (new), 1 bundle [sales], 1 concepts, 342 bytes on disk
+watching /home/me/okf/sources/acme for tenant acme
+langonrock serving /home/me/okf/data on /tmp/okf.sock (0 tokens, 1 writable tenant)
+```
+
+Those three lines say the whole story: it compiled, it is watching, and it is listening. You do not need a separate `sync` first, and you do not need `langonrock watch` in another terminal. Running both would put two watchers on one tenant.
+
+Without `--socket` the daemon listens on `<data>/langonrock.sock`.
+
+Progress goes to stderr so stdout stays clean for piping, and Bun paints anything written with `console.error` red. Those lines are status, not failures.
+
+```sh
+langonrock query "okf+unix:///tmp/okf.sock?tenant=acme" search orders
+```
+
+> [!TIP]
+> `ENOENT: no such file or directory, watch '...'` at startup means a path in `sources.json` does not exist. The folder has to be there before the server starts, and every immediate subdirectory of it is a bundle, so `sources/acme/sales/orders.md` works where `sources/acme/orders.md` gives you an empty tenant.
+
+### Over TCP, with a password
+
+The password is a bearer token in `<data>/tokens.json`. Mint one rather than inventing it, because that token is the whole of the authentication:
+
+```sh
+langonrock token --data ~/okf/data --tenant acme            # read-only
+langonrock token --data ~/okf/data --tenant acme --write    # may edit source
+```
+
+```
+9f3c1e…  (64 hex characters, on stdout so you can capture it)
+recorded a read-only grant for acme in ~/okf/data/tokens.json. A running
+server reads that file only at startup, so restart it before the token works
+```
+
+The command appends to the file, keeps whatever is already in it, and leaves it at mode `600`. You can still write it by hand: a bare string is a read-only grant, an object opts a token into writing.
+
+```json
+{
+  "read-only": "acme",
+  "editor-token": { "tenant": "acme", "write": true }
+}
+```
+
+```sh
+langonrock serve --data ~/okf/data --host 127.0.0.1 --port 7777
+langonrock query "okf+http://127.0.0.1:7777?token=$TOKEN" manifest
+```
+
 > [!WARNING]
 > Binding TCP always requires tokens, including on `127.0.0.1`, and the server refuses to start without them. A unix socket is already guarded by file permissions and is the only transport allowed to run unauthenticated. Windows has no named pipe support in Bun, so use loopback TCP there.
+
+> [!IMPORTANT]
+> Tokens are read once, at startup. Adding one or revoking one by editing the file changes nothing until the server restarts, so a token you believe you have withdrawn keeps working until then.
+
+### Over TLS
+
+A bearer token is only as private as the connection carrying it, so anything past loopback needs a certificate.
+
+```sh
+langonrock serve --data ~/okf/data --host 0.0.0.0 --port 7777 \
+  --tls-cert /etc/langonrock/fullchain.pem \
+  --tls-key /etc/langonrock/privkey.pem
+```
+
+```sh
+langonrock query "okf+https://knowledge.example.com:7777?token=$TOKEN" manifest
+```
+
+The server refuses to bind anything but `127.0.0.1`, `::1` or `localhost` in cleartext, and says so instead of starting:
+
+```
+refusing to serve 0.0.0.0 without tls: every request would carry its token in
+cleartext. Pass tls, or bind 127.0.0.1 and terminate tls in a proxy in front
+```
+
+Both shapes are fine. Terminate TLS here, or bind loopback and let nginx or Caddy do it. What the server will not do is put your token on the wire in the clear.
+
+### Reading it over plain HTTP
+
+The token decides the tenant, so the path only needs one when the server has no tokens at all.
+
+```
+GET  /v1/{tenant}/manifest[?bundle=sales]  the manifest, ETag is the snapshot digest
+GET  /v1/{tenant}/snapshot                 {"snapshot": "…", "concepts": n}
+POST /v1/{tenant}/get                      {"ids": [...], "section"?: "schema"}
+POST /v1/{tenant}/search                   {"q": "...", "k"?: n, "expand"?: false, "bundle"?: "..."}
+```
+
+```sh
+curl -H 'Authorization: Bearer read-only' http://127.0.0.1:7777/v1/manifest
+
+curl -X POST -H 'Authorization: Bearer read-only' -H 'content-type: application/json' \
+  -d '{"ids":["orders"],"section":"schema"}' http://127.0.0.1:7777/v1/get
+```
+
+Send `If-None-Match` with the ETag you hold and an unchanged manifest answers `304` with no body.
 
 ## Editing over the network
 
 An editor needs to create, change and delete concepts remotely. It does that by writing the **source Markdown**, never a snapshot. The watcher recompiles from source, so it would overwrite a snapshot written directly within seconds. Writing source is the path the design endorses, and it leaves the read API above untouched. No HTTP request ever writes a snapshot.
 
-Tell the server where each tenant's Markdown lives, in `<data>/sources.json`. Folders are never moved into the store; source usually lives in a git repository of its own.
-
-```json
-{ "acme": "/home/me/sources/acme" }
-```
-
-A tenant that is not listed stays readable and refuses writes. Grant writing per token in `<data>/tokens.json`, where a bare string still means read-only:
-
-```json
-{
-  "reader-token": "acme",
-  "editor-token": { "tenant": "acme", "write": true }
-}
-```
+The two files from [Running a server](#running-a-server) are what turn this on. `sources.json` says where a tenant's Markdown is, and `tokens.json` says which tokens may change it. A tenant with no entry in `sources.json` stays readable and refuses writes, which is the right default and needs no flag. Folders are never moved into the store; source usually lives in a git repository of its own.
 
 ```
 GET    /v1/{tenant}/source                 list files with sizes and hashes
@@ -366,20 +465,23 @@ Queries that describe a concept rather than name it land at 95% on both sides.
 
 ## CLI
 
-| Command         |                                                         |
-| --------------- | ------------------------------------------------------- |
-| `compile <dir>` | Compile one bundle to a manifest on stdout              |
-| `put <dir>`     | Store one directory as one bundle                       |
-| `sync <dir>`    | Store every subdirectory as its own bundle              |
-| `watch <dir>`   | Keep a tenant in sync with a folder                     |
-| `manifest`      | Print the stored manifest                               |
-| `get <id…>`     | Fetch concepts by id                                    |
-| `serve`         | Run the daemon                                          |
-| `query <dsn> …` | `manifest`, `snapshot`, `search`, or `get` over any dsn |
-| `mcp <dsn>`     | Serve MCP over stdio                                    |
-| `gc`            | Collect old and partial snapshots                       |
+| Command         |                                            |
+| --------------- | ------------------------------------------ |
+| `compile <dir>` | Compile one bundle to a manifest on stdout |
+| `put <dir>`     | Store one directory as one bundle          |
+| `sync <dir>`    | Store every subdirectory as its own bundle |
+| `watch <dir>`   | Keep a tenant in sync with a folder        |
+| `manifest`      | Print the stored manifest                  |
+| `get <id…>`     | Fetch concepts by id                       |
+| `serve`         | Run the daemon                             |
+| `token`         | Mint a token and record its grant          |
+| `query <dsn> …` | Any read or write verb over any dsn        |
+| `mcp <dsn>`     | Serve MCP over stdio                       |
+| `gc`            | Collect old and partial snapshots          |
 
-Useful options: `--data` (store root), `--tenant`, `--section`, `--k`, `--summary-width`, `--strict` to exit non-zero on any diagnostic, `--dry-run` for `gc`. Run `langonrock --help` for the rest.
+`query` takes `manifest`, `snapshot`, `search` and `get` on the read side, and `source`, `read`, `write`, `delete`, `delete-bundle` and `sync` on the write side.
+
+Useful options: `--data` (store root), `--tenant`, `--section`, `--k`, `--summary-width`, `--strict` to exit non-zero on any diagnostic, `--dry-run` for `gc`. For `serve`: `--socket`, or `--host` and `--port` for TCP, `--tls-cert` and `--tls-key` for TLS, and `--debounce` to coalesce filesystem events. For `token`: `--tenant` and `--write`. Run `langonrock --help` for the rest.
 
 Without `--data`, the store lives in the platform data directory: `$XDG_DATA_HOME/langonrock` on Linux, `~/Library/Application Support/langonrock` on macOS, `%LOCALAPPDATA%\langonrock` on Windows. `$LANGONROCK_DATA` overrides it.
 

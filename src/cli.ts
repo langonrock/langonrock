@@ -8,9 +8,10 @@ import { estimateTokens } from './compile/tokens.ts'
 import { serveMcp } from './mcp/server.ts'
 import { serve } from './server/http.ts'
 import { loadSources } from './server/sources.ts'
-import { loadTokens } from './server/tokens.ts'
+import { TOKENS_FILE, addToken, loadTokens } from './server/tokens.ts'
 import { resolveDataDir } from './store/datadir.ts'
 import { collect, collectAll } from './store/gc.ts'
+import { assertTenantId } from './store/paths.ts'
 import { openTenant } from './store/reader.ts'
 import { watchTenant } from './store/watch.ts'
 import { putBundle, putTenantRoot } from './store/writer.ts'
@@ -19,7 +20,7 @@ import type { CompileOptions } from './compile/manifest.ts'
 import type { Diagnostic } from './okf/types.ts'
 import type { Connection } from './client/connection.ts'
 import type { SearchOptions } from './search/tenant.ts'
-import type { ServeOptions } from './server/http.ts'
+import type { ServeOptions, Tls } from './server/http.ts'
 import type { GcOptions, GcResult } from './store/gc.ts'
 import type { WatchOptions, Watcher } from './store/watch.ts'
 import type { PutOptions, PutResult } from './store/writer.ts'
@@ -34,6 +35,7 @@ usage:
   langonrock manifest --data D --tenant T   print the stored manifest
   langonrock get <id...> --data D --tenant T  fetch concepts by id
   langonrock serve --data D [--socket P]    run the daemon
+  langonrock token --data D --tenant T      mint a token and record its grant
   langonrock query <dsn> manifest|snapshot  read the index by dsn
   langonrock query <dsn> search <words...>  rank concepts by relevance
   langonrock query <dsn> get <id...>        fetch concepts by dsn
@@ -59,6 +61,9 @@ options:
   --socket <path>     unix socket for serve (default: <data>/langonrock.sock)
   --host <name>       bind TCP instead of a socket, requires tokens.json
   --port <n>          TCP port (default 7777)
+  --tls-cert <file>   serve https, required off loopback, needs --tls-key
+  --tls-key <file>    private key for --tls-cert
+  --write             token only: the token may change source markdown
   --watch <dir>       serve only: also keep --tenant in sync with this folder
   --debounce <ms>     coalesce filesystem events (default 200)
   --rescan <ms>       full rescan backstop interval (default 30000)
@@ -89,6 +94,9 @@ interface Flags {
   socket?: string | undefined
   host?: string | undefined
   port?: string | undefined
+  'tls-cert'?: string | undefined
+  'tls-key'?: string | undefined
+  write?: boolean | undefined
   watch?: string | undefined
   debounce?: string | undefined
   rescan?: string | undefined
@@ -307,10 +315,35 @@ const runGet: Command = async (positionals, flags) => {
   return found.size === ids.length ? 0 : 1
 }
 
-function serveOptions(flags: Flags, root: string): ServeOptions {
+async function tlsFrom(flags: Flags): Promise<Tls | undefined> {
+  const cert = flags['tls-cert']
+  const key = flags['tls-key']
+
+  if (cert === undefined && key === undefined) {
+    return undefined
+  }
+
+  if (cert === undefined || key === undefined) {
+    throw new Error('--tls-cert and --tls-key must be given together')
+  }
+
+  return {
+    cert: await Bun.file(cert).text(),
+    key: await Bun.file(key).text()
+  }
+}
+
+async function serveOptions(flags: Flags, root: string): Promise<ServeOptions> {
   const options: ServeOptions = { root }
+  const tls = await tlsFrom(flags)
 
   if (flags.host === undefined && flags.port === undefined) {
+    if (tls !== undefined) {
+      throw new Error(
+        '--tls-cert needs --host or --port: a unix socket has no tls'
+      )
+    }
+
     options.unix = flags.socket ?? `${root}/langonrock.sock`
 
     return options
@@ -322,6 +355,10 @@ function serveOptions(flags: Flags, root: string): ServeOptions {
 
   if (flags.port !== undefined) {
     options.port = Number.parseInt(flags.port, 10)
+  }
+
+  if (tls !== undefined) {
+    options.tls = tls
   }
 
   return options
@@ -374,9 +411,29 @@ async function startWatchers(
   }
 }
 
+/**
+ * Prints the token on stdout and everything else on stderr, so capturing it
+ * into a variable gets the secret and nothing around it.
+ */
+const runToken: Command = async (_positionals, flags) => {
+  const root = resolveDataDir(flags.data)
+  const tenant = assertTenantId(required(flags.tenant, '--tenant'))
+  const write = flags.write === true
+  const token = await addToken(root, { tenant, write })
+
+  await Bun.write(Bun.stdout, `${token}\n`)
+  console.error(
+    `recorded a ${write ? 'read-write' : 'read-only'} grant for ${tenant} in ` +
+      `${root}/${TOKENS_FILE}. A running server reads that file only at ` +
+      'startup, so restart it before the token works'
+  )
+
+  return 0
+}
+
 const runServe: Command = async (_positionals, flags) => {
   const root = resolveDataDir(flags.data)
-  const options = serveOptions(flags, root)
+  const options = await serveOptions(flags, root)
   const sources = await loadSources(root)
 
   options.tokens = await loadTokens(root)
@@ -673,6 +730,7 @@ const COMMANDS: Record<string, Command> = {
   manifest: runManifest,
   get: runGet,
   serve: runServe,
+  token: runToken,
   query: runQuery,
   mcp: runMcp,
   gc: runGc
@@ -690,6 +748,9 @@ async function main(): Promise<number> {
       tenant: { type: 'string' },
       section: { type: 'string' },
       socket: { type: 'string' },
+      'tls-cert': { type: 'string' },
+      'tls-key': { type: 'string' },
+      write: { type: 'boolean' },
       host: { type: 'string' },
       port: { type: 'string' },
       watch: { type: 'string' },

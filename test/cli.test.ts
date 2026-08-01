@@ -90,6 +90,52 @@ describe('cli', () => {
     expect(result.stderr).toContain('--summary-width')
   })
 
+  test('refuses half a tls pair', async () => {
+    const result = await run([
+      'serve',
+      '--data',
+      scratch,
+      '--host',
+      '0.0.0.0',
+      '--tls-cert',
+      `${import.meta.dir}/fixtures/tls/localhost-cert.pem`
+    ])
+
+    expect(result.code).toBe(1)
+    expect(result.stderr).toContain('must be given together')
+  })
+
+  test('refuses tls on a unix socket, which has none to offer', async () => {
+    const tls = `${import.meta.dir}/fixtures/tls`
+    const result = await run([
+      'serve',
+      '--data',
+      scratch,
+      '--tls-cert',
+      `${tls}/localhost-cert.pem`,
+      '--tls-key',
+      `${tls}/localhost-key.pem`
+    ])
+
+    expect(result.code).toBe(1)
+    expect(result.stderr).toContain('unix socket has no tls')
+  })
+
+  test('refuses to bind an exposed address in cleartext', async () => {
+    const result = await run([
+      'serve',
+      '--data',
+      scratch,
+      '--host',
+      '0.0.0.0',
+      '--port',
+      '0'
+    ])
+
+    expect(result.code).toBe(1)
+    expect(result.stderr).toMatch(/without tokens|without tls/)
+  })
+
   test('prints usage and exits zero for --help', async () => {
     const result = await run(['--help'])
 

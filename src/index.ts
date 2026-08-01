@@ -30,7 +30,12 @@ export {
 } from './search/tenant.ts'
 export { serve } from './server/http.ts'
 export { SOURCES_FILE, loadSources } from './server/sources.ts'
-export { TOKENS_FILE, loadTokens } from './server/tokens.ts'
+export {
+  TOKENS_FILE,
+  addToken,
+  generateToken,
+  loadTokens
+} from './server/tokens.ts'
 export { createReaderCache } from './store/cache.ts'
 export { encodeTnt, parseDir, parseHeader } from './store/format.ts'
 export {
