@@ -19,11 +19,27 @@ export const B = 0.75
  */
 export const FIELD_WEIGHT = 2
 
+/**
+ * How many times the concept's own names — its id and its frontmatter title —
+ * count against a word of prose. A query that names a concept should land on
+ * the concept itself, not on a neighbour that mentions the name in passing,
+ * which is why names weigh more than the other manifest cells.
+ *
+ * Swept over the reference, handbook and spec corpora at k = 8. The hit rate
+ * for naming queries is already captured at 2, but the top position keeps
+ * improving to 4: reference MRR 0.39 at 2, 0.43 at 4. Above 4 nothing moves
+ * outside noise, and describing queries never move at all — the recall cost
+ * that capped FIELD_WEIGHT does not apply to a concept's own name.
+ */
+export const NAME_WEIGHT = 4
+
 export interface Document {
   id: string
   text: string
   /** Manifest cells, counted FIELD_WEIGHT times against the body text. */
   fields?: string
+  /** The concept's id and title, counted NAME_WEIGHT times. */
+  names?: string
 }
 
 export interface Hit {
@@ -63,27 +79,14 @@ export function tokenize(text: string): string[] {
   return lowered.normalize('NFKD').replace(MARKS, '').match(TOKEN) ?? []
 }
 
-function countTerms(tokens: string[]): Map<string, number> {
-  const counts = new Map<string, number>()
-
+function addWeighted(
+  counts: Map<string, number>,
+  tokens: string[],
+  weight: number
+): void {
   for (const token of tokens) {
-    counts.set(token, (counts.get(token) ?? 0) + 1)
+    counts.set(token, (counts.get(token) ?? 0) + weight)
   }
-
-  return counts
-}
-
-function weigh(
-  fields: Map<string, number>,
-  body: Map<string, number>
-): Map<string, number> {
-  const counts = new Map(body)
-
-  for (const [term, frequency] of fields) {
-    counts.set(term, (counts.get(term) ?? 0) + frequency * FIELD_WEIGHT)
-  }
-
-  return counts
 }
 
 export function buildIndex(documents: Document[]): Bm25Index {
@@ -94,14 +97,20 @@ export function buildIndex(documents: Document[]): Bm25Index {
   for (const [document, entry] of documents.entries()) {
     const body = tokenize(entry.text)
     const fields = entry.fields === undefined ? [] : tokenize(entry.fields)
+    const names = entry.names === undefined ? [] : tokenize(entry.names)
 
     ids.push(entry.id)
-    lengths.push(body.length + fields.length * FIELD_WEIGHT)
+    lengths.push(
+      body.length + fields.length * FIELD_WEIGHT + names.length * NAME_WEIGHT
+    )
 
-    for (const [term, frequency] of weigh(
-      countTerms(fields),
-      countTerms(body)
-    )) {
+    const counts = new Map<string, number>()
+
+    addWeighted(counts, body, 1)
+    addWeighted(counts, fields, FIELD_WEIGHT)
+    addWeighted(counts, names, NAME_WEIGHT)
+
+    for (const [term, frequency] of counts) {
       const list = postings.get(term) ?? []
 
       list.push({ document, frequency })

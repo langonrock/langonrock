@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -177,6 +177,35 @@ describe('field weighting', () => {
     expect(search(plain, 'orders', 1)).toEqual([])
     expect(search(weighted, 'orders', 1).map(hit => hit.id)).toEqual(['a'])
   })
+
+  test('a name match outranks the same term in ordinary fields', () => {
+    const index = buildIndex([
+      { id: 'named', names: 'rabbit', text: 'x y z' },
+      { id: 'cited', fields: 'rabbit', text: 'x y z' }
+    ])
+
+    expect(search(index, 'rabbit', 2).map(hit => hit.id)).toEqual([
+      'named',
+      'cited'
+    ])
+  })
+
+  test('finds a concept whose title never appears in its body', () => {
+    const index = buildIndex([
+      {
+        id: 'recipe_181',
+        names: 'recipe_181 Rabbit Soup',
+        text: 'Take one, joint it, and simmer for three hours.'
+      },
+      {
+        id: 'recipe_182',
+        names: 'recipe_182 Onion Gravy',
+        text: 'A rabbit pairs well with this, some say.'
+      }
+    ])
+
+    expect(search(index, 'rabbit soup', 2)[0]?.id).toBe('recipe_181')
+  })
 })
 
 describe('parseManifest', () => {
@@ -305,5 +334,23 @@ describe('searchTenant', () => {
 
   test('is deterministic across repeated calls', () => {
     expect(searchTenant(built, 'orders')).toBe(searchTenant(built, 'orders'))
+  })
+
+  test('finds a concept by a title the compiler stripped', async () => {
+    const dir = join(scratch, 'titled')
+
+    await mkdir(dir, { recursive: true })
+    await writeFile(
+      join(dir, 'recipe_181.md'),
+      '---\ntype: Recipe\ntitle: Rabbit Soup\n---\n\nJoint it and simmer for three hours.\n'
+    )
+
+    const root = join(scratch, 'titled-data')
+
+    await putBundle(dir, { root, tenant: 'titled', bundle: 'recipes' })
+
+    const titled = await buildTenantIndex(await openTenant(root, 'titled'))
+
+    expect(ids(searchTenant(titled, 'rabbit soup'))).toEqual(['recipe_181'])
   })
 })
