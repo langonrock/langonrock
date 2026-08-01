@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { isAbsolute } from 'node:path'
 
 import {
   assertBundleName,
@@ -47,9 +48,14 @@ describe('assertConceptPath', () => {
 
 describe('sourceFile', () => {
   test('builds a path inside the bundle', () => {
-    expect(sourceFile('/data/acme', 'sales', 'tables/orders.md')).toBe(
+    const built = sourceFile('/data/acme', 'sales', 'tables/orders.md')
+
+    // Windows resolves this to a drive letter and backslashes, so the tail is
+    // compared in one separator rather than pinning a posix absolute path.
+    expect(built.replaceAll('\\', '/')).toEndWith(
       '/data/acme/sales/tables/orders.md'
     )
+    expect(isAbsolute(built)).toBe(true)
   })
 
   test('refuses to leave the bundle even by a valid looking route', () => {

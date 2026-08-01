@@ -5,8 +5,15 @@ import { join } from 'node:path'
 
 import { open } from '../src/client/connection.ts'
 import { serve } from '../src/server/http.ts'
+import { MAX_BYTES, sourceResponse } from '../src/server/sourceroutes.ts'
+import { loadSources } from '../src/server/sources.ts'
 import { openTenant } from '../src/store/reader.ts'
-import { hashContent, listSource, readSource } from '../src/store/source.ts'
+import {
+  deleteSource,
+  hashContent,
+  listSource,
+  readSource
+} from '../src/store/source.ts'
 import { putTenantRoot } from '../src/store/writer.ts'
 
 import type { Connection } from '../src/client/connection.ts'
@@ -89,8 +96,33 @@ afterAll(async () => {
   await rm(scratch, { recursive: true, force: true })
 })
 
+/**
+ * A unix socket where there is one and loopback TCP where there is not. The
+ * write path is the same code either way, and gating these tests on the
+ * transport left the whole source service untested on Windows.
+ */
 function local(): Connection {
-  return open(`okf+unix://${socket}?tenant=acme`)
+  return ON_POSIX
+    ? open(`okf+unix://${socket}?tenant=acme`)
+    : open(tcpDsn('/?token=writer-token'))
+}
+
+function api(path: string, init: RequestInit = {}): Promise<Response> {
+  return fetch(`http://127.0.0.1:${tcp?.port}/v1/acme${path}`, {
+    ...init,
+    headers: {
+      authorization: 'Bearer writer-token',
+      ...(init.headers as Record<string, string>)
+    }
+  })
+}
+
+function put(headers: Record<string, string>, body: string): Promise<Response> {
+  return api('/source/sales/tables/orders.md', {
+    method: 'PUT',
+    headers,
+    body
+  })
 }
 
 describe('the source service', () => {
@@ -108,18 +140,15 @@ describe('the source service', () => {
 
     expect(found?.content).toBe(CONCEPT)
   })
+
+  test('deleting a file that is not there reports it instead of throwing', async () => {
+    expect(await deleteSource(source, 'sales', 'tables/ghost.md')).toBe(false)
+  })
 })
 
 describe('preconditions', () => {
   test('refuses a write that names no version', async () => {
-    if (!ON_POSIX) {
-      return
-    }
-
-    const response = await fetch(
-      'http://langonrock/v1/acme/source/sales/tables/orders.md',
-      { unix: socket, method: 'PUT', body: 'nope' }
-    )
+    const response = await put({}, 'nope')
 
     expect(response.status).toBe(428)
     expect(await readSource(source, 'sales', 'tables/orders.md')).toEqual({
@@ -129,38 +158,18 @@ describe('preconditions', () => {
   })
 
   test('refuses a write whose hash is stale', async () => {
-    if (!ON_POSIX) {
-      return
-    }
-
-    const response = await fetch(
-      'http://langonrock/v1/acme/source/sales/tables/orders.md',
-      {
-        unix: socket,
-        method: 'PUT',
-        headers: { 'if-match': '"deadbeef"' },
-        body: 'nope'
-      }
-    )
+    const response = await put({ 'if-match': '"deadbeef"' }, 'nope')
 
     expect(response.status).toBe(412)
   })
 
   test('refuses to create over something that exists', async () => {
-    if (!ON_POSIX) {
-      return
-    }
-
     await expect(
       local().writeSource('sales', 'tables/orders.md', 'nope')
     ).rejects.toThrow('412')
   })
 
   test('accepts a write that names the current version', async () => {
-    if (!ON_POSIX) {
-      return
-    }
-
     const connection = local()
     const before = await connection.readSource('sales', 'tables/orders.md')
     const updated = `${CONCEPT}\nAppended by the editor.\n`
@@ -180,10 +189,6 @@ describe('preconditions', () => {
   })
 
   test('a second editor holding the old hash is refused, not merged', async () => {
-    if (!ON_POSIX) {
-      return
-    }
-
     const connection = local()
     const stale = (await connection.readSource('sales', 'tables/orders.md'))
       ?.hash
@@ -220,10 +225,6 @@ describe('preconditions', () => {
 
 describe('creating and removing', () => {
   test('writing the first file into a folder creates the bundle', async () => {
-    if (!ON_POSIX) {
-      return
-    }
-
     const connection = local()
 
     await connection.writeSource('ops', 'runbooks/deploy.md', CONCEPT)
@@ -237,10 +238,6 @@ describe('creating and removing', () => {
   })
 
   test('deleting a concept needs its hash too', async () => {
-    if (!ON_POSIX) {
-      return
-    }
-
     const connection = local()
 
     await connection.writeSource('sales', 'tables/temp.md', CONCEPT)
@@ -259,12 +256,73 @@ describe('creating and removing', () => {
   })
 })
 
+/**
+ * The embedded connection checks preconditions itself rather than leaning on the
+ * server. An editor developed against a local directory would otherwise learn
+ * about lost updates only once it was pointed at a server.
+ */
+describe('the embedded connection', () => {
+  function embedded(): Connection {
+    return open(`okf://${root}?tenant=acme`)
+  }
+
+  test('refuses a create over a concept that already exists', async () => {
+    await expect(
+      embedded().writeSource('sales', 'tables/orders.md', 'nope')
+    ).rejects.toThrow('concept already exists')
+  })
+
+  test('refuses a replace of a concept that is not there', async () => {
+    await expect(
+      embedded().writeSource('sales', 'tables/ghost.md', 'nope', 'deadbeef')
+    ).rejects.toThrow('concept does not exist')
+  })
+
+  test('refuses a replace whose hash is stale', async () => {
+    await expect(
+      embedded().writeSource('sales', 'tables/orders.md', 'nope', 'deadbeef')
+    ).rejects.toThrow('concept changed since it was read')
+  })
+
+  test('accepts a create and then a replace that names it', async () => {
+    const connection = embedded()
+    const hash = await connection.writeSource(
+      'sales',
+      'tables/local.md',
+      CONCEPT
+    )
+    const updated = `${CONCEPT}\nEdited locally.\n`
+
+    await connection.writeSource('sales', 'tables/local.md', updated, hash)
+
+    expect(
+      (await connection.readSource('sales', 'tables/local.md'))?.content
+    ).toBe(updated)
+
+    await connection.deleteSource(
+      'sales',
+      'tables/local.md',
+      hashContent(updated)
+    )
+
+    expect(await readSource(source, 'sales', 'tables/local.md')).toBeUndefined()
+  })
+
+  test('removes a bundle it created', async () => {
+    const connection = embedded()
+
+    await connection.writeSource('scratch', 'note.md', CONCEPT)
+
+    expect(await readSource(source, 'scratch', 'note.md')).toBeDefined()
+
+    await connection.deleteBundle('scratch')
+
+    expect(await readSource(source, 'scratch', 'note.md')).toBeUndefined()
+  })
+})
+
 describe('a write reaches the snapshot', () => {
   test('sync makes a new concept visible in the manifest', async () => {
-    if (!ON_POSIX) {
-      return
-    }
-
     const connection = local()
     const before = await connection.snapshot()
 
@@ -317,20 +375,153 @@ describe('authorization', () => {
   })
 })
 
+describe('the source routes', () => {
+  test.each([
+    ['GET', '/source/sales/tables/ghost.md', 404],
+    ['DELETE', '/source/sales/tables/ghost.md', 404],
+    ['POST', '/source', 405],
+    ['PUT', '/source/sales', 400],
+    ['PATCH', '/source/sales/tables/orders.md', 405],
+    ['GET', '/bundles/sales', 405],
+    ['DELETE', '/bundles', 400],
+    ['DELETE', '/bundles/nope', 404]
+  ])('answer %s %s with a %d', async (method, path, status) => {
+    expect((await api(path, { method })).status).toBe(status)
+  })
+
+  test('refuse to replace a concept that was never there', async () => {
+    const response = await api('/source/sales/tables/ghost.md', {
+      method: 'PUT',
+      headers: { 'if-match': '"deadbeef"' },
+      body: 'nope'
+    })
+
+    expect(response.status).toBe(412)
+  })
+
+  test('refuse a body larger than a concept could reasonably be', async () => {
+    const response = await api('/source/sales/tables/huge.md', {
+      method: 'PUT',
+      headers: { 'if-none-match': '*' },
+      body: 'a'.repeat(MAX_BYTES + 1)
+    })
+
+    expect(response.status).toBe(413)
+    // The message proves the route answered and not the transport underneath
+    // it, which is what keeps the refusal identical on every platform.
+    expect(await response.text()).toContain('may not exceed')
+    expect(await readSource(source, 'sales', 'tables/huge.md')).toBeUndefined()
+
+    // The connection has to survive the refusal. Answering before the body had
+    // been read left the rest of it on the socket, and the next request over
+    // that connection read those bytes as its own headers and hung.
+    expect((await api('/snapshot')).status).toBe(200)
+  })
+
+  /**
+   * A chunked upload declares no length, so the header check cannot see it and
+   * the byte count after reading is the only thing standing in the way. The
+   * route is called directly because keep-alive reuse makes a streamed request
+   * through the http client answer inconsistently.
+   */
+  test('refuse an oversized body that declared no length', async () => {
+    const chunk = new TextEncoder().encode('a'.repeat(100_000))
+    const request = new Request('http://langonrock/streamed', {
+      method: 'PUT',
+      headers: { 'if-none-match': '*' },
+      body: new ReadableStream<Uint8Array>({
+        start(controller) {
+          for (let index = 0; index < 11; index++) {
+            controller.enqueue(chunk)
+          }
+
+          controller.close()
+        }
+      }),
+      duplex: 'half'
+    } as RequestInit)
+
+    expect(request.headers.get('content-length')).toBeNull()
+
+    const refusal = await sourceResponse(request, {
+      dir: source,
+      write: true,
+      bundle: 'sales',
+      path: 'tables/streamed.md'
+    }).catch((cause: unknown) => cause)
+
+    expect(refusal).toMatchObject({ status: 413 })
+    expect(
+      await readSource(source, 'sales', 'tables/streamed.md')
+    ).toBeUndefined()
+  })
+})
+
+describe('loadSources', () => {
+  test('an absent file leaves every tenant read only', async () => {
+    const empty = await mkdtemp(join(tmpdir(), 'lr-sources-'))
+
+    expect((await loadSources(empty)).size).toBe(0)
+    await rm(empty, { recursive: true, force: true })
+  })
+
+  test('rejects anything that is not a map of directories', async () => {
+    const bad = await mkdtemp(join(tmpdir(), 'lr-sources-'))
+    const file = join(bad, 'sources.json')
+
+    await Bun.write(file, '["nope"]')
+    await expect(loadSources(bad)).rejects.toThrow('must be a JSON object')
+
+    await Bun.write(file, '{"acme": 7}')
+    await expect(loadSources(bad)).rejects.toThrow('non-string directory')
+
+    await Bun.write(file, '{"acme": ""}')
+    await expect(loadSources(bad)).rejects.toThrow('non-string directory')
+
+    await rm(bad, { recursive: true, force: true })
+  })
+
+  test('reads back the mapping the server runs on', async () => {
+    expect((await loadSources(root)).get('acme')).toBe(source)
+  })
+})
+
 describe('tenants without a source directory', () => {
   test('stay readable and refuse writes', async () => {
-    const bare = serve({ root, unix: `${socket}.bare` })
+    const bare = serve({
+      root,
+      port: 0,
+      hostname: '127.0.0.1',
+      tokens: new Map([['bare-token', { tenant: 'acme', write: true }]])
+    })
 
     try {
-      const connection = open(`okf+unix://${socket}.bare?tenant=acme`)
+      const connection = open(
+        `okf+http://127.0.0.1:${bare.port}/?token=bare-token`
+      )
 
       expect(await connection.manifest()).toContain('orders')
+      // The token grants writing, so the refusal can only come from the missing
+      // mapping rather than from the scope.
       await expect(connection.listSource()).rejects.toThrow(
         'no source directory'
       )
     } finally {
       bare.stop(true)
-      await rm(`${socket}.bare`, { force: true })
+    }
+  })
+
+  test('the embedded connection refuses the same way', async () => {
+    const elsewhere = await mkdtemp(join(tmpdir(), 'lr-nosource-'))
+
+    try {
+      const connection = open(`okf://${elsewhere}?tenant=acme`)
+
+      await expect(connection.listSource()).rejects.toThrow(
+        'no source directory'
+      )
+    } finally {
+      await rm(elsewhere, { recursive: true, force: true })
     }
   })
 })
@@ -343,10 +534,6 @@ describe('tenants without a source directory', () => {
  */
 describe('ids are not stable across a create', () => {
   test('adding a colliding file renames the concept that was already there', async () => {
-    if (!ON_POSIX) {
-      return
-    }
-
     const connection = local()
     const before = await openTenant(root, 'acme')
 

@@ -1,21 +1,16 @@
 import { mkdir, rm, stat, unlink } from 'node:fs/promises'
 
+import { globalKey, resolveGlobalIds } from '../compile/tenant.ts'
+import { hasFrontmatter } from '../okf/frontmatter.ts'
+import { deriveIds } from '../okf/ids.ts'
 import { writeAtomic } from './atomic.ts'
 import { assertBundleName, bundleDir, sourceFile } from './sourcepaths.ts'
 
+import type { SourceEntry, SourceFile } from '../types.ts'
+
+export type { SourceEntry, SourceFile } from '../types.ts'
+
 const encoder = new TextEncoder()
-
-export interface SourceEntry {
-  bundle: string
-  path: string
-  bytes: number
-  hash: string
-}
-
-export interface SourceFile {
-  content: string
-  hash: string
-}
 
 /**
  * The same primitive the snapshot writer uses for its digest, so a source hash
@@ -40,32 +35,93 @@ function parentOf(path: string): string {
  * Dot directories are skipped for the same reason the watcher ignores them:
  * `.git` and `.obsidian` are not knowledge.
  */
-export async function listSource(dir: string): Promise<SourceEntry[]> {
+interface Scanned {
+  bundle: string
+  path: string
+  content: string
+  concept: boolean
+}
+
+async function scanSource(dir: string): Promise<Scanned[]> {
   const glob = new Bun.Glob('*/**/*.md')
-  const found: SourceEntry[] = []
+  const found: Scanned[] = []
 
   for await (const entry of glob.scan({ cwd: dir, onlyFiles: true })) {
     const posix = entry.replaceAll('\\', '/')
-    const cut = posix.indexOf('/')
-    const bundle = posix.slice(0, cut)
 
     if (posix.split('/').some(segment => segment.startsWith('.'))) {
       continue
     }
 
+    const cut = posix.indexOf('/')
     const content = await Bun.file(`${dir}/${posix}`).text()
 
     found.push({
-      bundle,
+      bundle: posix.slice(0, cut),
       path: posix.slice(cut + 1),
-      bytes: Buffer.byteLength(content),
-      hash: hashContent(content)
+      content,
+      concept: hasFrontmatter(content)
     })
   }
 
   return found.sort((a, b) =>
     `${a.bundle}/${a.path}` < `${b.bundle}/${b.path}` ? -1 : 1
   )
+}
+
+/**
+ * Runs the compiler's own id derivation over the files it would accept, so the
+ * listing names each concept exactly as the manifest will. Files without
+ * frontmatter take part in neither, which is what makes a README visibly not a
+ * concept instead of an unexplained absence.
+ */
+function idsFor(scanned: Scanned[]): Map<string, string> {
+  const perBundle = new Map<string, string[]>()
+
+  for (const file of scanned.filter(file => file.concept)) {
+    perBundle.set(file.bundle, [
+      ...(perBundle.get(file.bundle) ?? []),
+      file.path
+    ])
+  }
+
+  const local = new Map<string, Map<string, string>>()
+
+  for (const [bundle, paths] of perBundle) {
+    local.set(bundle, deriveIds(paths))
+  }
+
+  const global = resolveGlobalIds(
+    [...local].map(([name, ids]) => ({ name, ids: [...ids.values()] }))
+  )
+  const byFile = new Map<string, string>()
+
+  for (const [bundle, ids] of local) {
+    for (const [path, id] of ids) {
+      const resolved = global.get(globalKey(bundle, id))
+
+      byFile.set(`${bundle}/${path}`, resolved ?? id)
+    }
+  }
+
+  return byFile
+}
+
+export async function listSource(dir: string): Promise<SourceEntry[]> {
+  const scanned = await scanSource(dir)
+  const ids = idsFor(scanned)
+
+  return scanned.map(file => {
+    const id = ids.get(`${file.bundle}/${file.path}`)
+    const entry: SourceEntry = {
+      bundle: file.bundle,
+      path: file.path,
+      bytes: Buffer.byteLength(file.content),
+      hash: hashContent(file.content)
+    }
+
+    return id === undefined ? entry : { ...entry, id }
+  })
 }
 
 export async function readSource(

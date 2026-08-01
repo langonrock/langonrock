@@ -17,6 +17,7 @@ export { deriveIds } from './okf/ids.ts'
 export { resolveLinks, resolveTarget } from './okf/links.ts'
 export { scanBundle } from './okf/scan.ts'
 export { open } from './client/connection.ts'
+export { connect, remoteConnection } from './client/client.ts'
 export { parseDsn } from './client/dsn.ts'
 export { MANIFEST_URI, createMcpServer, serveMcp } from './mcp/server.ts'
 export { buildIndex, search, tokenize } from './search/bm25.ts'
@@ -29,7 +30,12 @@ export {
 } from './search/tenant.ts'
 export { serve } from './server/http.ts'
 export { SOURCES_FILE, loadSources } from './server/sources.ts'
-export { TOKENS_FILE, loadTokens } from './server/tokens.ts'
+export {
+  TOKENS_FILE,
+  addToken,
+  generateToken,
+  loadTokens
+} from './server/tokens.ts'
 export { createReaderCache } from './store/cache.ts'
 export { encodeTnt, parseDir, parseHeader } from './store/format.ts'
 export {
@@ -65,13 +71,18 @@ export { openTenant } from './store/reader.ts'
 export { watchTenant } from './store/watch.ts'
 export { putBundle, putTenant, putTenantRoot } from './store/writer.ts'
 
-export type { Connection, SyncResult } from './client/connection.ts'
+export type {
+  Connection,
+  SearchOptions,
+  SourceEntry,
+  SourceFile,
+  SyncResult
+} from './types.ts'
 export type { Target, Transport } from './client/dsn.ts'
 export type { Bm25Index, Document, Hit } from './search/bm25.ts'
-export type { Manifest, SearchOptions, TenantIndex } from './search/tenant.ts'
+export type { Manifest, TenantIndex } from './search/tenant.ts'
 export type { ServeOptions } from './server/http.ts'
 export type { Grant } from './server/tokens.ts'
-export type { SourceEntry, SourceFile } from './store/source.ts'
 export type { GcOptions, GcResult } from './store/gc.ts'
 export type { CompileOptions, CompileResult } from './compile/manifest.ts'
 export type { Section } from './compile/sections.ts'

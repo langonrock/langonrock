@@ -199,6 +199,21 @@ describe('transport parity', () => {
     expect(found.size).toBe(0)
   })
 
+  /**
+   * Dropping either option server side would still answer, just with the
+   * default breadth, so the counts are asserted rather than the status.
+   */
+  test('k and expand survive the wire', async () => {
+    const connection = open(tcpDsn('/?token=secret-acme'))
+
+    expect(await connection.search('orders', { k: 1 })).toContain(
+      '# hits: 1 direct, 1 linked'
+    )
+    expect(
+      await connection.search('orders', { k: 1, expand: false })
+    ).toContain('# hits: 1 direct, 0 linked')
+  })
+
   test('a bundle filter survives the wire', async () => {
     if (!ON_POSIX) {
       return
@@ -283,6 +298,31 @@ describe('etag revalidation', () => {
 })
 
 describe('routing', () => {
+  test('a path outside the versioned prefix is a 404', async () => {
+    const response = await fetch(
+      `http://127.0.0.1:${tcpServer?.port}/v2/manifest`,
+      { headers: { authorization: 'Bearer secret-acme' } }
+    )
+
+    expect(response.status).toBe(404)
+  })
+
+  /**
+   * Without tokens nothing names the tenant except the path, so a request that
+   * omits it has to be refused rather than guessed at.
+   */
+  test('an untokened socket demands the tenant in the path', async () => {
+    if (!ON_POSIX) {
+      return
+    }
+
+    const response = await fetch('http://langonrock/v1/manifest', {
+      unix: socket
+    })
+
+    expect(response.status).toBe(401)
+  })
+
   test('unknown routes are a 404', async () => {
     const response = await fetch(
       `http://127.0.0.1:${tcpServer?.port}/v1/acme/nope`,
@@ -349,6 +389,55 @@ describe('loadTokens', () => {
 
     await Bun.write(join(bad, 'tokens.json'), '["nope"]')
     await expect(loadTokens(bad)).rejects.toThrow('must be a JSON object')
+    await rm(bad, { recursive: true, force: true })
+  })
+
+  /**
+   * A token that can rewrite someone's knowledge must not look identical to one
+   * that can only read it, so writing is opt-in and anything short of a literal
+   * true stays read only.
+   */
+  test('reads a bare string as a read only token', async () => {
+    expect((await loadTokens(root)).get('secret-acme')).toEqual({
+      tenant: 'acme',
+      write: false
+    })
+  })
+
+  test('takes writing only from an explicit true', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'lr-grant-'))
+
+    await Bun.write(
+      join(dir, 'tokens.json'),
+      JSON.stringify({
+        plain: { tenant: 'acme' },
+        writer: { tenant: 'acme', write: true },
+        sloppy: { tenant: 'acme', write: 'yes' }
+      })
+    )
+
+    const grants = await loadTokens(dir)
+
+    expect(grants.get('plain')).toEqual({ tenant: 'acme', write: false })
+    expect(grants.get('writer')).toEqual({ tenant: 'acme', write: true })
+    expect(grants.get('sloppy')).toEqual({ tenant: 'acme', write: false })
+
+    await rm(dir, { recursive: true, force: true })
+  })
+
+  test('rejects a grant with no tenant and a token with no name', async () => {
+    const bad = await mkdtemp(join(tmpdir(), 'lr-grant-'))
+    const file = join(bad, 'tokens.json')
+
+    await Bun.write(file, '{"t": {"write": true}}')
+    await expect(loadTokens(bad)).rejects.toThrow('invalid grant')
+
+    await Bun.write(file, '{"t": 7}')
+    await expect(loadTokens(bad)).rejects.toThrow('invalid grant')
+
+    await Bun.write(file, '{"": "acme"}')
+    await expect(loadTokens(bad)).rejects.toThrow('has an empty token')
+
     await rm(bad, { recursive: true, force: true })
   })
 })
