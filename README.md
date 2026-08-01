@@ -107,17 +107,28 @@ Add a bundle by creating a folder, remove it by deleting the folder, change one 
 langonrock mcp "okf://$PWD/data?tenant=acme"
 ```
 
-For Claude Code, register it once:
+That is an MCP server on stdio. There is no plugin and nothing to download: registering it only records the command a client should run, so the binary has to be on the machine first.
 
 ```sh
+curl -fsSL https://raw.githubusercontent.com/langonrock/langonrock/main/install.sh | sh
+
 claude mcp add langonrock -- langonrock mcp "okf:///abs/path/to/data?tenant=acme"
 ```
 
-Any connection string works here, so point it at a [running daemon](#running-a-server) instead and every agent invocation shares one process with warm indexes rather than paying cold start:
+Everything after `--` is the command being registered, and the path in the connection string has to be absolute. The client is what starts the process, and its working directory is not yours.
+
+At the start of each session the client runs that command, asks the server what it offers, and puts the four tool definitions in its system prompt. Nothing is discovered and nothing is fetched, so a server that fails to start shows up as tools that are quietly absent. `claude mcp list` is what tells you.
+
+Any connection string works, so point it at a [running daemon](#running-a-server) and every agent invocation shares one process with warm indexes rather than paying cold start:
 
 ```sh
-claude mcp add langonrock -- langonrock mcp "okf+unix:///tmp/okf.sock?tenant=acme"
+claude mcp add langonrock -s project -- langonrock mcp "okf+unix:///tmp/okf.sock?tenant=acme"
 ```
+
+`-s project` writes to `.mcp.json` in the repository instead of your own settings, so committing it hands the same knowledge to everyone who clones. That only works if the connection string resolves on their machines too, which in practice means a socket or a server rather than a path.
+
+> [!TIP]
+> MCP is not the only way in. A client that can run shell commands can call the CLI directly, with a line in its instructions saying the command exists. The four tool definitions cost tokens in every session whether or not anyone asks about knowledge, and a line of prose costs almost nothing but relies on the model remembering. Register the server when knowledge is consulted constantly, and reach for the CLI when it is occasional.
 
 Four tools, and no more, because every tool definition costs tokens in the client's system prompt:
 
@@ -454,6 +465,8 @@ Whether the concept that answers the question is in the top eight, over the same
 | OKF BM25 over raw Markdown                 |      70% | 0.43 |
 | langonrock BM25                            |      65% | 0.26 |
 | langonrock BM25 plus the one-hop expansion |  **75%** | 0.27 |
+
+The last row is what you get without configuring anything. Expansion is on unless a caller passes `expand: false`, which is what the middle row measures, and the CLI and the MCP tools offer no way to turn it off at all.
 
 Queries that describe a concept rather than name it land at 95% on both sides.
 
