@@ -2,7 +2,11 @@ import { createSearchCache } from '../search/cache.ts'
 import { searchTenant } from '../search/tenant.ts'
 import { createReaderCache } from '../store/cache.ts'
 import { HttpError } from './errors.ts'
-import { MAX_BYTES, bundlesResponse, sourceResponse } from './sourceroutes.ts'
+import {
+  MAX_UPLOAD_BYTES,
+  bundlesResponse,
+  sourceResponse
+} from './sourceroutes.ts'
 
 import type { SearchOptions, TenantIndex } from '../search/tenant.ts'
 import type { TenantReader } from '../store/reader.ts'
@@ -390,10 +394,10 @@ export function serve(options: ServeOptions): LangonrockServer {
 
   return Bun.serve({
     ...listenerFor(options),
-    // Enforced here rather than by reading `content-length` in the route: the
-    // transport knows how to refuse an oversize body and still leave the
-    // connection usable, which a handler answering mid-upload does not.
-    maxRequestBodySize: MAX_BYTES,
+    // A backstop against something absurd, not the concept limit. The route
+    // reads the body and answers 413 itself, which keeps the status and the
+    // message the same everywhere and leaves nothing unread on the socket.
+    maxRequestBodySize: MAX_UPLOAD_BYTES,
     fetch: async request => {
       try {
         const matched = route(new URL(request.url).pathname)

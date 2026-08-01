@@ -11,6 +11,16 @@ import { HttpError } from './errors.ts'
 /** A concept is prose. Anything this large is a mistake or an attack. */
 export const MAX_BYTES = 1_000_000
 
+/**
+ * What the transport will hold before refusing, deliberately well above the
+ * concept limit. The two do different jobs: this one bounds memory, and the
+ * one above states a rule about concepts. Keeping them apart means an
+ * ordinary oversize write is answered by the check below, with the same
+ * status and the same message on every platform, rather than by whatever the
+ * runtime happens to do when a body outgrows its own cap.
+ */
+export const MAX_UPLOAD_BYTES = MAX_BYTES * 8
+
 export interface SourceContext {
   dir: string
   write: boolean
@@ -71,9 +81,8 @@ function assertPrecondition(
  * The size is checked after reading, not from `content-length` before it.
  * Answering while the body is still arriving leaves it on a keep-alive
  * connection, where the next request reads it as its own headers and hangs, and
- * an oversize body is a rare enough mistake to be worth reading and dropping.
- * The server caps the transport at the same number, so nothing unbounded is
- * ever buffered to get here.
+ * an oversize write is a rare enough mistake to be worth reading and dropping.
+ * `MAX_UPLOAD_BYTES` keeps what gets buffered here bounded.
  */
 async function bodyOf(request: Request): Promise<string> {
   const content = await request.text()

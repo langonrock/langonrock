@@ -5,7 +5,7 @@ import { join } from 'node:path'
 
 import { open } from '../src/client/connection.ts'
 import { serve } from '../src/server/http.ts'
-import { sourceResponse } from '../src/server/sourceroutes.ts'
+import { MAX_BYTES, sourceResponse } from '../src/server/sourceroutes.ts'
 import { loadSources } from '../src/server/sources.ts'
 import { openTenant } from '../src/store/reader.ts'
 import {
@@ -403,11 +403,19 @@ describe('the source routes', () => {
     const response = await api('/source/sales/tables/huge.md', {
       method: 'PUT',
       headers: { 'if-none-match': '*' },
-      body: 'a'.repeat(1_000_001)
+      body: 'a'.repeat(MAX_BYTES + 1)
     })
 
     expect(response.status).toBe(413)
+    // The message proves the route answered and not the transport underneath
+    // it, which is what keeps the refusal identical on every platform.
+    expect(await response.text()).toContain('may not exceed')
     expect(await readSource(source, 'sales', 'tables/huge.md')).toBeUndefined()
+
+    // The connection has to survive the refusal. Answering before the body had
+    // been read left the rest of it on the socket, and the next request over
+    // that connection read those bytes as its own headers and hung.
+    expect((await api('/snapshot')).status).toBe(200)
   })
 
   /**
