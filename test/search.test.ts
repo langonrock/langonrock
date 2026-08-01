@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -54,6 +54,20 @@ describe('tokenize', () => {
   test('returns nothing for text with no word characters', () => {
     expect(tokenize('   --- ')).toEqual([])
   })
+
+  test('folds accents so both spellings tokenize identically', () => {
+    expect(tokenize('operações')).toEqual(['operacoes'])
+    expect(tokenize('operacoes')).toEqual(['operacoes'])
+    expect(tokenize('Métrica de Conversão')).toEqual([
+      'metrica',
+      'de',
+      'conversao'
+    ])
+  })
+
+  test('keeps non-latin letters instead of dropping them', () => {
+    expect(tokenize('売上高 2024')).toEqual(['売上高', '2024'])
+  })
 })
 
 describe('bm25 scoring', () => {
@@ -100,6 +114,21 @@ describe('bm25 scoring', () => {
     expect(search(index, 'x', 10).map(hit => hit.id)).toEqual(['a', 'b'])
   })
 
+  test('bounded selection matches the full ordering at every k', () => {
+    const documents = Array.from({ length: 40 }, (_, index) => ({
+      id: `doc_${String(index).padStart(2, '0')}`,
+      text: `${'orders '.repeat((index % 5) + 1)}${'filler '.repeat(index % 7)}x`
+    }))
+    const index = buildIndex(documents)
+    const full = search(index, 'orders filler', documents.length)
+
+    expect(full).toHaveLength(documents.length)
+
+    for (const k of [1, 3, 8, 17, 40]) {
+      expect(search(index, 'orders filler', k)).toEqual(full.slice(0, k))
+    }
+  })
+
   test('returns nothing for an unknown term or an empty index', () => {
     expect(search(buildIndex([{ id: 'a', text: 'x' }]), 'zzz', 10)).toEqual([])
     expect(search(buildIndex([]), 'x', 10)).toEqual([])
@@ -113,6 +142,16 @@ describe('bm25 scoring', () => {
     ])
 
     expect(search(index, 'x', 2)).toHaveLength(2)
+  })
+
+  test('matches across accented and plain spellings both ways', () => {
+    const index = buildIndex([
+      { id: 'accented', text: 'Relatório de operações da região sul' },
+      { id: 'plain', text: 'relatorio de operacoes da regiao norte' }
+    ])
+
+    expect(search(index, 'operações', 10)).toHaveLength(2)
+    expect(search(index, 'operacoes', 10)).toHaveLength(2)
   })
 
   test('filters before the cut to k, not after', () => {
@@ -152,6 +191,35 @@ describe('field weighting', () => {
 
     expect(search(plain, 'orders', 1)).toEqual([])
     expect(search(weighted, 'orders', 1).map(hit => hit.id)).toEqual(['a'])
+  })
+
+  test('a name match outranks the same term in ordinary fields', () => {
+    const index = buildIndex([
+      { id: 'named', names: 'rabbit', text: 'x y z' },
+      { id: 'cited', fields: 'rabbit', text: 'x y z' }
+    ])
+
+    expect(search(index, 'rabbit', 2).map(hit => hit.id)).toEqual([
+      'named',
+      'cited'
+    ])
+  })
+
+  test('finds a concept whose title never appears in its body', () => {
+    const index = buildIndex([
+      {
+        id: 'recipe_181',
+        names: 'recipe_181 Rabbit Soup',
+        text: 'Take one, joint it, and simmer for three hours.'
+      },
+      {
+        id: 'recipe_182',
+        names: 'recipe_182 Onion Gravy',
+        text: 'A rabbit pairs well with this, some say.'
+      }
+    ])
+
+    expect(search(index, 'rabbit soup', 2)[0]?.id).toBe('recipe_181')
   })
 })
 
@@ -281,5 +349,23 @@ describe('searchTenant', () => {
 
   test('is deterministic across repeated calls', () => {
     expect(searchTenant(built, 'orders')).toBe(searchTenant(built, 'orders'))
+  })
+
+  test('finds a concept by a title the compiler stripped', async () => {
+    const dir = join(scratch, 'titled')
+
+    await mkdir(dir, { recursive: true })
+    await writeFile(
+      join(dir, 'recipe_181.md'),
+      '---\ntype: Recipe\ntitle: Rabbit Soup\n---\n\nJoint it and simmer for three hours.\n'
+    )
+
+    const root = join(scratch, 'titled-data')
+
+    await putBundle(dir, { root, tenant: 'titled', bundle: 'recipes' })
+
+    const titled = await buildTenantIndex(await openTenant(root, 'titled'))
+
+    expect(ids(searchTenant(titled, 'rabbit soup'))).toEqual(['recipe_181'])
   })
 })

@@ -15,12 +15,11 @@ import {
   searchConcepts
 } from './baseline.ts'
 import { average, bill, median, memory, rowIds, score } from './billing.ts'
-import { generate } from './corpus.ts'
-import { buildQuestions } from './questions.ts'
+import { PROFILES } from './profiles.ts'
 
 import type { TenantIndex, TenantReader } from '../src/index.ts'
 import type { Turn } from './billing.ts'
-import type { Corpus } from './corpus.ts'
+import type { Corpus } from './okf.ts'
 import type { Question } from './questions.ts'
 
 const HERE = import.meta.dir
@@ -35,6 +34,20 @@ interface Store {
   resolve: (id: string) => string
   section: Map<string, number>
   whole: Map<string, number>
+}
+
+interface Target {
+  id: string
+  section: string
+}
+
+/** The question that touches the most concepts, used to time a batched read. */
+function widest(questions: Question[]): Target[] {
+  return questions.reduce<Target[]>(
+    (best, question) =>
+      question.targets.length > best.length ? question.targets : best,
+    []
+  )
 }
 
 async function compile(corpus: Corpus) {
@@ -77,17 +90,17 @@ async function conceptCosts(reader: TenantReader, store: Store) {
     }
   }
 
-  const targets = store.questions[7]?.targets ?? []
+  const targets = widest(store.questions)
 
   return median(20, () =>
     reader.get(
       targets.map(target => store.resolve(target.id)),
-      'schema'
+      targets[0]?.section
     )
   )
 }
 
-async function indexCosts(reader: TenantReader) {
+async function indexCosts(reader: TenantReader, probe: string) {
   const before = memory()
   const indexBuildMs = await median(2, () => buildTenantIndex(reader))
   const built = await buildTenantIndex(reader)
@@ -96,9 +109,7 @@ async function indexCosts(reader: TenantReader) {
   return {
     built,
     indexBuildMs,
-    queryMs: await median(20, async () =>
-      searchTenant(built, 'orders grain join refunds', { k: K })
-    ),
+    queryMs: await median(20, async () => searchTenant(built, probe, { k: K })),
     indexMb: after.heap - before.heap,
     rssMb: after.rss
   }
@@ -125,31 +136,57 @@ function retrieval(store: Store) {
       ranked(q => q.described, false),
       wanted
     ),
-    searchTokens: average(
-      questions.map(question =>
-        estimateTokens(searchTenant(built, question.named, { k: K }))
-      )
+    searchCosts: questions.map(question =>
+      estimateTokens(searchTenant(built, question.named, { k: K }))
     )
   }
 }
 
+function fetchTurn(store: Store, question: Question): Turn {
+  return {
+    parts: question.targets.map(target => {
+      const key = `${store.resolve(target.id)}#${target.section}`
+
+      return { key, tokens: store.section.get(key) ?? 0 }
+    })
+  }
+}
+
+/**
+ * The manifest lives in the cached prompt prefix and every read is one hop off
+ * it. Cheapest in round trips, and it is the whole manifest that gets re-read
+ * at the cache rate on every later turn.
+ */
 function storeTurns(store: Store): Turn[] {
   return store.questions.flatMap((question): Turn[] => {
     const turns: Turn[] = [
       { parts: [{ key: 'manifest', tokens: store.manifestTokens }] }
     ]
 
-    if (question.manifestOnly) {
-      return turns
+    if (!question.manifestOnly) {
+      turns.push(fetchTurn(store, question))
     }
 
-    turns.push({
-      parts: question.targets.map(target => {
-        const key = `${store.resolve(target.id)}#${target.section}`
+    return turns
+  })
+}
 
-        return { key, tokens: store.section.get(key) ?? 0 }
-      })
-    })
+/**
+ * The strategy the MCP tool descriptions already recommend on a large tenant:
+ * never read the whole manifest, rank first and fetch what ranked. Trades a
+ * round trip per question for not carrying the manifest at all. Charged
+ * optimistically, the same way the baseline is: the top result is assumed to
+ * hold the answer.
+ */
+function searchTurns(store: Store, costs: number[]): Turn[] {
+  return store.questions.flatMap((question, index): Turn[] => {
+    const turns: Turn[] = [
+      { parts: [{ key: `search:${index}`, tokens: costs[index] ?? 0 }] }
+    ]
+
+    if (!question.manifestOnly) {
+      turns.push(fetchTurn(store, question))
+    }
 
     return turns
   })
@@ -185,7 +222,7 @@ function okfTurns(
   })
 }
 
-async function okfSide(corpus: Corpus, questions: Question[]) {
+async function okfSide(corpus: Corpus, questions: Question[], probe: string) {
   const pathOf = new Map(
     corpus.concepts.map(concept => [
       concept.id,
@@ -203,7 +240,7 @@ async function okfSide(corpus: Corpus, questions: Question[]) {
   const indexTokens = (
     await Promise.all(corpus.bundles.map(name => readIndex(SOURCE, name)))
   ).reduce((sum, text) => sum + estimateTokens(text), 0)
-  const targets = questions[7]?.targets ?? []
+  const targets = widest(questions)
   const ranked = (query: (q: Question) => string) =>
     questions.map(
       question => searchConcepts(bundle, index, query(question), K).paths
@@ -218,7 +255,7 @@ async function okfSide(corpus: Corpus, questions: Question[]) {
     buildMs,
     rssMb: after.rss,
     queryMs: await median(20, async () =>
-      searchConcepts(bundle, index, 'orders grain join refunds', K)
+      searchConcepts(bundle, index, probe, K)
     ),
     coldMs: await median(20, async () => {
       await readIndex(SOURCE, corpus.bundles[0] as string)
@@ -238,19 +275,107 @@ async function okfSide(corpus: Corpus, questions: Question[]) {
   }
 }
 
+/**
+ * `bun bench/run.ts [profile] [bundles] [concepts per bundle]`. The profile is
+ * optional and only the reference one reads the two sizes, so the documented
+ * `1 500` form keeps working.
+ */
+function parseArgs(argv: string[]): {
+  name: string
+  bundles: number
+  perBundle: number
+} {
+  const named = argv[0] !== undefined && argv[0] in PROFILES
+  const sizes = named ? argv.slice(1) : argv
+
+  return {
+    name: named ? (argv[0] as string) : 'reference',
+    bundles: Number(sizes[0] ?? 1),
+    perBundle: Number(sizes[1] ?? 500)
+  }
+}
+
+interface Report {
+  name: string
+  corpus: Corpus
+  compiled: Awaited<ReturnType<typeof compile>>
+  indexed: Awaited<ReturnType<typeof indexCosts>>
+  okf: Awaited<ReturnType<typeof okfSide>>
+  found: ReturnType<typeof retrieval>
+  store: Store
+  getMs: number
+}
+
+function report(input: Report): string {
+  const { name, corpus, compiled, indexed, okf, found, store, getMs } = input
+  const targets = store.questions.flatMap(question => question.targets)
+
+  return `${JSON.stringify({
+    profile: name,
+    concepts: compiled.reader.ids.length,
+    bundles: corpus.bundles.length,
+    corpusTokens: okf.corpusTokens,
+    indexTokens: okf.indexTokens,
+    manifestTokens: compiled.manifestTokens,
+    manifestPerConcept: compiled.manifestTokens / compiled.reader.ids.length,
+    sliceTokens: compiled.sliceTokens,
+    snapshotMb: compiled.put.bytes / 1024 / 1024,
+    okfSession: bill(okfTurns(store.questions, okf.indexTokens, okf.tokensOf)),
+    storeSession: bill(storeTurns(store)),
+    searchSession: bill(searchTurns(store, found.searchCosts)),
+    okfConceptTokens: average(targets.map(t => okf.tokensOf(t.id))),
+    wholeConceptTokens: average(
+      targets.map(t => store.whole.get(store.resolve(t.id)) ?? 0)
+    ),
+    sectionConceptTokens: average(
+      targets.map(
+        t => store.section.get(`${store.resolve(t.id)}#${t.section}`) ?? 0
+      )
+    ),
+    searchTokens: average(found.searchCosts),
+    compileMs: compiled.compileMs,
+    openMs: compiled.openMs,
+    manifestMs: compiled.manifestMs,
+    sliceMs: compiled.sliceMs,
+    getMs,
+    indexBuildMs: indexed.indexBuildMs,
+    queryMs: indexed.queryMs,
+    storeIndexMb: indexed.indexMb,
+    storeRssMb: indexed.rssMb,
+    okfColdMs: okf.coldMs,
+    okfLoadMs: okf.loadMs,
+    okfBuildMs: okf.buildMs,
+    okfQueryMs: okf.queryMs,
+    okfRssMb: okf.rssMb,
+    okfNamed: okf.named,
+    okfDescribed: okf.described,
+    storeNamed: found.named,
+    storeNamedExpanded: found.namedExpanded,
+    storeDescribed: found.described
+  })}\n`
+}
+
 async function main(): Promise<void> {
-  const bundles = Number(process.argv[2] ?? 1)
-  const perBundle = Number(process.argv[3] ?? 500)
-  const corpus = await generate(SOURCE, { bundles, perBundle })
+  const { name, bundles, perBundle } = parseArgs(process.argv.slice(2))
+  const profile = PROFILES[name]
+
+  if (profile === undefined) {
+    throw new Error(`unknown profile "${name}"`)
+  }
+
+  const { corpus, questions } = await profile.build(SOURCE, {
+    bundles,
+    perBundle
+  })
   const compiled = await compile(corpus)
-  const indexed = await indexCosts(compiled.reader)
+  const indexed = await indexCosts(compiled.reader, profile.probe)
   const ids = new Set(compiled.reader.ids)
   const bundleOf = new Map(
     corpus.concepts.map(concept => [concept.id, concept.bundle])
   )
   const store: Store = {
     built: indexed.built,
-    questions: buildQuestions(corpus.concepts),
+    questions,
     manifestTokens: compiled.manifestTokens,
     resolve: id => (ids.has(id) ? id : `${bundleOf.get(id) ?? ''}/${id}`),
     section: new Map(),
@@ -259,57 +384,21 @@ async function main(): Promise<void> {
 
   const getMs = await conceptCosts(compiled.reader, store)
   const found = retrieval(store)
-  const okf = await okfSide(corpus, store.questions)
-  const targets = store.questions.flatMap(question => question.targets)
+  const okf = await okfSide(corpus, store.questions, profile.probe)
+  const line = report({
+    name,
+    corpus,
+    compiled,
+    indexed,
+    okf,
+    found,
+    store,
+    getMs
+  })
 
   await rm(SOURCE, { recursive: true, force: true })
   await rm(STORE, { recursive: true, force: true })
-
-  process.stdout.write(
-    `${JSON.stringify({
-      concepts: compiled.reader.ids.length,
-      bundles,
-      corpusTokens: okf.corpusTokens,
-      indexTokens: okf.indexTokens,
-      manifestTokens: compiled.manifestTokens,
-      manifestPerConcept: compiled.manifestTokens / compiled.reader.ids.length,
-      sliceTokens: compiled.sliceTokens,
-      snapshotMb: compiled.put.bytes / 1024 / 1024,
-      okfSession: bill(
-        okfTurns(store.questions, okf.indexTokens, okf.tokensOf)
-      ),
-      storeSession: bill(storeTurns(store)),
-      okfConceptTokens: average(targets.map(t => okf.tokensOf(t.id))),
-      wholeConceptTokens: average(
-        targets.map(t => store.whole.get(store.resolve(t.id)) ?? 0)
-      ),
-      sectionConceptTokens: average(
-        targets.map(
-          t => store.section.get(`${store.resolve(t.id)}#${t.section}`) ?? 0
-        )
-      ),
-      searchTokens: found.searchTokens,
-      compileMs: compiled.compileMs,
-      openMs: compiled.openMs,
-      manifestMs: compiled.manifestMs,
-      sliceMs: compiled.sliceMs,
-      getMs,
-      indexBuildMs: indexed.indexBuildMs,
-      queryMs: indexed.queryMs,
-      storeIndexMb: indexed.indexMb,
-      storeRssMb: indexed.rssMb,
-      okfColdMs: okf.coldMs,
-      okfLoadMs: okf.loadMs,
-      okfBuildMs: okf.buildMs,
-      okfQueryMs: okf.queryMs,
-      okfRssMb: okf.rssMb,
-      okfNamed: okf.named,
-      okfDescribed: okf.described,
-      storeNamed: found.named,
-      storeNamedExpanded: found.namedExpanded,
-      storeDescribed: found.described
-    })}\n`
-  )
+  process.stdout.write(line)
 }
 
 await main()

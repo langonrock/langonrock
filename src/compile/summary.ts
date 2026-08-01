@@ -6,12 +6,16 @@ const SENTENCE_END = /[.!?](?:\s|$)/
 
 export const EMPTY_CELL = '-'
 
+export function flatten(value: string): string {
+  return value.replace(/\s+/g, ' ').trim()
+}
+
 /**
  * A tab or newline inside a summary would split or truncate the row, so every
  * cell is flattened before it reaches the manifest.
  */
 export function sanitizeCell(value: string): string {
-  const flattened = value.replace(/\s+/g, ' ').trim()
+  const flattened = flatten(value)
 
   return flattened === '' ? EMPTY_CELL : flattened
 }

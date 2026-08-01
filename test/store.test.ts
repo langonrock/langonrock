@@ -214,6 +214,35 @@ describe('openTenant', () => {
     expect(reader.ids).toContain('weekly_active_users')
   })
 
+  test('exposes frontmatter titles for the search index', async () => {
+    await putBundle(FIXTURE, { root, tenant: 'titles' })
+
+    const reader = await openTenant(root, 'titles')
+
+    expect(reader.titles.get('weekly_active_users')).toBe('Weekly active users')
+    expect(reader.titles.get('tables/orders')).toBe('Orders')
+  })
+
+  test('leaves untitled concepts out of the titles map', async () => {
+    const dir = await seedBundle('untitled', 'Body only.\n')
+
+    await putBundle(dir, { root, tenant: 'untitled' })
+
+    const reader = await openTenant(root, 'untitled')
+
+    expect(reader.titles.size).toBe(0)
+  })
+
+  test('streams every body in id order from one region read', async () => {
+    await putBundle(FIXTURE, { root, tenant: 'stream' })
+
+    const reader = await openTenant(root, 'stream')
+    const streamed = new Map(await reader.bodies())
+
+    expect([...streamed.keys()]).toEqual(reader.ids)
+    expect(streamed).toEqual(await reader.get(reader.ids))
+  })
+
   test('reads the snapshot the current pointer names', async () => {
     const put = await putBundle(FIXTURE, { root, tenant: 'pointer' })
     const reader = await openTenant(root, 'pointer')

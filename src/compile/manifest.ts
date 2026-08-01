@@ -5,6 +5,7 @@ import { basename, scanBundle, toPosix } from '../okf/scan.ts'
 import {
   EMPTY_CELL,
   deriveSummary,
+  flatten,
   normalizeKind,
   readStatus,
   readStringField,
@@ -96,6 +97,7 @@ function toConcept(
       status: readStatus(data),
       grain,
       summary,
+      title: flatten(readStringField(data, 'title')),
       links: ids
     },
     diagnostics,

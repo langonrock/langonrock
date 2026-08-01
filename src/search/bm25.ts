@@ -1,4 +1,7 @@
-const TOKEN = /[a-z0-9]+/g
+const ASCII_TOKEN = /[a-z0-9]+/g
+const TOKEN = /[\p{L}\p{N}]+/gu
+const NON_ASCII = /[^\x00-\x7f]/
+const MARKS = /\p{M}+/gu
 
 export const K1 = 1.2
 export const B = 0.75
@@ -16,11 +19,27 @@ export const B = 0.75
  */
 export const FIELD_WEIGHT = 2
 
+/**
+ * How many times the concept's own names — its id and its frontmatter title —
+ * count against a word of prose. A query that names a concept should land on
+ * the concept itself, not on a neighbour that mentions the name in passing,
+ * which is why names weigh more than the other manifest cells.
+ *
+ * Swept over the reference, handbook and spec corpora at k = 8. The hit rate
+ * for naming queries is already captured at 2, but the top position keeps
+ * improving to 4: reference MRR 0.39 at 2, 0.43 at 4. Above 4 nothing moves
+ * outside noise, and describing queries never move at all — the recall cost
+ * that capped FIELD_WEIGHT does not apply to a concept's own name.
+ */
+export const NAME_WEIGHT = 4
+
 export interface Document {
   id: string
   text: string
   /** Manifest cells, counted FIELD_WEIGHT times against the body text. */
   fields?: string
+  /** The concept's id and title, counted NAME_WEIGHT times. */
+  names?: string
 }
 
 export interface Hit {
@@ -28,81 +47,158 @@ export interface Hit {
   score: number
 }
 
-interface Posting {
-  document: number
-  frequency: number
+/**
+ * Postings are parallel typed arrays, not one object per posting. At twenty
+ * thousand concepts the index holds millions of postings, and the per-object
+ * overhead was most of the process's memory ceiling.
+ */
+interface PostingList {
+  documents: Uint32Array
+  frequencies: Uint32Array
+  length: number
 }
 
 export interface Bm25Index {
   ids: string[]
   lengths: number[]
   averageLength: number
-  postings: Map<string, Posting[]>
+  postings: Map<string, PostingList>
 }
 
 /**
  * Splitting on every non-alphanumeric run means `order_id` and `order id`
  * tokenize identically, so a query written either way matches either form.
  * The query goes through this same function, which is what keeps that true.
+ *
+ * Accents fold away before splitting, so `operações` and `operacoes` are the
+ * same token whichever way the document or the query spells it. Pure ASCII
+ * text skips the normalization and keeps the exact behaviour and cost the
+ * index build always had.
  */
 export function tokenize(text: string): string[] {
-  return text.toLowerCase().match(TOKEN) ?? []
+  const lowered = text.toLowerCase()
+
+  if (!NON_ASCII.test(lowered)) {
+    return lowered.match(ASCII_TOKEN) ?? []
+  }
+
+  return lowered.normalize('NFKD').replace(MARKS, '').match(TOKEN) ?? []
 }
 
-function countTerms(tokens: string[]): Map<string, number> {
-  const counts = new Map<string, number>()
-
+function addWeighted(
+  counts: Map<string, number>,
+  tokens: string[],
+  weight: number
+): void {
   for (const token of tokens) {
-    counts.set(token, (counts.get(token) ?? 0) + 1)
+    counts.set(token, (counts.get(token) ?? 0) + weight)
   }
-
-  return counts
 }
 
-function weigh(
-  fields: Map<string, number>,
-  body: Map<string, number>
-): Map<string, number> {
-  const counts = new Map(body)
+function createList(): PostingList {
+  return {
+    documents: new Uint32Array(2),
+    frequencies: new Uint32Array(2),
+    length: 0
+  }
+}
 
-  for (const [term, frequency] of fields) {
-    counts.set(term, (counts.get(term) ?? 0) + frequency * FIELD_WEIGHT)
+function push(list: PostingList, document: number, frequency: number): void {
+  if (list.length === list.documents.length) {
+    const documents = new Uint32Array(list.length * 2)
+    const frequencies = new Uint32Array(list.length * 2)
+
+    documents.set(list.documents)
+    frequencies.set(list.frequencies)
+    list.documents = documents
+    list.frequencies = frequencies
   }
 
-  return counts
+  list.documents[list.length] = document
+  list.frequencies[list.length] = frequency
+  list.length += 1
+}
+
+function trim(list: PostingList): PostingList {
+  if (list.length === list.documents.length) {
+    return list
+  }
+
+  return {
+    documents: list.documents.slice(0, list.length),
+    frequencies: list.frequencies.slice(0, list.length),
+    length: list.length
+  }
+}
+
+export interface IndexBuilder {
+  add: (document: Document) => void
+  build: () => Bm25Index
+}
+
+/**
+ * Documents are added one at a time so the caller never has to hold every
+ * body in memory at once: tokenize, count, drop the text, move on.
+ */
+export function createIndexBuilder(): IndexBuilder {
+  const ids: string[] = []
+  const lengths: number[] = []
+  const postings = new Map<string, PostingList>()
+
+  return {
+    add: entry => {
+      const document = ids.length
+      const body = tokenize(entry.text)
+      const fields = entry.fields === undefined ? [] : tokenize(entry.fields)
+      const names = entry.names === undefined ? [] : tokenize(entry.names)
+
+      ids.push(entry.id)
+      lengths.push(
+        body.length + fields.length * FIELD_WEIGHT + names.length * NAME_WEIGHT
+      )
+
+      const counts = new Map<string, number>()
+
+      addWeighted(counts, body, 1)
+      addWeighted(counts, fields, FIELD_WEIGHT)
+      addWeighted(counts, names, NAME_WEIGHT)
+
+      for (const [term, frequency] of counts) {
+        let list = postings.get(term)
+
+        if (list === undefined) {
+          list = createList()
+          postings.set(term, list)
+        }
+
+        push(list, document, frequency)
+      }
+    },
+    build: () => {
+      for (const [term, list] of postings) {
+        postings.set(term, trim(list))
+      }
+
+      const total = lengths.reduce((sum, length) => sum + length, 0)
+
+      return {
+        ids,
+        lengths,
+        averageLength: ids.length === 0 ? 0 : total / ids.length,
+        postings
+      }
+    }
+  }
 }
 
 export function buildIndex(documents: Document[]): Bm25Index {
-  const ids: string[] = []
-  const lengths: number[] = []
-  const postings = new Map<string, Posting[]>()
+  const builder = createIndexBuilder()
 
-  for (const [document, entry] of documents.entries()) {
-    const body = tokenize(entry.text)
-    const fields = entry.fields === undefined ? [] : tokenize(entry.fields)
-
-    ids.push(entry.id)
-    lengths.push(body.length + fields.length * FIELD_WEIGHT)
-
-    for (const [term, frequency] of weigh(
-      countTerms(fields),
-      countTerms(body)
-    )) {
-      const list = postings.get(term) ?? []
-
-      list.push({ document, frequency })
-      postings.set(term, list)
-    }
+  for (const document of documents) {
+    builder.add(document)
   }
 
-  const total = lengths.reduce((sum, length) => sum + length, 0)
-
-  return {
-    ids,
-    lengths,
-    averageLength: ids.length === 0 ? 0 : total / ids.length,
-    postings
-  }
+  return builder.build()
 }
 
 function inverseDocumentFrequency(matching: number, total: number): number {
@@ -122,17 +218,15 @@ function accumulate(
 
   const idf = inverseDocumentFrequency(list.length, index.ids.length)
 
-  for (const posting of list) {
-    const length = index.lengths[posting.document] ?? 0
+  for (let entry = 0; entry < list.length; entry++) {
+    const document = list.documents[entry] ?? 0
+    const frequency = list.frequencies[entry] ?? 0
+    const length = index.lengths[document] ?? 0
     const norm =
       index.averageLength === 0 ? 1 : 1 - B + (B * length) / index.averageLength
-    const weight =
-      (posting.frequency * (K1 + 1)) / (posting.frequency + K1 * norm)
+    const weight = (frequency * (K1 + 1)) / (frequency + K1 * norm)
 
-    scores.set(
-      posting.document,
-      (scores.get(posting.document) ?? 0) + idf * weight
-    )
+    scores.set(document, (scores.get(document) ?? 0) + idf * weight)
   }
 }
 
@@ -140,12 +234,48 @@ function accumulate(
  * Ties break by id so the same query against the same snapshot always returns
  * the same order. An agent that reruns a search should not see results shuffle.
  */
-function byScoreThenId(a: Hit, b: Hit): number {
-  if (a.score !== b.score) {
-    return b.score - a.score
+function ranksBefore(id: string, score: number, hit: Hit): boolean {
+  if (score !== hit.score) {
+    return score > hit.score
   }
 
-  return a.id < b.id ? -1 : 1
+  return id < hit.id
+}
+
+/**
+ * Bounded selection: keeps the best k seen so far in rank order, so a query
+ * matching most of a large tenant costs one comparison per match instead of
+ * sorting every match. Same total order as a full sort, identical results.
+ */
+function insertBounded(top: Hit[], id: string, score: number, k: number): void {
+  const last = top[top.length - 1]
+
+  if (
+    top.length === k &&
+    (last === undefined || !ranksBefore(id, score, last))
+  ) {
+    return
+  }
+
+  let low = 0
+  let high = top.length
+
+  while (low < high) {
+    const middle = (low + high) >>> 1
+    const there = top[middle]
+
+    if (there === undefined || ranksBefore(id, score, there)) {
+      high = middle
+    } else {
+      low = middle + 1
+    }
+  }
+
+  top.splice(low, 0, { id, score })
+
+  if (top.length > k) {
+    top.pop()
+  }
 }
 
 /**
@@ -164,15 +294,15 @@ export function search(
     accumulate(index, term, scores)
   }
 
-  const hits: Hit[] = []
+  const top: Hit[] = []
 
   for (const [document, score] of scores) {
     const id = index.ids[document]
 
     if (id !== undefined && (keep === undefined || keep(id))) {
-      hits.push({ id, score })
+      insertBounded(top, id, score, k)
     }
   }
 
-  return hits.sort(byScoreThenId).slice(0, k)
+  return top
 }

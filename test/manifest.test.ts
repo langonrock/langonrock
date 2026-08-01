@@ -93,6 +93,7 @@ describe('serialize', () => {
         status: '-',
         grain: '-',
         summary: 's',
+        title: '',
         links: []
       },
       {
@@ -102,6 +103,7 @@ describe('serialize', () => {
         status: '-',
         grain: '-',
         summary: 's',
+        title: '',
         links: []
       }
     ]
@@ -121,6 +123,7 @@ describe('serialize', () => {
         status: '-',
         grain: '-',
         summary: 's',
+        title: '',
         links: []
       }
     ]

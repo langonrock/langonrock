@@ -12,6 +12,11 @@ export interface DirEntry {
   offset: number
   length: number
   sections: Record<string, SectionRange>
+  /**
+   * Compiled away from the manifest, kept for the search index. Optional so a
+   * snapshot written before titles existed still parses.
+   */
+  title?: string
 }
 
 export interface TntHeader {
@@ -28,6 +33,7 @@ export interface TntConcept {
   id: string
   content: string
   sections: Record<string, SectionRange>
+  title?: string
 }
 
 const encoder = new TextEncoder()
@@ -109,13 +115,18 @@ function packBlobs(concepts: TntConcept[]): PackedBlobs {
 
   for (const concept of concepts) {
     const blob = Bun.zstdCompressSync(encoder.encode(concept.content))
-
-    entries.push({
+    const entry: DirEntry = {
       id: concept.id,
       offset: cursor,
       length: blob.byteLength,
       sections: concept.sections
-    })
+    }
+
+    if (concept.title !== undefined) {
+      entry.title = concept.title
+    }
+
+    entries.push(entry)
     chunks.push(blob)
     cursor += blob.byteLength
   }

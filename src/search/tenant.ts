@@ -1,10 +1,10 @@
-import { buildIndex, search } from './bm25.ts'
+import { createIndexBuilder, search } from './bm25.ts'
 
 export type { SearchOptions } from '../types.ts'
 
 import type { TenantReader } from '../store/reader.ts'
 import type { SearchOptions } from '../types.ts'
-import type { Bm25Index } from './bm25.ts'
+import type { Bm25Index, Document } from './bm25.ts'
 
 export const DEFAULT_K = 8
 
@@ -66,26 +66,36 @@ export function parseManifest(tsv: string): Manifest {
 }
 
 /**
- * The searchable text is the manifest row plus the concept body, minus the
- * links column. Link targets are ids, and indexing them would make every
- * concept match its neighbours' names.
+ * The searchable text is the concept's names (id and frontmatter title), the
+ * manifest row, and the body, minus the links column. Link targets are ids,
+ * and indexing them would make every concept match its neighbours' names. The
+ * title is indexed even though no manifest cell carries it: the compiler
+ * strips it from the document, and without this fold a carefully titled
+ * concept retrieves worse than an untitled one.
  */
 export async function buildTenantIndex(
   reader: TenantReader
 ): Promise<TenantIndex> {
   const manifest = parseManifest(await reader.manifest())
-  const bodies = await reader.get(reader.ids)
-  const documents = reader.ids.map(id => {
-    const row = manifest.rows.get(id)
-    const fields = row === undefined ? id : row.cells.slice(0, -1).join(' ')
+  const builder = createIndexBuilder()
 
-    return { id, fields, text: bodies.get(id) ?? '' }
-  })
+  for (const [id, text] of await reader.bodies()) {
+    const title = reader.titles.get(id)
+    const names = title === undefined ? id : `${id} ${title}`
+    const cells = manifest.rows.get(id)?.cells.slice(1, -1).join(' ') ?? ''
+    const document: Document = { id, names, text }
+
+    if (cells !== '') {
+      document.fields = cells
+    }
+
+    builder.add(document)
+  }
 
   return {
     snapshot: reader.snapshot,
     manifest,
-    index: buildIndex(documents)
+    index: builder.build()
   }
 }
 

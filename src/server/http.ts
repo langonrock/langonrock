@@ -8,6 +8,7 @@ import {
   sourceResponse
 } from './sourceroutes.ts'
 
+import type { SearchCache } from '../search/cache.ts'
 import type { SearchOptions, TenantIndex } from '../search/tenant.ts'
 import type { TenantReader } from '../store/reader.ts'
 import type { PutResult } from '../store/writer.ts'
@@ -46,6 +47,11 @@ export interface ServeOptions {
   sources?: Map<string, string>
   /** Recompiles a tenant now, so a client can make its write visible. */
   sync?: (tenant: string) => Promise<PutResult>
+  /**
+   * Share the search cache with the caller, so a watcher can rebuild an index
+   * right after a sync instead of leaving the cost on the first search.
+   */
+  indexes?: SearchCache
   unix?: string
   hostname?: string
   port?: number
@@ -390,7 +396,7 @@ export function serve(options: ServeOptions): LangonrockServer {
   assertSafeToBind(options, tokens)
 
   const cache = createReaderCache(options.root)
-  const indexes = createSearchCache(options.root)
+  const indexes = options.indexes ?? createSearchCache(options.root)
 
   return Bun.serve({
     ...listenerFor(options),
