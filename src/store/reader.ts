@@ -12,6 +12,8 @@ const BUNDLE_COLUMN = 'bundle'
 export interface TenantReader {
   snapshot: string
   ids: string[]
+  /** Frontmatter titles by id, only for concepts that have one. */
+  titles: Map<string, string>
   manifest: (bundle?: string) => Promise<string>
   get: (ids: string[], section?: string) => Promise<Map<string, string>>
 }
@@ -185,5 +187,19 @@ export async function openTenant(
     return found
   }
 
-  return { snapshot, ids: entries.map(entry => entry.id), manifest, get }
+  const titles = new Map<string, string>()
+
+  for (const entry of entries) {
+    if (entry.title !== undefined) {
+      titles.set(entry.id, entry.title)
+    }
+  }
+
+  return {
+    snapshot,
+    ids: entries.map(entry => entry.id),
+    titles,
+    manifest,
+    get
+  }
 }

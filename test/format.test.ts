@@ -75,6 +75,18 @@ describe('encodeTnt', () => {
     expect(entries[0]?.sections['schema']).toEqual({ start: 6, end: 31 })
   })
 
+  test('round-trips a concept title through the directory', () => {
+    const bytes = encodeTnt(MANIFEST, [
+      { id: 'orders', content: 'x', sections: {}, title: 'Orders' },
+      { id: 'plain', content: 'y', sections: {} }
+    ])
+    const header = parseHeader(bytes)
+    const entries = parseDir(slice(bytes, header.dirOffset, header.dirLength))
+
+    expect(entries[0]?.title).toBe('Orders')
+    expect(entries[1]?.title).toBeUndefined()
+  })
+
   test('handles a bundle with no concepts', () => {
     const bytes = encodeTnt(MANIFEST, [])
     const header = parseHeader(bytes)

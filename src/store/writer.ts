@@ -49,8 +49,17 @@ function sectionMap(body: string): Record<string, SectionRange> {
 function toTntConcepts(compiled: TenantCompileResult): TntConcept[] {
   return compiled.concepts.map(concept => {
     const content = compiled.bodies.get(concept.id) ?? ''
+    const tnt: TntConcept = {
+      id: concept.id,
+      content,
+      sections: sectionMap(content)
+    }
 
-    return { id: concept.id, content, sections: sectionMap(content) }
+    if (concept.title !== '') {
+      tnt.title = concept.title
+    }
+
+    return tnt
   })
 }
 

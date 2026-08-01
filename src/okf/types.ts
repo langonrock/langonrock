@@ -13,6 +13,8 @@ export interface Concept {
   status: string
   grain: string
   summary: string
+  /** Frontmatter title. Never a manifest cell; carried for the search index. */
+  title: string
   links: string[]
 }
 
