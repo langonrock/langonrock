@@ -6,12 +6,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { open } from '../src/client/connection.ts'
-import {
-  GET_LIMIT,
-  MANIFEST_URI,
-  adviceFor,
-  createMcpServer
-} from '../src/mcp/server.ts'
+import { GET_LIMIT, MANIFEST_URI, createMcpServer } from '../src/mcp/server.ts'
+import { adviceFor } from '../src/search/advice.ts'
 import { putBundle } from '../src/store/writer.ts'
 
 const FIXTURE = `${import.meta.dir}/fixtures/sales`
