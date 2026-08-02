@@ -10,7 +10,12 @@ export function basename(path: string): string {
   return segments[segments.length - 1] ?? path
 }
 
-function isConcept(path: string): boolean {
+/**
+ * Navigation files are structure, not knowledge, whatever their frontmatter
+ * says. Exported because the source listing must exclude the same files the
+ * compiler does, or an editor would show a file the manifest never mentions.
+ */
+export function isConceptPath(path: string): boolean {
   return !NAVIGATION_FILES.has(basename(path).toLowerCase())
 }
 
@@ -21,7 +26,7 @@ export async function scanBundle(root: string): Promise<string[]> {
   for await (const entry of glob.scan({ cwd: root, onlyFiles: true })) {
     const path = toPosix(entry)
 
-    if (isConcept(path)) {
+    if (isConceptPath(path)) {
       found.push(path)
     }
   }

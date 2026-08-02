@@ -46,7 +46,7 @@ describe('hasFrontmatter', () => {
 })
 
 describe('compileBundle ingestion', () => {
-  test('leaves a cloned repository README out of the manifest', async () => {
+  test('compiles a cloned repository README like any markdown', async () => {
     const dir = await seed('cloned', {
       'README.md': '# acme-knowledge\n\nPublished on BundleDex.\n',
       'CONTRIBUTING.md': '# Contributing\n\nOpen a PR.\n',
@@ -55,36 +55,68 @@ describe('compileBundle ingestion', () => {
 
     const result = await compileBundle(dir, { bundle: 'acme' })
 
-    expect(result.concepts.map(concept => concept.id)).toEqual(['orders'])
-    expect(result.tsv).not.toContain('README')
-    expect(result.bodies.has('README')).toBe(false)
+    expect(result.concepts.map(concept => concept.id)).toEqual([
+      'CONTRIBUTING',
+      'README',
+      'orders'
+    ])
+    expect(result.tsv).toContain('README')
+    expect(result.bodies.has('README')).toBe(true)
   })
 
-  test('reports every skipped file rather than dropping it silently', async () => {
+  test('reports plain markdown as a conformance warning, not a skip', async () => {
     const dir = await seed('reported', {
       'README.md': '# Readme\n',
       'tables/orders.md': CONCEPT
     })
 
     const result = await compileBundle(dir, { bundle: 'acme' })
-    const skipped = result.diagnostics.filter(diagnostic =>
-      diagnostic.message.startsWith('skipped:')
-    )
 
-    expect(skipped).toHaveLength(1)
-    expect(skipped[0]?.path).toBe('README.md')
-    expect(skipped[0]?.level).toBe('warn')
+    expect(result.diagnostics).toEqual([
+      {
+        level: 'warn',
+        path: 'README.md',
+        message:
+          'no frontmatter, compiled as plain markdown, not an OKF concept'
+      }
+    ])
   })
 
-  test('a skipped file does not lengthen a real concept id', async () => {
+  test('a plain markdown sibling takes part in id derivation', async () => {
     const dir = await seed('shadow', {
-      'orders.md': '# Orders\n\nNo frontmatter, so not a concept.\n',
+      'orders.md': '# Orders\n\nPlain markdown is a concept now.\n',
       'tables/orders.md': CONCEPT
     })
 
     const result = await compileBundle(dir, { bundle: 'acme' })
 
-    expect(result.concepts.map(concept => concept.id)).toEqual(['orders'])
+    expect(result.concepts.map(concept => concept.id)).toEqual([
+      'orders',
+      'tables/orders'
+    ])
+  })
+
+  test('derives kind, summary and title for a plain markdown file', async () => {
+    const dir = await seed('derived', {
+      'guide.md': '# Getting Started\n\nInstall it with one command.\n'
+    })
+
+    const result = await compileBundle(dir, { bundle: 'acme' })
+    const guide = result.concepts[0]
+
+    expect(guide?.kind).toBe('-')
+    expect(guide?.summary).toBe('Install it with one command.')
+    expect(guide?.title).toBe('Getting Started')
+  })
+
+  test('does not mistake a fenced comment for the title', async () => {
+    const dir = await seed('fenced', {
+      'notes.md': '```sql\n# not a heading\nselect 1;\n```\n\nProse after.\n'
+    })
+
+    const result = await compileBundle(dir, { bundle: 'acme' })
+
+    expect(result.concepts[0]?.title).toBe('')
   })
 })
 
