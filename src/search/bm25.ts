@@ -74,6 +74,12 @@ export interface Bm25Index {
  * same token whichever way the document or the query spells it. Pure ASCII
  * text skips the normalization and keeps the exact behaviour and cost the
  * index build always had.
+ *
+ * No stemming, and that is measured rather than assumed: a minimal plural
+ * fold lifted the identifier-heavy reference corpus (+5pp hit rate, +0.12
+ * MRR) but cost the prose corpora rank quality across the board (handbook
+ * −5pp, MRR −0.06; scripture-coarse MRR −0.08), because folding blurs the
+ * exact words a known-item phrase matches on.
  */
 export function tokenize(text: string): string[] {
   const lowered = text.toLowerCase()
