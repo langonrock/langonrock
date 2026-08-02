@@ -90,3 +90,26 @@ export function deriveSummary(
 
   return truncate(sanitizeCell(source), width)
 }
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
+
+/**
+ * YAML parses a bare `2027-01-01` as a Date and a quoted one as a string, and
+ * authors write both. Anything else is empty, and the caller decides whether
+ * that deserves a diagnostic.
+ */
+export function readStaleAfter(data: Frontmatter): string {
+  const value = data['stale_after']
+
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10)
+  }
+
+  if (typeof value !== 'string') {
+    return ''
+  }
+
+  const trimmed = value.trim()
+
+  return ISO_DATE.test(trimmed) ? trimmed : ''
+}

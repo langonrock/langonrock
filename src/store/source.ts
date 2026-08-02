@@ -1,8 +1,8 @@
 import { mkdir, rm, stat, unlink } from 'node:fs/promises'
 
 import { globalKey, resolveGlobalIds } from '../compile/tenant.ts'
-import { hasFrontmatter } from '../okf/frontmatter.ts'
 import { deriveIds } from '../okf/ids.ts'
+import { isConceptPath } from '../okf/scan.ts'
 import { writeAtomic } from './atomic.ts'
 import { assertBundleName, bundleDir, sourceFile } from './sourcepaths.ts'
 
@@ -60,7 +60,7 @@ async function scanSource(dir: string): Promise<Scanned[]> {
       bundle: posix.slice(0, cut),
       path: posix.slice(cut + 1),
       content,
-      concept: hasFrontmatter(content)
+      concept: isConceptPath(posix.slice(cut + 1))
     })
   }
 
@@ -71,9 +71,9 @@ async function scanSource(dir: string): Promise<Scanned[]> {
 
 /**
  * Runs the compiler's own id derivation over the files it would accept, so the
- * listing names each concept exactly as the manifest will. Files without
- * frontmatter take part in neither, which is what makes a README visibly not a
- * concept instead of an unexplained absence.
+ * listing names each concept exactly as the manifest will. Navigation files
+ * take part in neither, which is what makes an index.md visibly not a concept
+ * instead of an unexplained absence.
  */
 function idsFor(scanned: Scanned[]): Map<string, string> {
   const perBundle = new Map<string, string[]>()

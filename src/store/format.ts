@@ -17,6 +17,11 @@ export interface DirEntry {
    * snapshot written before titles existed still parses.
    */
   title?: string
+  /**
+   * ISO date after which the reader demotes the concept's status to `stale`.
+   * Optional for the same reason `title` is: older snapshots still parse.
+   */
+  staleAfter?: string
 }
 
 export interface TntHeader {
@@ -34,6 +39,7 @@ export interface TntConcept {
   content: string
   sections: Record<string, SectionRange>
   title?: string
+  staleAfter?: string
 }
 
 const encoder = new TextEncoder()
@@ -124,6 +130,10 @@ function packBlobs(concepts: TntConcept[]): PackedBlobs {
 
     if (concept.title !== undefined) {
       entry.title = concept.title
+    }
+
+    if (concept.staleAfter !== undefined) {
+      entry.staleAfter = concept.staleAfter
     }
 
     entries.push(entry)

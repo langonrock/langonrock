@@ -53,11 +53,11 @@ export interface SourceEntry {
   bytes: number
   hash: string
   /**
-   * The id this file compiles to, absent when the file is not a concept
-   * because it carries no frontmatter. Ids are the shortest unambiguous form
-   * of a path, so this is the only reliable way to join a file an editor is
-   * showing to the manifest row that describes it, and it moves with the tree:
-   * adding a sibling can change it.
+   * The id this file compiles to, absent only for navigation files like
+   * index.md, which never become concepts. Ids are the shortest unambiguous
+   * form of a path, so this is the only reliable way to join a file an editor
+   * is showing to the manifest row that describes it, and it moves with the
+   * tree: adding a sibling can change it.
    */
   id?: string
 }

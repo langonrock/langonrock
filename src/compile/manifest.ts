@@ -7,6 +7,7 @@ import {
   deriveSummary,
   flatten,
   normalizeKind,
+  readStaleAfter,
   readStatus,
   readStringField,
   sanitizeCell
@@ -53,6 +54,24 @@ interface SourceFile {
   source: string
 }
 
+const TITLE_HEADING = /^#{1,6}[ \t]+(.+?)[ \t]*$/m
+
+/**
+ * The first heading, unless a code fence opens before it: real documents put
+ * their name there, and a `# comment` inside a fenced SQL block is not a name.
+ */
+function headingTitle(body: string): string {
+  const match = TITLE_HEADING.exec(body)
+
+  if (match === null) {
+    return ''
+  }
+
+  const fence = body.indexOf('```')
+
+  return fence !== -1 && fence < match.index ? '' : flatten(match[1] ?? '')
+}
+
 function toConcept(
   file: SourceFile,
   id: string,
@@ -61,6 +80,7 @@ function toConcept(
   const { path, source } = file
   const { data, body, error } = parseFrontmatter(source)
   const diagnostics: Diagnostic[] = []
+  const conformant = hasFrontmatter(source)
 
   if (error !== undefined) {
     diagnostics.push({ level: 'warn', path, message: error })
@@ -68,7 +88,13 @@ function toConcept(
 
   const kind = normalizeKind(data['type'])
 
-  if (kind === EMPTY_CELL) {
+  if (!conformant) {
+    diagnostics.push({
+      level: 'warn',
+      path,
+      message: 'no frontmatter, compiled as plain markdown, not an OKF concept'
+    })
+  } else if (kind === EMPTY_CELL) {
     diagnostics.push({
       level: 'warn',
       path,
@@ -88,6 +114,15 @@ function toConcept(
 
   const grain = sanitizeCell(readStringField(data, 'grain'))
   const summary = deriveSummary(data, body, context.summaryWidth)
+  const staleAfter = readStaleAfter(data)
+
+  if (data['stale_after'] !== undefined && staleAfter === '') {
+    diagnostics.push({
+      level: 'warn',
+      path,
+      message: 'stale_after is not a date (YYYY-MM-DD), ignored'
+    })
+  }
 
   return {
     concept: {
@@ -97,7 +132,13 @@ function toConcept(
       status: readStatus(data),
       grain,
       summary,
-      title: flatten(readStringField(data, 'title')),
+      // A plain markdown file has no frontmatter title, but its first heading
+      // does the same retrieval work, and only for these files: a conformant
+      // concept's output must not change because its body gained a heading.
+      title: conformant
+        ? flatten(readStringField(data, 'title'))
+        : headingTitle(body),
+      staleAfter,
       links: ids
     },
     diagnostics,
@@ -159,30 +200,19 @@ async function readSources(
   )
 }
 
-function skippedDiagnostic(file: SourceFile): Diagnostic {
-  return {
-    level: 'warn',
-    path: file.path,
-    message: 'skipped: no frontmatter, so not an OKF concept'
-  }
-}
-
+/**
+ * Every Markdown file compiles, frontmatter or not: a docs folder is knowledge
+ * before anyone annotates it, and OKF conformance is what `--strict` checks
+ * rather than the price of admission. A file with no frontmatter still gets an
+ * id, a summary from its first sentence, and its links.
+ */
 export async function compileBundle(
   root: string,
   options: CompileOptions = {}
 ): Promise<CompileResult> {
   const summaryWidth = options.summaryWidth ?? DEFAULT_SUMMARY_WIDTH
   const bundle = options.bundle ?? defaultBundleName(root)
-  const sources = await readSources(root, await scanBundle(root))
-  const files: SourceFile[] = []
-  const skipped: SourceFile[] = []
-
-  for (const file of sources) {
-    ;(hasFrontmatter(file.source) ? files : skipped).push(file)
-  }
-
-  // Ids are derived after the filter so a skipped README cannot push a real
-  // concept from a bare id onto a longer one.
+  const files = await readSources(root, await scanBundle(root))
   const pathToId = deriveIds(files.map(file => file.path))
   const context: ConceptContext = { pathToId, summaryWidth }
   const results = files.map(file =>
@@ -190,10 +220,7 @@ export async function compileBundle(
   )
 
   const concepts = results.map(result => result.concept).sort(byId)
-  const diagnostics = [
-    ...skipped.map(skippedDiagnostic),
-    ...results.flatMap(result => result.diagnostics)
-  ]
+  const diagnostics = results.flatMap(result => result.diagnostics)
   const bodies = new Map(
     results.map(result => [result.concept.id, result.body])
   )

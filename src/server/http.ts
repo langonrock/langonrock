@@ -250,7 +250,12 @@ async function searchResponse(
     options.bundle = payload.bundle
   }
 
-  const body = searchTenant(await resolved.index(), payload.q, options)
+  const body = await searchTenant(
+    await resolved.index(),
+    payload.q,
+    options,
+    ids => resolved.reader.get(ids)
+  )
 
   return new Response(body, {
     headers: { 'content-type': 'text/tab-separated-values' }

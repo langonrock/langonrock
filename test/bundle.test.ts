@@ -111,10 +111,17 @@ describe('manifest by bundle', () => {
 })
 
 describe('search by bundle', () => {
-  test('ranks within the bundle instead of trimming the global top k', () => {
-    const global = rows(searchTenant(built, 'orders', { expand: false }))
+  test('ranks within the bundle instead of trimming the global top k', async () => {
+    const global = rows(
+      await searchTenant(built, 'orders', { expand: false }, reader.get)
+    )
     const scoped = rows(
-      searchTenant(built, 'orders', { bundle: 'ops', expand: false })
+      await searchTenant(
+        built,
+        'orders',
+        { bundle: 'ops', expand: false },
+        reader.get
+      )
     )
     const idsOf = (found: string[]) => found.map(row => row.split('\t')[0])
 
@@ -125,17 +132,22 @@ describe('search by bundle', () => {
     expect(idsOf(scoped)).toEqual(['deploy'])
   })
 
-  test('keeps the one hop expansion inside the bundle', () => {
-    const scoped = searchTenant(built, 'rollback', { bundle: 'ops' })
+  test('keeps the one hop expansion inside the bundle', async () => {
+    const scoped = await searchTenant(
+      built,
+      'rollback',
+      { bundle: 'ops' },
+      reader.get
+    )
 
     expect(rows(scoped).every(row => bundleOf(row) === 'ops')).toBe(true)
     expect(rows(scoped).map(row => row.split('\t')[0])).toContain('deploy')
   })
 
-  test('records the narrowing in the header', () => {
-    expect(searchTenant(built, 'orders', { bundle: 'ops' })).toContain(
-      '# bundle: ops'
-    )
+  test('records the narrowing in the header', async () => {
+    expect(
+      await searchTenant(built, 'orders', { bundle: 'ops' }, reader.get)
+    ).toContain('# bundle: ops')
   })
 })
 

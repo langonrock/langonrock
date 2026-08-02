@@ -25,7 +25,9 @@ export {
   createMcpServer,
   serveMcp
 } from './mcp/server.ts'
+export { ADVICE_RATIO, adviceFor } from './search/advice.ts'
 export { buildIndex, search, tokenize } from './search/bm25.ts'
+export { bestWindowStart } from './search/window.ts'
 export { createSearchCache } from './search/cache.ts'
 export {
   DEFAULT_K,
