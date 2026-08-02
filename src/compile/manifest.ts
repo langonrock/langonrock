@@ -7,6 +7,7 @@ import {
   deriveSummary,
   flatten,
   normalizeKind,
+  readStaleAfter,
   readStatus,
   readStringField,
   sanitizeCell
@@ -113,6 +114,15 @@ function toConcept(
 
   const grain = sanitizeCell(readStringField(data, 'grain'))
   const summary = deriveSummary(data, body, context.summaryWidth)
+  const staleAfter = readStaleAfter(data)
+
+  if (data['stale_after'] !== undefined && staleAfter === '') {
+    diagnostics.push({
+      level: 'warn',
+      path,
+      message: 'stale_after is not a date (YYYY-MM-DD), ignored'
+    })
+  }
 
   return {
     concept: {
@@ -128,6 +138,7 @@ function toConcept(
       title: conformant
         ? flatten(readStringField(data, 'title'))
         : headingTitle(body),
+      staleAfter,
       links: ids
     },
     diagnostics,

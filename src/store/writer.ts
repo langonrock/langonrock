@@ -59,6 +59,10 @@ function toTntConcepts(compiled: TenantCompileResult): TntConcept[] {
       tnt.title = concept.title
     }
 
+    if (concept.staleAfter !== '') {
+      tnt.staleAfter = concept.staleAfter
+    }
+
     return tnt
   })
 }
