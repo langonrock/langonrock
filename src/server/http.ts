@@ -10,6 +10,7 @@ import {
 
 import type { SearchCache } from '../search/cache.ts'
 import type { SearchOptions, TenantIndex } from '../search/tenant.ts'
+import type { GetOptions } from '../types.ts'
 import type { TenantReader } from '../store/reader.ts'
 import type { PutResult } from '../store/writer.ts'
 import type { Grant } from './tokens.ts'
@@ -176,6 +177,9 @@ function manifestResponse(
 interface GetPayload {
   ids?: unknown
   section?: unknown
+  offset?: unknown
+  limit?: unknown
+  find?: unknown
 }
 
 async function getResponse(
@@ -185,13 +189,32 @@ async function getResponse(
   const payload = (await request.json().catch(() => ({}))) as GetPayload
 
   if (!Array.isArray(payload.ids)) {
-    throw new HttpError(400, 'body must be {"ids": [...], "section"?: "..."}')
+    throw new HttpError(
+      400,
+      'body must be {"ids": [...], "section"?, "offset"?, "limit"?, "find"?}'
+    )
   }
 
   const ids = payload.ids.filter((id): id is string => typeof id === 'string')
-  const section =
-    typeof payload.section === 'string' ? payload.section : undefined
-  const found = await reader.get(ids, section)
+  const options: GetOptions = {}
+
+  if (typeof payload.section === 'string') {
+    options.section = payload.section
+  }
+
+  if (typeof payload.offset === 'number') {
+    options.offset = payload.offset
+  }
+
+  if (typeof payload.limit === 'number') {
+    options.limit = payload.limit
+  }
+
+  if (typeof payload.find === 'string') {
+    options.find = payload.find
+  }
+
+  const found = await reader.get(ids, options)
 
   return Response.json(Object.fromEntries(found))
 }

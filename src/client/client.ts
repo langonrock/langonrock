@@ -8,7 +8,9 @@ export { remoteConnection } from './remote.ts'
 
 export type { Target, Transport } from './dsn.ts'
 export type {
+  ConceptSlice,
   Connection,
+  GetOptions,
   SearchOptions,
   SourceEntry,
   SourceFile,

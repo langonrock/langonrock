@@ -198,10 +198,21 @@ async function daemon(corpus: Corpus, probe: string) {
 
   await connection.manifest()
 
+  // A needle cut from the stored text itself, so the find always hits and the
+  // row times a located window rather than a miss.
+  const first = ids[0] ?? ''
+  const text = (await connection.get([first])).get(first)?.text ?? ''
+  const needle = text.slice(120, 150) || text.slice(0, 30)
+
   const timings = {
     socketSearchMs: await median(20, () => connection.search(probe)),
     socketManifestMs: await median(20, () => connection.manifest()),
-    socketGetMs: await median(20, () => connection.get(ids, 'schema')),
+    socketGetMs: await median(20, () =>
+      connection.get(ids, { section: 'schema' })
+    ),
+    socketFindMs: await median(20, () =>
+      connection.get([first], { find: needle })
+    ),
     ...(await preconditionCost(connection, corpus))
   }
 

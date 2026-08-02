@@ -3,12 +3,23 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 
 import { open } from '../client/connection.ts'
+import { renderConcepts } from '../store/slice.ts'
 
 import type { Connection } from '../client/connection.ts'
 import type { SearchOptions } from '../search/tenant.ts'
+import type { GetOptions } from '../types.ts'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 
 export const MANIFEST_URI = 'okf://manifest'
+
+/**
+ * The MCP boundary is where an unbounded read becomes a context blowup, so it
+ * is the one layer that caps by default. 15,000 characters is roughly 4,000
+ * tokens: every ordinary concept passes through whole, and only a document
+ * that genuinely needs paging gets framed as a partial slice. The library and
+ * the HTTP API stay uncapped, because their callers are programs, not prompts.
+ */
+export const GET_LIMIT = 15_000
 
 const MANIFEST_DESCRIPTION = `Read the tenant's knowledge manifest: one dense TSV row per concept with its id, bundle, kind, status, grain, a one-line summary, and outgoing links.
 
@@ -18,13 +29,17 @@ A status cell other than "-" means the concept is not current, for example "depr
 
 Pass "bundle" to read one bundle instead of the whole tenant. On a large tenant the whole manifest can be too big to be worth reading, so narrow with "bundle" when you know the domain, or use "search" when you do not.`
 
-const GET_DESCRIPTION = `Fetch the full text of concepts by id, as listed in the manifest.
+const GET_DESCRIPTION = `Fetch the text of concepts by id, as listed in the manifest.
 
-Pass every id you need in one call rather than calling repeatedly; the batch costs one round trip regardless of size. Pass "section" to retrieve a single named section instead of the whole document, for example "schema" or "joins". Section names come from the concept's own markdown headings, lowercased with underscores.`
+Pass every id you need in one call rather than calling repeatedly; the batch costs one round trip regardless of size. Pass "section" to retrieve a single named section instead of the whole document, for example "schema" or "joins". Section names come from the concept's own markdown headings, lowercased with underscores.
+
+Each concept returns at most "limit" characters (default ${GET_LIMIT}); a partial slice is framed as "@@ id [start..end of total]", and "offset" continues from where it stopped.
+
+When the question is where the text says something, pass "find" with a literal phrase instead of reading the document: the response is a small window around the first case-insensitive occurrence plus every match offset.`
 
 const SEARCH_DESCRIPTION = `Rank concepts by relevance to a query and return their manifest rows, not their bodies.
 
-Reach for this instead of reading the whole manifest when the tenant is large, or when you do not already know which concept holds the answer. The result is the same TSV shape as "manifest", narrowed: pick ids from it and fetch them with "get". Results also include concepts one link away from the top matches, which is usually where the join partner, parent dataset, or metric definition lives.
+Reach for this instead of reading the whole manifest when the tenant is large, or when you do not already know which concept holds the answer. The result is the same TSV shape as "manifest", narrowed: pick ids from it and fetch them with "get", passing "find" to "get" when what you want is a passage inside a hit rather than the document. Results also include concepts one link away from the top matches, which is usually where the join partner, parent dataset, or metric definition lives.
 
 Pass "bundle" to rank only within one bundle.`
 
@@ -40,20 +55,6 @@ function failure(cause: unknown): CallToolResult {
   const message = cause instanceof Error ? cause.message : String(cause)
 
   return { content: [{ type: 'text', text: message }], isError: true }
-}
-
-function renderConcepts(
-  requested: string[],
-  found: Map<string, string>
-): string {
-  const chunks = [...found].map(([id, body]) => `@@ ${id}\n${body}`)
-  const missing = requested.filter(id => !found.has(id))
-
-  if (missing.length > 0) {
-    chunks.push(`@@ missing\n${missing.join(' ')}`)
-  }
-
-  return chunks.join('\n')
 }
 
 function registerManifest(server: McpServer, connection: Connection): void {
@@ -116,12 +117,53 @@ function registerGet(server: McpServer, connection: Connection): void {
           .optional()
           .describe(
             'Optional section name to return instead of the whole concept.'
-          )
+          ),
+        offset: z
+          .number()
+          .int()
+          .min(0)
+          .optional()
+          .describe(
+            'Character offset to start from, for continuing a partial slice.'
+          ),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .optional()
+          .describe(
+            `Maximum characters per concept, default ${GET_LIMIT}. With "find", sizes the window instead.`
+          ),
+        find: z
+          .string()
+          .min(1)
+          .optional()
+          .describe('Literal case-insensitive phrase to locate.')
       }
     },
-    async ({ ids, section }) => {
+    async ({ ids, section, offset, limit, find }) => {
       try {
-        return text(renderConcepts(ids, await connection.get(ids, section)))
+        const options: GetOptions = {}
+
+        if (section !== undefined) {
+          options.section = section
+        }
+
+        if (offset !== undefined) {
+          options.offset = offset
+        }
+
+        if (find !== undefined) {
+          options.find = find
+        }
+
+        const capped = limit ?? (find === undefined ? GET_LIMIT : undefined)
+
+        if (capped !== undefined) {
+          options.limit = capped
+        }
+
+        return text(renderConcepts(ids, await connection.get(ids, options)))
       } catch (cause) {
         return failure(cause)
       }

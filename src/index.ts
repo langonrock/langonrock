@@ -19,7 +19,12 @@ export { scanBundle } from './okf/scan.ts'
 export { open } from './client/connection.ts'
 export { connect, remoteConnection } from './client/client.ts'
 export { parseDsn } from './client/dsn.ts'
-export { MANIFEST_URI, createMcpServer, serveMcp } from './mcp/server.ts'
+export {
+  GET_LIMIT,
+  MANIFEST_URI,
+  createMcpServer,
+  serveMcp
+} from './mcp/server.ts'
 export { buildIndex, search, tokenize } from './search/bm25.ts'
 export { createSearchCache } from './search/cache.ts'
 export {
@@ -68,11 +73,20 @@ export {
   sourceFile
 } from './store/sourcepaths.ts'
 export { openTenant } from './store/reader.ts'
+export {
+  FIND_WINDOW,
+  MATCH_CAP,
+  frameSlice,
+  renderConcepts,
+  sliceConcept
+} from './store/slice.ts'
 export { watchTenant } from './store/watch.ts'
 export { putBundle, putTenant, putTenantRoot } from './store/writer.ts'
 
 export type {
+  ConceptSlice,
   Connection,
+  GetOptions,
   SearchOptions,
   SourceEntry,
   SourceFile,

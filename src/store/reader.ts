@@ -2,7 +2,9 @@ import { readFile } from 'node:fs/promises'
 
 import { HEADER_BYTES, decodeBlob, parseDir, parseHeader } from './format.ts'
 import { currentFile, snapshotFile } from './paths.ts'
+import { sliceConcept } from './slice.ts'
 
+import type { ConceptSlice, GetOptions } from '../types.ts'
 import type { DirEntry, TntHeader } from './format.ts'
 
 const decoder = new TextDecoder()
@@ -15,7 +17,10 @@ export interface TenantReader {
   /** Frontmatter titles by id, only for concepts that have one. */
   titles: Map<string, string>
   manifest: (bundle?: string) => Promise<string>
-  get: (ids: string[], section?: string) => Promise<Map<string, string>>
+  get: (
+    ids: string[],
+    options?: GetOptions
+  ) => Promise<Map<string, ConceptSlice>>
   /**
    * Every body in id order, decompressed one at a time off a single read of
    * the blobs region. For whole-tenant consumers like the search index build,
@@ -199,8 +204,8 @@ export async function openTenant(
 
   const get = async (
     ids: string[],
-    section?: string
-  ): Promise<Map<string, string>> => {
+    options?: GetOptions
+  ): Promise<Map<string, ConceptSlice>> => {
     const wanted = ids
       .map(id => byId.get(id))
       .filter((entry): entry is DirEntry => entry !== undefined)
@@ -209,13 +214,13 @@ export async function openTenant(
       wanted.map(entry => readEntry(path, header, entry))
     )
 
-    const found = new Map<string, string>()
+    const found = new Map<string, ConceptSlice>()
 
     for (const [index, entry] of wanted.entries()) {
-      const value = sliceSection(contents[index] ?? '', entry, section)
+      const value = sliceSection(contents[index] ?? '', entry, options?.section)
 
       if (value !== undefined) {
-        found.set(entry.id, value)
+        found.set(entry.id, sliceConcept(value, options))
       }
     }
 

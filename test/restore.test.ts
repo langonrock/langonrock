@@ -41,7 +41,7 @@ async function fingerprint(tenant: string): Promise<Fingerprint> {
   return {
     snapshot: await connection.snapshot(),
     manifest: await connection.manifest(),
-    concept: (await connection.get(['orders'])).get('orders') ?? '',
+    concept: (await connection.get(['orders'])).get('orders')?.text ?? '',
     search: await connection.search('ledger')
   }
 }

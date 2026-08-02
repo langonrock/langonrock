@@ -1,12 +1,12 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { open } from '../src/client/connection.ts'
-import { MANIFEST_URI, createMcpServer } from '../src/mcp/server.ts'
+import { GET_LIMIT, MANIFEST_URI, createMcpServer } from '../src/mcp/server.ts'
 import { putBundle } from '../src/store/writer.ts'
 
 const FIXTURE = `${import.meta.dir}/fixtures/sales`
@@ -176,6 +176,97 @@ describe('get', () => {
     })
 
     expect(result.isError).toBe(true)
+  })
+})
+
+/**
+ * The cap is the point of the MCP boundary: a naive get of a huge document
+ * must come back as a framed slice, never as an unbounded dump, and the frame
+ * has to carry enough to continue or to jump straight to a passage.
+ */
+describe('get slicing', () => {
+  const body = `${'x'.repeat(20_000)} the needle sentence ${'y'.repeat(20_000)}`
+  let sliced: Client
+  let total = 0
+  let needleAt = 0
+
+  beforeAll(async () => {
+    const dir = join(scratch, 'big')
+
+    await mkdir(dir, { recursive: true })
+    await writeFile(join(dir, 'huge.md'), `---\ntype: Chapter\n---\n\n${body}`)
+    await putBundle(dir, { root, tenant: 'big' })
+    sliced = await connect(`okf://${root}?tenant=big`)
+
+    const direct = open(`okf://${root}?tenant=big`)
+    const stored = (await direct.get(['huge'])).get('huge')
+
+    total = stored?.total ?? 0
+    needleAt = stored?.text.indexOf('needle sentence') ?? 0
+    await direct.close()
+  })
+
+  afterAll(async () => {
+    await sliced.close()
+  })
+
+  test('caps an unbounded read at the default limit', async () => {
+    const result = firstText(
+      await sliced.callTool({ name: 'get', arguments: { ids: ['huge'] } })
+    )
+
+    expect(result).toContain(`@@ huge [0..${GET_LIMIT} of ${total}]`)
+    expect(result).not.toContain('needle')
+    expect(result.length).toBeLessThan(GET_LIMIT + 100)
+  })
+
+  test('offset continues where the cap stopped', async () => {
+    const result = firstText(
+      await sliced.callTool({
+        name: 'get',
+        arguments: { ids: ['huge'], offset: GET_LIMIT }
+      })
+    )
+
+    expect(result).toContain(
+      `@@ huge [${GET_LIMIT}..${GET_LIMIT * 2} of ${total}]`
+    )
+    expect(result).toContain('needle sentence')
+  })
+
+  test('an explicit limit overrides the default', async () => {
+    const result = firstText(
+      await sliced.callTool({
+        name: 'get',
+        arguments: { ids: ['huge'], limit: 25 }
+      })
+    )
+
+    expect(result).toContain(`@@ huge [0..25 of ${total}]`)
+  })
+
+  test('find returns a small window and the match offset', async () => {
+    const result = firstText(
+      await sliced.callTool({
+        name: 'get',
+        arguments: { ids: ['huge'], find: 'needle sentence' }
+      })
+    )
+
+    expect(result).toContain(`1 match at ${needleAt}`)
+    expect(result).toContain('needle sentence')
+    expect(result.length).toBeLessThan(3_000)
+  })
+
+  test('find that misses says so instead of returning silence', async () => {
+    const result = firstText(
+      await sliced.callTool({
+        name: 'get',
+        arguments: { ids: ['huge'], find: 'ghost of a phrase' }
+      })
+    )
+
+    expect(result).toContain(`@@ huge no match in ${total} chars`)
   })
 })
 

@@ -173,7 +173,7 @@ describe('openTenant', () => {
       'orders_db',
       'tables/orders'
     ])
-    expect(found.get('customers')).toContain('Back to [orders]')
+    expect(found.get('customers')?.text).toContain('Back to [orders]')
   })
 
   test('returns only the requested section', async () => {
@@ -185,10 +185,10 @@ describe('openTenant', () => {
     await putBundle(dir, { root, tenant: 'sectioned' })
 
     const reader = await openTenant(root, 'sectioned')
-    const found = await reader.get(['thing'], 'schema')
+    const found = await reader.get(['thing'], { section: 'schema' })
 
-    expect(found.get('thing')).toBe('## Schema\n\ncol a\n\n')
-    expect(found.get('thing')).not.toContain('Lead text')
+    expect(found.get('thing')?.text).toBe('## Schema\n\ncol a\n\n')
+    expect(found.get('thing')?.text).not.toContain('Lead text')
   })
 
   test('omits ids and sections that do not exist', async () => {
@@ -200,9 +200,58 @@ describe('openTenant', () => {
     expect(byId.has('customers')).toBe(true)
     expect(byId.has('nope')).toBe(false)
 
-    const bySection = await reader.get(['customers'], 'no_such_section')
+    const bySection = await reader.get(['customers'], {
+      section: 'no_such_section'
+    })
 
     expect(bySection.size).toBe(0)
+  })
+
+  test('windows a concept and reports how much text remains', async () => {
+    const dir = await seedBundle('windowed', `${'x'.repeat(50)}tail end.`)
+
+    await putBundle(dir, { root, tenant: 'windowed' })
+
+    const reader = await openTenant(root, 'windowed')
+    const whole = (await reader.get(['thing'])).get('thing')
+    const total = whole?.total ?? 0
+
+    expect(whole?.text).toHaveLength(total)
+    expect(whole?.text.endsWith('tail end.')).toBe(true)
+
+    const first = (await reader.get(['thing'], { limit: 10 })).get('thing')
+
+    expect(first?.text).toBe(whole?.text.slice(0, 10) ?? '')
+    expect(first).toMatchObject({ start: 0, end: 10, total })
+
+    const rest = (await reader.get(['thing'], { offset: total - 9 })).get(
+      'thing'
+    )
+
+    expect(rest?.text).toBe('tail end.')
+    expect(rest).toMatchObject({ start: total - 9, end: total, total })
+  })
+
+  test('find locates a phrase inside the addressed section', async () => {
+    const dir = await seedBundle(
+      'locatable',
+      'Lead.\n\n## Schema\n\nThe Grain is order_id here.\n\n## Joins\n\ngrain again\n'
+    )
+
+    await putBundle(dir, { root, tenant: 'locatable' })
+
+    const reader = await openTenant(root, 'locatable')
+    const whole = (await reader.get(['thing'], { find: 'grain' })).get('thing')
+
+    expect(whole?.matchCount).toBe(2)
+    expect(whole?.text).toContain('The Grain is order_id')
+
+    const sectioned = (
+      await reader.get(['thing'], { section: 'joins', find: 'grain' })
+    ).get('thing')
+
+    expect(sectioned?.matchCount).toBe(1)
+    expect(sectioned?.text).toContain('grain again')
   })
 
   test('exposes every stored id', async () => {
@@ -238,9 +287,12 @@ describe('openTenant', () => {
 
     const reader = await openTenant(root, 'stream')
     const streamed = new Map(await reader.bodies())
+    const fetched = await reader.get(reader.ids)
 
     expect([...streamed.keys()]).toEqual(reader.ids)
-    expect(streamed).toEqual(await reader.get(reader.ids))
+    expect(streamed).toEqual(
+      new Map([...fetched].map(([id, slice]) => [id, slice.text]))
+    )
   })
 
   test('reads the snapshot the current pointer names', async () => {

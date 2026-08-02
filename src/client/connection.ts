@@ -19,7 +19,9 @@ import type { Connection } from '../types.ts'
 import type { Target } from './dsn.ts'
 
 export type {
+  ConceptSlice,
   Connection,
+  GetOptions,
   SearchOptions,
   SourceEntry,
   SourceFile,
@@ -89,7 +91,7 @@ function embeddedConnection(target: Target): Connection {
     transport: 'embedded',
     snapshot: async () => (await cache(tenant)).snapshot,
     manifest: async bundle => (await cache(tenant)).manifest(bundle),
-    get: async (ids, section) => (await cache(tenant)).get(ids, section),
+    get: async (ids, options) => (await cache(tenant)).get(ids, options),
     search: async (query, options) =>
       searchTenant(await indexes(tenant), query, options ?? {}),
     listSource: async () => listSource(await sourceDir()),
