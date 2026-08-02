@@ -14,12 +14,13 @@ import { resolveDataDir } from './store/datadir.ts'
 import { collect, collectAll } from './store/gc.ts'
 import { assertTenantId } from './store/paths.ts'
 import { openTenant } from './store/reader.ts'
+import { renderConcepts } from './store/slice.ts'
 import { watchTenant } from './store/watch.ts'
 import { putBundle, putTenantRoot } from './store/writer.ts'
 
 import type { CompileOptions } from './compile/manifest.ts'
 import type { Diagnostic } from './okf/types.ts'
-import type { Connection } from './client/connection.ts'
+import type { Connection, GetOptions } from './client/connection.ts'
 import type { SearchOptions } from './search/tenant.ts'
 import type { ServeOptions, Tls } from './server/http.ts'
 import type { GcOptions, GcResult } from './store/gc.ts'
@@ -59,6 +60,10 @@ options:
                       platform data directory)
   --tenant <id>       tenant id, [a-z0-9_-] up to 64 chars
   --section <name>    return only this section of each concept
+  --offset <n>        get only: start the slice at this character offset
+  --limit <n>         get only: return at most this many characters per concept
+  --find <text>       get only: return a window around this literal phrase,
+                      plus the offset of every case-insensitive occurrence
   --socket <path>     unix socket for serve (default: <data>/langonrock.sock)
   --host <name>       bind TCP instead of a socket, requires tokens.json
   --port <n>          TCP port (default 7777)
@@ -92,6 +97,9 @@ interface Flags {
   data?: string | undefined
   tenant?: string | undefined
   section?: string | undefined
+  offset?: string | undefined
+  limit?: string | undefined
+  find?: string | undefined
   socket?: string | undefined
   host?: string | undefined
   port?: string | undefined
@@ -288,6 +296,28 @@ const runManifest: Command = async (_positionals, flags) => {
   return 0
 }
 
+function getOptions(flags: Flags): GetOptions {
+  const options: GetOptions = {}
+
+  if (flags.section !== undefined) {
+    options.section = flags.section
+  }
+
+  if (flags.offset !== undefined) {
+    options.offset = parseInterval(flags.offset, '--offset')
+  }
+
+  if (flags.limit !== undefined) {
+    options.limit = parseInterval(flags.limit, '--limit')
+  }
+
+  if (flags.find !== undefined) {
+    options.find = flags.find
+  }
+
+  return options
+}
+
 const runGet: Command = async (positionals, flags) => {
   const ids = positionals.slice(1)
 
@@ -299,8 +329,7 @@ const runGet: Command = async (positionals, flags) => {
     resolveDataDir(flags.data),
     required(flags.tenant, '--tenant')
   )
-  const found = await reader.get(ids, flags.section)
-  const chunks = [...found].map(([id, content]) => `@@ ${id}\n${content}`)
+  const found = await reader.get(ids, getOptions(flags))
 
   for (const id of ids) {
     if (!found.has(id)) {
@@ -308,7 +337,7 @@ const runGet: Command = async (positionals, flags) => {
     }
   }
 
-  const text = chunks.join('\n')
+  const text = renderConcepts([...found.keys()], found)
 
   await emit(text, flags.out)
   reportStats(text, found.size)
@@ -578,8 +607,8 @@ const QUERY_VERBS: Record<string, QueryVerb> = {
 
   get: async (connection, positionals, flags) => {
     const ids = positionals.slice(3)
-    const found = await connection.get(ids, flags.section)
-    const text = [...found].map(([id, body]) => `@@ ${id}\n${body}`).join('\n')
+    const found = await connection.get(ids, getOptions(flags))
+    const text = renderConcepts([...found.keys()], found)
 
     await emit(text, flags.out)
     reportStats(text, found.size)
@@ -768,6 +797,9 @@ async function main(): Promise<number> {
       data: { type: 'string' },
       tenant: { type: 'string' },
       section: { type: 'string' },
+      offset: { type: 'string' },
+      limit: { type: 'string' },
+      find: { type: 'string' },
       socket: { type: 'string' },
       'tls-cert': { type: 'string' },
       'tls-key': { type: 'string' },

@@ -1,12 +1,13 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { open } from '../src/client/connection.ts'
-import { MANIFEST_URI, createMcpServer } from '../src/mcp/server.ts'
+import { GET_LIMIT, MANIFEST_URI, createMcpServer } from '../src/mcp/server.ts'
+import { adviceFor } from '../src/search/advice.ts'
 import { putBundle } from '../src/store/writer.ts'
 
 const FIXTURE = `${import.meta.dir}/fixtures/sales`
@@ -179,6 +180,97 @@ describe('get', () => {
   })
 })
 
+/**
+ * The cap is the point of the MCP boundary: a naive get of a huge document
+ * must come back as a framed slice, never as an unbounded dump, and the frame
+ * has to carry enough to continue or to jump straight to a passage.
+ */
+describe('get slicing', () => {
+  const body = `${'x'.repeat(20_000)} the needle sentence ${'y'.repeat(20_000)}`
+  let sliced: Client
+  let total = 0
+  let needleAt = 0
+
+  beforeAll(async () => {
+    const dir = join(scratch, 'big')
+
+    await mkdir(dir, { recursive: true })
+    await writeFile(join(dir, 'huge.md'), `---\ntype: Chapter\n---\n\n${body}`)
+    await putBundle(dir, { root, tenant: 'big' })
+    sliced = await connect(`okf://${root}?tenant=big`)
+
+    const direct = open(`okf://${root}?tenant=big`)
+    const stored = (await direct.get(['huge'])).get('huge')
+
+    total = stored?.total ?? 0
+    needleAt = stored?.text.indexOf('needle sentence') ?? 0
+    await direct.close()
+  })
+
+  afterAll(async () => {
+    await sliced.close()
+  })
+
+  test('caps an unbounded read at the default limit', async () => {
+    const result = firstText(
+      await sliced.callTool({ name: 'get', arguments: { ids: ['huge'] } })
+    )
+
+    expect(result).toContain(`@@ huge [0..${GET_LIMIT} of ${total}]`)
+    expect(result).not.toContain('needle')
+    expect(result.length).toBeLessThan(GET_LIMIT + 100)
+  })
+
+  test('offset continues where the cap stopped', async () => {
+    const result = firstText(
+      await sliced.callTool({
+        name: 'get',
+        arguments: { ids: ['huge'], offset: GET_LIMIT }
+      })
+    )
+
+    expect(result).toContain(
+      `@@ huge [${GET_LIMIT}..${GET_LIMIT * 2} of ${total}]`
+    )
+    expect(result).toContain('needle sentence')
+  })
+
+  test('an explicit limit overrides the default', async () => {
+    const result = firstText(
+      await sliced.callTool({
+        name: 'get',
+        arguments: { ids: ['huge'], limit: 25 }
+      })
+    )
+
+    expect(result).toContain(`@@ huge [0..25 of ${total}]`)
+  })
+
+  test('find returns a small window and the match offset', async () => {
+    const result = firstText(
+      await sliced.callTool({
+        name: 'get',
+        arguments: { ids: ['huge'], find: 'needle sentence' }
+      })
+    )
+
+    expect(result).toContain(`1 match at ${needleAt}`)
+    expect(result).toContain('needle sentence')
+    expect(result.length).toBeLessThan(3_000)
+  })
+
+  test('find that misses says so instead of returning silence', async () => {
+    const result = firstText(
+      await sliced.callTool({
+        name: 'get',
+        arguments: { ids: ['huge'], find: 'ghost of a phrase' }
+      })
+    )
+
+    expect(result).toContain(`@@ huge no match in ${total} chars`)
+  })
+})
+
 describe('snapshot', () => {
   test('returns the current digest', async () => {
     const result = await client.callTool({ name: 'snapshot', arguments: {} })
@@ -237,5 +329,62 @@ describe('stdio transport', () => {
     await proc.exited
 
     expect(await new Response(proc.stderr).text()).toContain('over stdio')
+  })
+})
+
+describe('strategy advice', () => {
+  const row = (id: number) =>
+    `concept_${id}\tsales\ttable\t-\t-\tOne row per something or other.\t-`
+  const manifestOf = (rows: number) =>
+    `${[
+      '# tenant: acme',
+      '# bundles: sales',
+      'id\tbundle\tkind\tstatus\tgrain\tsummary\tlinks',
+      ...Array.from({ length: rows }, (_, id) => row(id))
+    ].join('\n')}\n`
+
+  test('a small manifest is advised into the prompt prefix', () => {
+    expect(adviceFor(manifestOf(20))).toContain(
+      'reading it whole is cheaper than searching'
+    )
+  })
+
+  test('a large manifest is advised toward search', () => {
+    expect(adviceFor(manifestOf(2000))).toContain(
+      'prefer "search" over reading it whole'
+    )
+  })
+
+  test('the advice names the manifest cost in round tokens', () => {
+    expect(adviceFor(manifestOf(2000))).toMatch(/~[\d,]+ tokens/)
+  })
+
+  test('is deterministic for the same manifest', () => {
+    expect(adviceFor(manifestOf(500))).toBe(adviceFor(manifestOf(500)))
+  })
+
+  test('reaches the client inside the manifest tool description', async () => {
+    const [clientSide, serverSide] = InMemoryTransport.createLinkedPair()
+    const advised = new Client({ name: 'test', version: '0.0.0' })
+
+    await Promise.all([
+      createMcpServer(open(dsn), 'Advice sentence under test.').connect(
+        serverSide
+      ),
+      advised.connect(clientSide)
+    ])
+
+    const { tools } = await advised.listTools()
+    const manifest = tools.find(tool => tool.name === 'manifest')
+
+    expect(manifest?.description).toEndWith('Advice sentence under test.')
+    await advised.close()
+  })
+
+  test('stays absent when no advice is given', async () => {
+    const { tools } = await client.listTools()
+    const manifest = tools.find(tool => tool.name === 'manifest')
+
+    expect(manifest?.description).not.toContain('tokens;')
   })
 })

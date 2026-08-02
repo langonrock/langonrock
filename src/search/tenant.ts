@@ -1,9 +1,10 @@
 import { createIndexBuilder, search } from './bm25.ts'
+import { bestWindowStart } from './window.ts'
 
 export type { SearchOptions } from '../types.ts'
 
 import type { TenantReader } from '../store/reader.ts'
-import type { SearchOptions } from '../types.ts'
+import type { ConceptSlice, SearchOptions } from '../types.ts'
 import type { Bm25Index, Document } from './bm25.ts'
 
 export const DEFAULT_K = 8
@@ -163,11 +164,15 @@ function expand(
     .map(entry => entry.id)
 }
 
-function rowsFor(manifest: Manifest, ids: string[]): string[] {
+function rowsFor(
+  manifest: Manifest,
+  ids: string[],
+  posOf: (id: string) => number | undefined
+): string[] {
   return ids
     .map(id => manifest.rows.get(id))
     .filter((row): row is ManifestRow => row !== undefined)
-    .map(row => row.cells.join('\t'))
+    .map(row => `${row.cells.join('\t')}\t${posOf(row.id) ?? EMPTY_CELL}`)
 }
 
 function keeper(
@@ -179,29 +184,44 @@ function keeper(
     : id => manifest.rows.get(id)?.bundle === bundle
 }
 
+export type BodyFetch = (ids: string[]) => Promise<Map<string, ConceptSlice>>
+
 /**
  * Returns manifest rows, not concept bodies. The agent stays on the two-hop
  * path: narrow with search, then fetch only what it chose with `get`.
+ *
+ * Each direct hit ends in a `pos` cell: the offset where the query's words
+ * cluster densest in the body, so the second hop can be a window at that
+ * offset instead of the document. Costs one body fetch per direct hit; linked
+ * rows were never matched by the query, so they carry no position.
  */
-export function searchTenant(
+export async function searchTenant(
   built: TenantIndex,
   query: string,
-  options: SearchOptions = {}
-): string {
+  options: SearchOptions,
+  getBodies: BodyFetch
+): Promise<string> {
   const k = options.k ?? DEFAULT_K
   const keep = keeper(built.manifest, options.bundle)
   const direct = search(built.index, query, k, keep).map(hit => hit.id)
   const linked =
     options.expand === false ? [] : expand(built.manifest, direct, k, keep)
+  const bodies =
+    direct.length === 0
+      ? new Map<string, ConceptSlice>()
+      : await getBodies(direct)
+  const positions = new Map(
+    direct.map(id => [id, bestWindowStart(bodies.get(id)?.text ?? '', query)])
+  )
 
   const lines = [
     ...built.manifest.comments,
     ...(options.bundle === undefined ? [] : [`# bundle: ${options.bundle}`]),
     `# query: ${query}`,
     `# hits: ${direct.length} direct, ${linked.length} linked`,
-    built.manifest.columns,
-    ...rowsFor(built.manifest, direct),
-    ...rowsFor(built.manifest, linked)
+    `${built.manifest.columns}\tpos`,
+    ...rowsFor(built.manifest, direct, id => positions.get(id)),
+    ...rowsFor(built.manifest, linked, () => undefined)
   ]
 
   return `${lines.join('\n')}\n`

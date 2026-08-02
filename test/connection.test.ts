@@ -171,7 +171,7 @@ describe('transport parity', () => {
     const remote = await open(`okf+unix://${socket}?tenant=acme`).get(ids)
 
     expect([...remote.keys()].sort()).toEqual([...embedded.keys()].sort())
-    expect(remote.get('customers')).toBe(embedded.get('customers'))
+    expect(remote.get('customers')).toEqual(embedded.get('customers'))
   })
 
   test('embedded and socket rank identically', async () => {
@@ -196,9 +196,31 @@ describe('transport parity', () => {
     }
 
     const remote = open(`okf+unix://${socket}?tenant=acme`)
-    const found = await remote.get(['tables/orders'], 'no_such_section')
+    const found = await remote.get(['tables/orders'], {
+      section: 'no_such_section'
+    })
 
     expect(found.size).toBe(0)
+  })
+
+  test('a find window survives the wire byte for byte', async () => {
+    if (!ON_POSIX) {
+      return
+    }
+
+    const options = { find: 'BACK TO', limit: 30 }
+    const embedded = await open(`okf://${root}?tenant=acme`).get(
+      ['customers'],
+      options
+    )
+    const remote = await open(`okf+unix://${socket}?tenant=acme`).get(
+      ['customers'],
+      options
+    )
+
+    expect(remote.get('customers')).toEqual(embedded.get('customers'))
+    expect(remote.get('customers')?.matchCount).toBeGreaterThan(0)
+    expect(remote.get('customers')?.text).toContain('Back to')
   })
 
   /**

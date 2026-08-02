@@ -3,28 +3,44 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 
 import { open } from '../client/connection.ts'
+import { adviceFor } from '../search/advice.ts'
+import { renderConcepts } from '../store/slice.ts'
 
 import type { Connection } from '../client/connection.ts'
 import type { SearchOptions } from '../search/tenant.ts'
+import type { GetOptions } from '../types.ts'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 
 export const MANIFEST_URI = 'okf://manifest'
+
+/**
+ * The MCP boundary is where an unbounded read becomes a context blowup, so it
+ * is the one layer that caps by default. 15,000 characters is roughly 4,000
+ * tokens: every ordinary concept passes through whole, and only a document
+ * that genuinely needs paging gets framed as a partial slice. The library and
+ * the HTTP API stay uncapped, because their callers are programs, not prompts.
+ */
+export const GET_LIMIT = 15_000
 
 const MANIFEST_DESCRIPTION = `Read the tenant's knowledge manifest: one dense TSV row per concept with its id, bundle, kind, status, grain, a one-line summary, and outgoing links.
 
 Call this before anything else whenever you need to know what knowledge exists. It is the index: pick ids from it, then fetch those ids with "get". Never guess an id.
 
-A status cell other than "-" means the concept is not current, for example "deprecated" or "draft"; prefer a current concept and say so if you use one that is not.
+A status cell other than "-" means the concept is not current, for example "deprecated", "draft", or "stale" for one past its stale_after date; prefer a current concept and say so if you use one that is not.
 
 Pass "bundle" to read one bundle instead of the whole tenant. On a large tenant the whole manifest can be too big to be worth reading, so narrow with "bundle" when you know the domain, or use "search" when you do not.`
 
-const GET_DESCRIPTION = `Fetch the full text of concepts by id, as listed in the manifest.
+const GET_DESCRIPTION = `Fetch the text of concepts by id, as listed in the manifest.
 
-Pass every id you need in one call rather than calling repeatedly; the batch costs one round trip regardless of size. Pass "section" to retrieve a single named section instead of the whole document, for example "schema" or "joins". Section names come from the concept's own markdown headings, lowercased with underscores.`
+Pass every id you need in one call rather than calling repeatedly; the batch costs one round trip regardless of size. Pass "section" to retrieve a single named section instead of the whole document, for example "schema" or "joins". Section names come from the concept's own markdown headings, lowercased with underscores.
+
+Each concept returns at most "limit" characters (default ${GET_LIMIT}); a partial slice is framed as "@@ id [start..end of total]", and "offset" continues from where it stopped.
+
+When the question is where the text says something, pass "find" with a literal phrase instead of reading the document: the response is a small window around the first case-insensitive occurrence plus every match offset.`
 
 const SEARCH_DESCRIPTION = `Rank concepts by relevance to a query and return their manifest rows, not their bodies.
 
-Reach for this instead of reading the whole manifest when the tenant is large, or when you do not already know which concept holds the answer. The result is the same TSV shape as "manifest", narrowed: pick ids from it and fetch them with "get". Results also include concepts one link away from the top matches, which is usually where the join partner, parent dataset, or metric definition lives.
+Reach for this instead of reading the whole manifest when the tenant is large, or when you do not already know which concept holds the answer. The result is the same TSV shape as "manifest" plus a trailing "pos" column: the character offset where your query's words cluster densest in that concept, "-" when they only match its manifest row. To read the passage instead of the document, call "get" with that id and {offset: pos, limit: 2000}. Results also include concepts one link away from the top matches, which is usually where the join partner, parent dataset, or metric definition lives.
 
 Pass "bundle" to rank only within one bundle.`
 
@@ -42,26 +58,21 @@ function failure(cause: unknown): CallToolResult {
   return { content: [{ type: 'text', text: message }], isError: true }
 }
 
-function renderConcepts(
-  requested: string[],
-  found: Map<string, string>
-): string {
-  const chunks = [...found].map(([id, body]) => `@@ ${id}\n${body}`)
-  const missing = requested.filter(id => !found.has(id))
+function registerManifest(
+  server: McpServer,
+  connection: Connection,
+  advice?: string
+): void {
+  const description =
+    advice === undefined
+      ? MANIFEST_DESCRIPTION
+      : `${MANIFEST_DESCRIPTION}\n\n${advice}`
 
-  if (missing.length > 0) {
-    chunks.push(`@@ missing\n${missing.join(' ')}`)
-  }
-
-  return chunks.join('\n')
-}
-
-function registerManifest(server: McpServer, connection: Connection): void {
   server.registerTool(
     'manifest',
     {
       title: 'Read the knowledge manifest',
-      description: MANIFEST_DESCRIPTION,
+      description,
       inputSchema: {
         bundle: z
           .string()
@@ -85,7 +96,7 @@ function registerManifest(server: McpServer, connection: Connection): void {
     MANIFEST_URI,
     {
       title: 'Knowledge manifest',
-      description: MANIFEST_DESCRIPTION,
+      description,
       mimeType: 'text/tab-separated-values'
     },
     async uri => ({
@@ -116,12 +127,53 @@ function registerGet(server: McpServer, connection: Connection): void {
           .optional()
           .describe(
             'Optional section name to return instead of the whole concept.'
-          )
+          ),
+        offset: z
+          .number()
+          .int()
+          .min(0)
+          .optional()
+          .describe(
+            'Character offset to start from, for continuing a partial slice.'
+          ),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .optional()
+          .describe(
+            `Maximum characters per concept, default ${GET_LIMIT}. With "find", sizes the window instead.`
+          ),
+        find: z
+          .string()
+          .min(1)
+          .optional()
+          .describe('Literal case-insensitive phrase to locate.')
       }
     },
-    async ({ ids, section }) => {
+    async ({ ids, section, offset, limit, find }) => {
       try {
-        return text(renderConcepts(ids, await connection.get(ids, section)))
+        const options: GetOptions = {}
+
+        if (section !== undefined) {
+          options.section = section
+        }
+
+        if (offset !== undefined) {
+          options.offset = offset
+        }
+
+        if (find !== undefined) {
+          options.find = find
+        }
+
+        const capped = limit ?? (find === undefined ? GET_LIMIT : undefined)
+
+        if (capped !== undefined) {
+          options.limit = capped
+        }
+
+        return text(renderConcepts(ids, await connection.get(ids, options)))
       } catch (cause) {
         return failure(cause)
       }
@@ -189,10 +241,13 @@ function registerSnapshot(server: McpServer, connection: Connection): void {
  * system prompt, so each one has to earn its place: manifest and search both
  * narrow, get fetches, snapshot invalidates.
  */
-export function createMcpServer(connection: Connection): McpServer {
+export function createMcpServer(
+  connection: Connection,
+  advice?: string
+): McpServer {
   const server = new McpServer({ name: 'langonrock', version: '0.0.0' })
 
-  registerManifest(server, connection)
+  registerManifest(server, connection, advice)
   registerSearch(server, connection)
   registerGet(server, connection)
   registerSnapshot(server, connection)
@@ -203,9 +258,19 @@ export function createMcpServer(connection: Connection): McpServer {
 /**
  * The stdio transport owns stdout: anything else written there corrupts the
  * JSON-RPC framing. Diagnostics go to stderr only.
+ *
+ * The advice is computed once, from the snapshot current at startup, and a
+ * client reads tool descriptions once per session: a tenant that changes
+ * shape underneath a running server keeps the old advice until the next
+ * session. It is a hint about corpus shape, and shape moves slowly.
  */
 export async function serveMcp(dsn: string): Promise<void> {
-  const server = createMcpServer(open(dsn))
+  const connection = open(dsn)
+  const advice = await connection
+    .manifest()
+    .then(adviceFor)
+    .catch(() => undefined)
+  const server = createMcpServer(connection, advice)
   const transport = new StdioServerTransport()
 
   await server.connect(transport)

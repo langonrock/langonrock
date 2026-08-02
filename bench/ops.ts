@@ -3,6 +3,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { readdir, rm, stat } from 'node:fs/promises'
 
 import {
+  adviceFor,
   buildTenantIndex,
   createMcpServer,
   estimateTokens,
@@ -96,16 +97,21 @@ async function coldVersusWarm(probe: string) {
   const coldMs = await median(5, async () => {
     const reader = await openTenant(STORE, TENANT)
 
-    searchTenant(await buildTenantIndex(reader), probe, { k: 8 })
+    await searchTenant(
+      await buildTenantIndex(reader),
+      probe,
+      { k: 8 },
+      reader.get
+    )
   })
   const reader = await openTenant(STORE, TENANT)
   const index = await buildTenantIndex(reader)
 
   return {
     coldMs,
-    warmMs: await median(50, async () => {
-      searchTenant(index, probe, { k: 8 })
-    }),
+    warmMs: await median(50, () =>
+      searchTenant(index, probe, { k: 8 }, reader.get)
+    ),
     warmManifestMs: await median(50, () => reader.manifest())
   }
 }
@@ -152,9 +158,10 @@ async function mcpCost(probe: string) {
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair()
   const client = new Client({ name: 'bench', version: '0.0.0' })
   const direct = open(`okf://${STORE}?tenant=${TENANT}`)
+  const advice = adviceFor(await direct.manifest())
 
   await Promise.all([
-    createMcpServer(open(`okf://${STORE}?tenant=${TENANT}`)).connect(
+    createMcpServer(open(`okf://${STORE}?tenant=${TENANT}`), advice).connect(
       serverSide
     ),
     client.connect(clientSide)
@@ -198,10 +205,21 @@ async function daemon(corpus: Corpus, probe: string) {
 
   await connection.manifest()
 
+  // A needle cut from the stored text itself, so the find always hits and the
+  // row times a located window rather than a miss.
+  const first = ids[0] ?? ''
+  const text = (await connection.get([first])).get(first)?.text ?? ''
+  const needle = text.slice(120, 150) || text.slice(0, 30)
+
   const timings = {
     socketSearchMs: await median(20, () => connection.search(probe)),
     socketManifestMs: await median(20, () => connection.manifest()),
-    socketGetMs: await median(20, () => connection.get(ids, 'schema')),
+    socketGetMs: await median(20, () =>
+      connection.get(ids, { section: 'schema' })
+    ),
+    socketFindMs: await median(20, () =>
+      connection.get([first], { find: needle })
+    ),
     ...(await preconditionCost(connection, corpus))
   }
 

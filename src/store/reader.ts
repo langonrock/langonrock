@@ -2,7 +2,9 @@ import { readFile } from 'node:fs/promises'
 
 import { HEADER_BYTES, decodeBlob, parseDir, parseHeader } from './format.ts'
 import { currentFile, snapshotFile } from './paths.ts'
+import { sliceConcept } from './slice.ts'
 
+import type { ConceptSlice, GetOptions } from '../types.ts'
 import type { DirEntry, TntHeader } from './format.ts'
 
 const decoder = new TextDecoder()
@@ -15,7 +17,10 @@ export interface TenantReader {
   /** Frontmatter titles by id, only for concepts that have one. */
   titles: Map<string, string>
   manifest: (bundle?: string) => Promise<string>
-  get: (ids: string[], section?: string) => Promise<Map<string, string>>
+  get: (
+    ids: string[],
+    options?: GetOptions
+  ) => Promise<Map<string, ConceptSlice>>
   /**
    * Every body in id order, decompressed one at a time off a single read of
    * the blobs region. For whole-tenant consumers like the search index build,
@@ -139,6 +144,66 @@ function titlesOf(entries: DirEntry[]): Map<string, string> {
   return titles
 }
 
+function staleAfterOf(entries: DirEntry[]): Map<string, string> {
+  const dates = new Map<string, string>()
+
+  for (const entry of entries) {
+    if (entry.staleAfter !== undefined) {
+      dates.set(entry.id, entry.staleAfter)
+    }
+  }
+
+  return dates
+}
+
+/** ISO dates order as strings, so the clock touches nothing but `today`. */
+function expiredOf(dates: Map<string, string>, today: string): Set<string> {
+  const expired = new Set<string>()
+
+  for (const [id, date] of dates) {
+    if (date < today) {
+      expired.add(id)
+    }
+  }
+
+  return expired
+}
+
+/**
+ * Rewrites the status cell of expired rows to `stale`, leaving any explicit
+ * status alone: `deprecated` already says more than `stale` would. Demotion
+ * happens here, at render time, because a compile-time comparison against the
+ * clock would break the byte-determinism of the snapshot. The search index
+ * parses this same rendered manifest, so search rows inherit the demotion
+ * when the index is next built.
+ */
+function demote(manifest: string, expired: Set<string>): string {
+  const lines = manifest.split('\n')
+  let status = -1
+
+  return lines
+    .map(line => {
+      if (status === -1) {
+        if (line.startsWith('id\t')) {
+          status = line.split('\t').indexOf('status')
+        }
+
+        return line
+      }
+
+      const cells = line.split('\t')
+
+      if (!expired.has(cells[0] ?? '') || cells[status] !== '-') {
+        return line
+      }
+
+      cells[status] = 'stale'
+
+      return cells.join('\t')
+    })
+    .join('\n')
+}
+
 async function readEntry(
   path: string,
   header: TntHeader,
@@ -175,32 +240,38 @@ export async function openTenant(
   let text: string | undefined
   let byBundle: Map<string, string> | undefined
 
+  const stale = staleAfterOf(entries)
+
   const manifest = async (bundle?: string): Promise<string> => {
     text ??= decoder.decode(
       await slice(path, header.manifestOffset, header.manifestLength)
     )
 
-    if (bundle === undefined) {
-      return text
+    let base = text
+
+    if (bundle !== undefined) {
+      byBundle ??= splitByBundle(text)
+
+      const found = byBundle.get(bundle)
+
+      if (found === undefined) {
+        throw new Error(
+          `no bundle "${bundle}" in this tenant: found ${[...byBundle.keys()].join(', ')}`
+        )
+      }
+
+      base = found
     }
 
-    byBundle ??= splitByBundle(text)
+    const expired = expiredOf(stale, new Date().toISOString().slice(0, 10))
 
-    const found = byBundle.get(bundle)
-
-    if (found === undefined) {
-      throw new Error(
-        `no bundle "${bundle}" in this tenant: found ${[...byBundle.keys()].join(', ')}`
-      )
-    }
-
-    return found
+    return expired.size === 0 ? base : demote(base, expired)
   }
 
   const get = async (
     ids: string[],
-    section?: string
-  ): Promise<Map<string, string>> => {
+    options?: GetOptions
+  ): Promise<Map<string, ConceptSlice>> => {
     const wanted = ids
       .map(id => byId.get(id))
       .filter((entry): entry is DirEntry => entry !== undefined)
@@ -209,13 +280,13 @@ export async function openTenant(
       wanted.map(entry => readEntry(path, header, entry))
     )
 
-    const found = new Map<string, string>()
+    const found = new Map<string, ConceptSlice>()
 
     for (const [index, entry] of wanted.entries()) {
-      const value = sliceSection(contents[index] ?? '', entry, section)
+      const value = sliceSection(contents[index] ?? '', entry, options?.section)
 
       if (value !== undefined) {
-        found.set(entry.id, value)
+        found.set(entry.id, sliceConcept(value, options))
       }
     }
 

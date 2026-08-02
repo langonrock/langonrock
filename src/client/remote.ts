@@ -1,5 +1,7 @@
 import type {
+  ConceptSlice,
   Connection,
+  GetOptions,
   SearchOptions,
   SourceEntry,
   SyncResult
@@ -104,18 +106,19 @@ function readingOf(call: Call, prefix: string) {
     },
     get: async (
       ids: string[],
-      section?: string
-    ): Promise<Map<string, string>> => {
-      const payload = section === undefined ? { ids } : { ids, section }
+      options: GetOptions = {}
+    ): Promise<Map<string, ConceptSlice>> => {
       const response = await assertOk(
         await call(`${prefix}/get`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(payload)
+          body: JSON.stringify({ ids, ...options })
         })
       )
 
-      return new Map(Object.entries((await response.json()) as object))
+      return new Map(
+        Object.entries((await response.json()) as Record<string, ConceptSlice>)
+      )
     },
     search: async (
       query: string,

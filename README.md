@@ -22,21 +22,24 @@ Measured against the OKF reference consumption pattern over the same corpus and 
 
 The saving comes from the manifest carrying the link graph. The agent knows every id it needs _before_ it fetches anything, so one batched call covers them all, and it can ask for a single section instead of the whole concept. The manifest itself is not smaller than the Markdown it replaces.
 
-That corpus is a warehouse catalogue, and the saving is a property of the documents rather than of the store. The same twenty-question harness over a set of RFCs saves 98 percent; over four novels it saves 2. Full numbers, including where the store loses, are in [Benchmarks](#benchmarks).
+That corpus is a warehouse catalogue, and the saving is a property of the documents rather than of the store. The same twenty-question harness over a set of RFCs saves 98 percent; over four novels it used to save 2, and saves 69 now that `find` returns the passage instead of the chapter. Full numbers, including where the store loses, are in [Benchmarks](#benchmarks).
 
 ## Features
 
-- **Compiles OKF, does not replace it.** Your directory of Markdown stays the source of truth and stays conformant.
+- **Compiles any Markdown, keeps OKF as the bar.** Every file compiles, frontmatter or not, with its id, summary, title and links derived from the text; `--strict` is the OKF conformance gate. Your directory stays the source of truth.
 - **A manifest that fits in the prompt.** One dense TSV row per concept: id, bundle, kind, status, grain, summary, outgoing links.
 - **Byte-deterministic output.** Identical input compiles to identical bytes, so the manifest stays in the prompt cache across rebuilds.
-- **Section addressing.** `get(id, "schema")` returns one slice instead of the whole document, using the concept's own Markdown headings.
+- **Section addressing.** `get(id, { section: "schema" })` returns one slice instead of the whole document, using the concept's own Markdown headings.
+- **Sliced reads on any document.** `offset` and `limit` page a long concept, and `find` returns a window around a literal phrase plus the offset of every occurrence — sub-document addressing that works on prose with no headings at all. Over MCP a read is capped at 15,000 characters per concept by default, so a naive `get` can never flood a model's context.
 - **Batched reads.** Pass every id you need in one call; N concepts cost one round trip.
 - **Deterministic retrieval.** BM25 plus a capped one-hop expansion over the link graph, with no model call anywhere in the path.
+- **Search that points inside the document.** Every direct hit carries `pos`, the offset of the passage densest in the query's words, so the next `get` can be a 2,000-character window instead of the document — no quote required.
+- **Knowledge that expires visibly.** A concept past its `stale_after` date shows `stale` in the manifest's status cell, computed at read time so the snapshot bytes never depend on the clock.
 - **Immutable, content-addressed snapshots.** A backup is a file copy, a restore is a file copy back, and a rollback is a side effect of naming files by their own hash.
 - **Multi-tenant.** A tenant is a directory boundary with its own snapshots and its own index.
 - **Three connection modes, one interface.** Embedded, local daemon, or HTTP server, selected by a connection string.
 - **Refuses to leak its own credentials.** TCP needs a token, and any address past loopback needs TLS, or the server declines to start.
-- **MCP server.** Four verbs for Claude Code, Cursor, or anything else that speaks MCP.
+- **MCP server.** Four verbs for Claude Code, Cursor, or anything else that speaks MCP — with tool descriptions that carry the tenant's own numbers: the server measures the manifest at startup and advises manifest-first or search-first.
 - **Editable over the network.** Create, change and delete concepts through the API, with a mandatory precondition so two editors cannot silently overwrite each other.
 - **No database.** Two runtime dependencies, both for MCP.
 
@@ -87,7 +90,7 @@ customers	sales	bigquery_table	deprecated	customer_id	Registered customers, incl
 orders	sales	bigquery_table	-	order_id	One row per completed customer order.	customers
 ```
 
-Everything an agent needs to plan its reads is in those rows. A `status` cell other than `-` is the concept telling you it is not current. Then fetch only what you chose, and only the part you need:
+Everything an agent needs to plan its reads is in those rows. A `status` cell other than `-` is the concept telling you it is not current — `deprecated`, `draft`, or `stale` once its `stale_after` date passes. Then fetch only what you chose, and only the part you need:
 
 ```sh
 langonrock get orders --section schema --data ./data --tenant acme
@@ -132,12 +135,12 @@ claude mcp add langonrock -s project -- langonrock mcp "okf+unix:///tmp/okf.sock
 
 Four tools, and no more, because every tool definition costs tokens in the client's system prompt:
 
-| Tool       | What it does                                                                                                                                                       |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `manifest` | The whole tenant, or one bundle with `bundle`. Also served as the MCP resource `okf://manifest`, so clients that preload resources get it in the cacheable prefix. |
-| `search`   | BM25 over the manifest and bodies, plus a capped one-hop expansion. Returns manifest rows, never bodies.                                                           |
-| `get`      | Concepts by id, batched, optionally one `section` each.                                                                                                            |
-| `snapshot` | The current digest, to check whether the manifest you hold is stale.                                                                                               |
+| Tool       | What it does                                                                                                                                                                                                                                                       |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `manifest` | The whole tenant, or one bundle with `bundle`. Also served as the MCP resource `okf://manifest`, so clients that preload resources get it in the cacheable prefix. Its description states this tenant's measured manifest size and which read strategy is cheaper. |
+| `search`   | BM25 over the manifest and bodies, plus a capped one-hop expansion. Returns manifest rows, never bodies; each direct hit ends in `pos`, the offset of the densest passage, for a windowed `get`.                                                                   |
+| `get`      | Concepts by id, batched; optionally one `section`, an `offset`/`limit` window, or a `find` phrase to locate. Capped at 15,000 chars per concept by default.                                                                                                        |
+| `snapshot` | The current digest, to check whether the manifest you hold is stale.                                                                                                                                                                                               |
 
 ## Connection modes
 
@@ -251,9 +254,11 @@ The token decides the tenant, so the path only needs one when the server has no 
 ```
 GET  /v1/{tenant}/manifest[?bundle=sales]  the manifest, ETag is the snapshot digest
 GET  /v1/{tenant}/snapshot                 {"snapshot": "…", "concepts": n}
-POST /v1/{tenant}/get                      {"ids": [...], "section"?: "schema"}
+POST /v1/{tenant}/get                      {"ids": [...], "section"?, "offset"?, "limit"?, "find"?}
 POST /v1/{tenant}/search                   {"q": "...", "k"?: n, "expand"?: false, "bundle"?: "..."}
 ```
+
+`get` answers with one slice per id — `{"text", "start", "end", "total"}`, plus `"matches"` and `"matchCount"` when `find` was set — so a caller always knows how much text exists beyond what it received.
 
 ```sh
 curl -H 'Authorization: Bearer read-only' http://127.0.0.1:7777/v1/manifest
@@ -353,8 +358,15 @@ const knowledge = open('okf:///var/data?tenant=acme')
 
 const manifest = await knowledge.manifest('sales')
 const hits = await knowledge.search('order grain', { k: 5 })
-const concepts = await knowledge.get(['orders', 'customers'], 'schema')
+const concepts = await knowledge.get(['orders', 'customers'], {
+  section: 'schema'
+})
+const passage = await knowledge.get(['pride_3'], {
+  find: 'ten thousand a year'
+})
 ```
+
+Every read returns slices, `{ text, start, end, total }`, so a whole read and a windowed one have the same shape; `find` adds `matches` and `matchCount`. The library never truncates unless asked — `offset` and `limit` are opt-in here, and only the MCP boundary caps by default.
 
 The compiler, store, reader, watcher and search are all exported too, if you want the pieces rather than the connection.
 
@@ -425,7 +437,7 @@ The store has two strategies and the benchmark bills both. Keeping the manifest 
 | OKF `read_concept`, the whole file   |     594 |
 | `get(id)`, frontmatter compiled away |     445 |
 | `get(id, "schema")`                  | **213** |
-| One search result, eight rows        |     719 |
+| One search result, eight rows        |     731 |
 
 | What can go in the prompt |  Tokens |
 | ------------------------- | ------: |
@@ -453,9 +465,9 @@ The store has two strategies and the benchmark bills both. Keeping the manifest 
 | Read the manifest, warm      | <0.01 | <0.01 |  <0.01 |
 | Batched `get` of 3 sections  |  0.08 |  0.11 |   0.09 |
 | Build the BM25 index         |    22 |   193 |    674 |
-| BM25 query                   |  0.10 |  0.55 |   1.83 |
+| BM25 query, with `pos`       |  0.29 |  0.94 |   2.13 |
 
-`get` is flat: batching a fetch costs the same on a tenant of twenty thousand concepts as on one of five hundred. None of this is where the time goes, though. One saved model round trip is worth about a second, four orders of magnitude more than any row above.
+The query row is roughly three times what it was before search began computing `pos`, because ranking is now followed by a scan of the top hits' bodies. `get` is flat: batching a fetch costs the same on a tenant of twenty thousand concepts as on one of five hundred. None of this is where the time goes, though. One saved model round trip is worth about a second, four orders of magnitude more than any row above.
 
 That table leaves memory mostly out on purpose. The store rebuilds the index in memory once per snapshot, and peak process memory at 20,000 concepts landed around 0.85 GB — down by roughly a third since the postings moved into typed arrays and the build stopped holding every body at once. It is still the practical ceiling on how many large tenants one daemon can hold. The index build itself streams the bodies off a single read of the snapshot's blob region, and `serve` rebuilds the index right after each sync, so the first search after a save does not pay for it.
 
@@ -494,37 +506,77 @@ Everything above describes a warehouse catalogue. To find out what the store doe
 | `handbook-untitled` | The same recipes with no `title` field, the name left as an H1 |    1,282 |
 | `spec`              | Twenty-eight IETF RFCs, one concept per document               |       28 |
 
-Twenty questions per profile, ground truth stated the same way, every path charged for delivering the same concepts. `manifest` is the manifest-in-the-prompt strategy, `search` is search-first; the store's cost is the better of the two.
+Twenty questions per profile, ground truth stated the same way, every path charged for delivering the same concepts. `manifest` is the manifest-in-the-prompt strategy, `search` is search-first, `find` is search-first with the fetch replaced by a located window; the store's cost is the best of the three. A `find` column only exists where the twenty questions are literal phrases of the text — a natural-language question has nothing to locate, which is what — means.
 
-| Profile            |    Corpus | `manifest.tsv` | OKF billed |  `manifest` |   `search` | Saving |
-| ------------------ | --------: | -------------: | ---------: | ----------: | ---------: | -----: |
-| `spec`             |   767,143 |          1,176 |    756,168 |  **13,995** |     52,033 |    98% |
-| `scripture-coarse` | 1,067,694 |          2,028 |  1,278,420 |  **39,395** |     67,020 |    97% |
-| `handbook`         |   613,230 |         26,198 |    125,798 |      71,797 | **19,874** |    84% |
-| `book-coarse`      |   343,265 |            113 |    338,296 | **122,236** |    186,451 |    64% |
-| `scripture`        | 1,076,465 |         38,283 |    159,174 |     148,029 | **75,207** |    53% |
-| `reference`        |   264,744 |         20,549 |    116,357 |      64,355 | **56,394** |    52% |
-| `book`             |   344,540 |          1,772 |    130,101 | **127,077** |    188,093 |     2% |
+| Profile            |    Corpus | `manifest.tsv` | OKF billed | `manifest` |   `search` |     `find` | Saving |
+| ------------------ | --------: | -------------: | ---------: | ---------: | ---------: | ---------: | -----: |
+| `spec`             |   767,143 |          1,176 |    756,168 | **13,995** |     52,862 |          — |    98% |
+| `scripture-coarse` | 1,067,694 |          2,028 |  1,278,420 | **39,395** |     67,740 |     45,695 |    97% |
+| `book-coarse`      |   343,265 |            113 |    338,296 |    122,236 |    186,850 | **37,736** |    89% |
+| `handbook`         |   613,230 |         26,198 |    125,798 |     71,797 | **19,551** |          — |    84% |
+| `book`             |   344,540 |          1,772 |    130,101 |    127,077 |    188,730 | **39,862** |    69% |
+| `scripture`        | 1,076,465 |         38,283 |    159,174 |    148,029 |     75,625 | **53,801** |    66% |
+| `reference`        |   264,744 |         20,549 |    116,357 |     64,355 | **56,928** |          — |    51% |
 
-Round trips are not in that table because they are the same everywhere: the manifest strategy spends 16 to 21 calls, search-first spends 35 to 40. Search-first buys tokens with one extra turn per question, and this project treats a turn as the expensive resource.
+Round trips are not in that table because they are the same everywhere: the manifest strategy spends 16 to 21 calls, search-first and `find` spend 35 to 40. Both buy tokens with one extra turn per question, and this project treats a turn as the expensive resource.
 
-| Profile     | OKF `read_concept` | `get(id)` | `get(id, section)` |
-| ----------- | -----------------: | --------: | -----------------: |
-| `spec`      |             23,439 |    23,321 |            **388** |
-| `book`      |              3,261 |     3,244 |              3,244 |
-| `scripture` |                852 |       841 |                841 |
-| `reference` |                594 |       445 |            **213** |
-| `handbook`  |                292 |       279 |             **87** |
+| Profile     | OKF `read_concept` | `get(id)` | `get(id, section)` | `get(id, find)` |
+| ----------- | -----------------: | --------: | -----------------: | --------------: |
+| `spec`      |             23,439 |    23,321 |            **388** |               — |
+| `book`      |              3,261 |     3,244 |              3,244 |         **513** |
+| `scripture` |                852 |       841 |                841 |         **476** |
+| `reference` |                594 |       445 |            **213** |               — |
+| `handbook`  |                292 |       279 |             **87** |               — |
 
 The ordering is not by corpus size. It is by how much structure the document already carries, and two things pay:
 
-- **Headings.** `get(id, section)` can only return a slice if the document names its slices. An RFC numbers every subsection, so a question about one costs 388 tokens instead of 23,439. A Bible chapter and a novel chapter have no headings at all, so the section read and the whole read are the same read.
+- **Headings.** `get(id, section)` can only return a slice if the document names its slices. An RFC numbers every subsection, so a question about one costs 388 tokens instead of 23,439. A Bible chapter and a novel chapter have no headings at all, so the section read and the whole read used to be the same read — the gap `find` closes: a located window costs 476 to 513 tokens where the whole document costs 841 to 3,244.
 - **Links.** Batching saves a round trip only when the manifest knows which concepts belong together. Mrs Beeton's "No. 105" cross-references and the RFC citation graph both compile into the `links` column. The Bible and the novels have none, so the store spends exactly as many turns as the navigator.
 
 What is left when a corpus has neither is the frontmatter the compiler strips, and on real prose that is almost nothing: 17 tokens per chapter on the novels, 11 on the Bible, against the 149 a full OKF sample header costs.
 
+#### Locating instead of reading
+
+The novels were the profile this store could not help: no headings to address, no links to batch, a 2 percent saving. `find` changes the unit of retrieval instead of the format — search names the chapter, `get` with a literal phrase returns a window around the first occurrence plus the offset of every other one, and the chapter never enters the context. The same twenty questions, which on these profiles are passages to locate:
+
+| Profile            | OKF billed | Store, without `find` | Store, `find` windows | Saving |
+| ------------------ | ---------: | --------------------: | --------------------: | -----: |
+| `book`             |    130,101 |               127,077 |            **39,862** |    69% |
+| `book-coarse`      |    338,296 |               122,236 |            **37,736** |    89% |
+| `scripture`        |    159,174 |                75,625 |            **53,801** |    66% |
+| `scripture-coarse` |  1,278,420 |            **39,395** |                45,695 |    97% |
+
+Every one of the twenty questions located on every row. `scripture-coarse` is the honest loss: a 66-row manifest amortised over the session still beats paying a search per question, so `find` wins where the manifest is large or the documents are, not everywhere. The other rows are the novels' 2 percent becoming 69, and the chapter-grain Bible dropping from 148,029 to 53,801 with the store byte-for-byte unchanged on disk.
+
+Every `find` and `search` figure on this page carries the `pos` column added below, which is why they sit about one percent above the numbers this section reported when `find` shipped alone: the novels' 39,274 became 39,862, and `handbook` and `reference` each gave back a point of saving. Locating pays for pointing, and the tables state the price rather than the best version of itself.
+
+Locating is not slower than fetching. A `find` sweeps the decompressed body with `indexOf`, and the median over the bench corpora runs 0.05 to 0.3 ms — the same order as `get` itself, and three to four orders below the model turn it feeds.
+
+`find` needs a quote. `pos` removes that requirement: every direct search hit now ends in a `pos` column naming the offset where the query's words cluster densest in the body, so the second hop can be `get(id, { offset: pos, limit: 2000 })` even when the question describes a passage instead of quoting one. The same twenty questions asked descriptively — summaries, not quotes — answered by capped document reads against `pos` windows:
+
+| Profile            | Capped reads | `pos` windows | Window held the passage |
+| ------------------ | -----------: | ------------: | ----------------------: |
+| `scripture-coarse` |      220,967 |    **47,541** |                 20 / 20 |
+| `spec`             |      155,996 |    **58,416** |                   5 / 7 |
+| `book`             |      180,625 |   **125,911** |                  8 / 20 |
+| `scripture`        |       76,173 |    **56,780** |                 19 / 20 |
+| `book-coarse`      |   **33,115** |        38,336 |                 20 / 20 |
+
+The last column is checked rather than assumed: a hit means the wanted concept's window really contained the passage the question pointed at, and across the eight profiles that held in 113 of 135 locatable cases. The `book` row's misses are ranking's, not the window's — described queries reach the top eight only 40 percent of the time on headingless prose, and every question ranking did place, the window answered. `book-coarse` is the honest loss from the other side: four documents amortise their capped reads across twenty questions at the cache rate, and twenty fresh windows cannot. The column itself costs six to sixteen tokens per search result.
+
+The other half of the change is what a naive read can no longer do. Over MCP, `get` returns at most 15,000 characters per concept by default; a partial slice is framed as `@@ id [start..end of total]` and continued with `offset`, while the library and the HTTP API stay unbounded by default because their callers are programs rather than prompts. Measured as the largest single concept of each corpus:
+
+| Largest concept in     | Naive `get` | Through the MCP cap |
+| ---------------------- | ----------: | ------------------: |
+| `book-coarse`, a novel |     172,994 |           **3,758** |
+| `spec`, RFC 9110       |     122,797 |           **3,758** |
+| `handbook`             |      76,221 |           **3,759** |
+| `book`, one chapter    |      11,406 |           **3,760** |
+
+The worst case an MCP client can pay for one concept fell from the size of the document, whatever it is, to a constant.
+
 > [!IMPORTANT]
-> On prose with no headings and no links, langonrock is worth about two percent. The advantage is not compression and it does not come from having a store; it comes from documents that were already structured. A folder of chapters is better served by reading the files.
+> On prose with no headings and no links, whole-document reads are worth about two percent, and a folder of chapters was better served by reading the files. That was the honest limit of this store until `find` gave prose the sub-document addressing its missing headings never could. What remains true is that links cannot be conjured: on a corpus with no graph the store still spends exactly as many turns as the navigator.
 
 #### Which strategy, and when
 
@@ -532,14 +584,16 @@ The manifest is paid once and amortised over the session; a search is paid per q
 
 | Profile            | `manifest.tsv` | One search result | Ratio | Cheaper  |
 | ------------------ | -------------: | ----------------: | ----: | -------- |
-| `handbook`         |         26,198 |               256 |   102 | search   |
-| `scripture`        |         38,283 |               427 |    90 | search   |
-| `reference`        |         20,549 |               719 |    29 | search   |
-| `book`             |          1,772 |               165 |    11 | manifest |
-| `scripture-coarse` |          2,028 |               288 |     7 | manifest |
-| `spec`             |          1,176 |               649 |     2 | manifest |
+| `handbook`         |         26,198 |               259 |   101 | search   |
+| `scripture`        |         38,283 |               434 |    88 | search   |
+| `reference`        |         20,549 |               731 |    28 | search   |
+| `book`             |          1,772 |               175 |    10 | manifest |
+| `scripture-coarse` |          2,028 |               299 |     7 | manifest |
+| `spec`             |          1,176 |               665 |     2 | manifest |
 
-Over twenty questions the crossover lands near twenty. Below it, keep the manifest in the prompt and pay for it once; above it, never read the manifest and rank instead. The store already exposes both, and the MCP tool descriptions already say so; nothing here needs a code change, only the right call.
+Over twenty questions the crossover lands near twenty. Below it, keep the manifest in the prompt and pay for it once; above it, never read the manifest and rank instead. That call now ships with the store: at startup the MCP server measures the manifest, estimates one search result from the manifest's own row lengths, and appends one sentence to the manifest tool's description — prefer search past the ratio of twenty, read it whole below. The rule classifies all eight bench profiles the way the measured sessions came out, and it is deterministic: same manifest, same advice.
+
+Quote-shaped questions add a third strategy to that choice: search, then locate, whose fetch side is a flat window of about 500 tokens regardless of document size. It is the cheapest path whenever the question is a passage to find rather than a document to read; the ratio above still decides manifest against search for everything else.
 
 #### Concept grain is a corpus decision with a large price
 
@@ -552,7 +606,7 @@ Over twenty questions the crossover lands near twenty. Below it, keep the manife
 
 Seventy-three percent cheaper, and the store is byte-for-byte the same. What changed is that 1,189 rows re-read on every turn became 66, while the read stayed one chapter (845 tokens against 841) because chapters became addressable sections. Nearly two thirds of the original bill was the manifest, not the text.
 
-It does not generalise to the novels: `book` to `book-coarse` saves 4 percent, because their manifest was 1,772 tokens to begin with and the cost is the 3,244-token chapter itself. Coarsening helps a corpus whose manifest is large, not one whose documents are large. For the novels, the smallest addressable unit is still a whole chapter, and only sub-document sections would change that.
+It does not generalise to the novels: `book` to `book-coarse` saves 4 percent, because their manifest was 1,772 tokens to begin with and the cost is the 3,244-token chapter itself. Coarsening helps a corpus whose manifest is large, not one whose documents are large. What the novels needed was a smaller addressable unit than the chapter, and that is what `find` is: the windowed rows in [Locating instead of reading](#locating-instead-of-reading) move exactly where coarsening could not.
 
 > [!NOTE]
 > The OKF column moves too, and against the baseline. At book grain `read_concept` returns a whole book of the Bible, 34,430 tokens, so the baseline's bill goes from 159,174 to 1,278,420. The honest comparison for a grain change is store against store.
@@ -567,7 +621,9 @@ Retrieval over the same questions, top eight:
 | `reference` |       70% / 0.43 | 70% / 0.43 |  **75% / 0.44** |
 | `book`      |       80% / 0.72 | 80% / 0.69 |      80% / 0.69 |
 
-The store meets or beats the raw files everywhere except the novels' top position, where prose with no headings and no links gives the compiler nothing to work with. `handbook` is the profile that used to prove the opposite — 50% against the baseline's 90% — and what it was measuring was a design cost, not noise: Mrs Beeton numbers her recipes, so the id is `recipe_181` and the words "rabbit soup" lived only in the `title` the compiler strips. The index now folds every concept's title in next to its id, weighted above the other fields, and the penalty is gone.
+The store meets or beats the raw files everywhere except the novels' top position, where prose with no headings and no links gives the compiler nothing to work with.
+
+There is no stemming, and that is a measured decision rather than a default: a minimal plural fold lifted the identifier-heavy `reference` corpus by five points of hit rate and 0.12 of MRR, and paid for it with rank quality across every prose corpus — `handbook` lost five points and 0.06 of MRR, `scripture-coarse` 0.08 of MRR. The fold was reverted; these numbers are why. `handbook` is the profile that used to prove the opposite — 50% against the baseline's 90% — and what it was measuring was a design cost, not noise: Mrs Beeton numbers her recipes, so the id is `recipe_181` and the words "rabbit soup" lived only in the `title` the compiler strips. The index now folds every concept's title in next to its id, weighted above the other fields, and the penalty is gone.
 
 `handbook-untitled` is the same bundle with the title moved out of the frontmatter and into the body as an H1, which is what a document that was downloaded rather than authored looks like. It used to beat the titled bundle by thirty-five points; now it is the control that shows the fold works:
 
@@ -598,17 +654,17 @@ One query, by how you reached it. Cold is a fresh embedded invocation that has t
 
 |                                   | 500 concepts | 1,189, `scripture` | 5,000 concepts |
 | --------------------------------- | -----------: | -----------------: | -------------: |
-| Cold: open, index, one query      |      27.5 ms |           151.9 ms |       237.0 ms |
-| Warm, in process                  |     0.107 ms |           0.300 ms |       1.359 ms |
-| Over a unix socket, a real daemon |     0.281 ms |           0.456 ms |       1.458 ms |
-| Over a socket, read the manifest  |     0.101 ms |           0.117 ms |       0.119 ms |
-| Over a socket, batched `get`      |     0.205 ms |           0.185 ms |       0.137 ms |
-| Through MCP, the same search      |     0.272 ms |           0.490 ms |       1.450 ms |
-| The same search, no MCP layer     |     0.158 ms |           0.330 ms |       1.403 ms |
+| Cold: open, index, one query      |      21.4 ms |           147.3 ms |       177.9 ms |
+| Warm, in process                  |     0.327 ms |           0.510 ms |       0.644 ms |
+| Over a unix socket, a real daemon |     0.551 ms |           0.673 ms |       0.900 ms |
+| Over a socket, read the manifest  |     0.123 ms |           0.117 ms |       0.114 ms |
+| Over a socket, batched `get`      |     0.226 ms |           0.185 ms |       0.209 ms |
+| Through MCP, the same search      |     0.547 ms |           0.708 ms |       0.869 ms |
+| The same search, no MCP layer     |     0.386 ms |           0.563 ms |       0.733 ms |
 
-**A daemon is worth 98 to 333 times.** Cold against the socket row, which is the honest pair: 27.5 against 0.281, 151.9 against 0.456, 237.0 against 1.458. An embedded invocation rebuilds the BM25 index from nothing before it can answer anything, and that is the whole of the difference.
+**A daemon is worth 39 to 219 times.** Cold against the socket row, which is the honest pair: 21.4 against 0.551, 147.3 against 0.673, 177.9 against 0.900. An embedded invocation rebuilds the BM25 index from nothing before it can answer anything, and that is the whole of the difference.
 
-**Transport is a fixed cost, not a proportional one.** The socket adds 0.10 to 0.17 ms over the in-process figure at every size, and the MCP layer adds another 0.05 to 0.16 ms. Neither grows with the corpus, so the larger the tenant the less either matters: at 5,000 concepts the socket costs 7 percent on top of the query and MCP costs 3.
+**Transport is a fixed cost, not a proportional one.** The socket adds 0.16 to 0.26 ms over the in-process figure at every size, and the MCP layer adds another 0.14 to 0.16 ms. Neither grows with the corpus. What grew is the query itself: a search now decompresses and scans its top hits' bodies to compute `pos`, which put warm search from the old 0.02–0.15 ms range into 0.3–0.9 ms here and up to 14 ms when the hits are whole novels — one to two orders of magnitude, and still two below the model turn it feeds.
 
 The write path, through the HTTP source routes where the precondition lives:
 
@@ -633,9 +689,9 @@ The write path, through the HTTP source routes where the precondition lives:
 
 | Registering the MCP server           | Tokens |
 | ------------------------------------ | -----: |
-| Four tool definitions, every session |    833 |
+| Four tool definitions, every session |  1,122 |
 
-That is the entry fee, paid in the client's system prompt whether or not the model ever asks about knowledge, and it does not change with corpus size. It costs about one search result. Worth it when knowledge is consulted repeatedly, which is the same conclusion the tip above reaches, now with a number on it.
+That is the entry fee, paid in the client's system prompt whether or not the model ever asks about knowledge, and it does not change with corpus size. The slicing parameters on `get` are 229 tokens of it, repaid the first time one window replaces one chapter; the newest sixty are the `pos` column's explanation, the tenant's own strategy advice, and the `stale` status — repaid by one avoided capped read about sixty times over. Worth it when knowledge is consulted repeatedly, which is the same conclusion the tip above reaches, now with a number on it.
 
 ## CLI
 
@@ -655,7 +711,7 @@ That is the entry fee, paid in the client's system prompt whether or not the mod
 
 `query` takes `manifest`, `snapshot`, `search` and `get` on the read side, and `source`, `read`, `write`, `delete`, `delete-bundle` and `sync` on the write side.
 
-Useful options: `--data` (store root), `--tenant`, `--section`, `--k`, `--summary-width`, `--strict` to exit non-zero on any diagnostic, `--dry-run` for `gc`. For `serve`: `--socket`, or `--host` and `--port` for TCP, `--tls-cert` and `--tls-key` for TLS, and `--debounce` to coalesce filesystem events. For `token`: `--tenant` and `--write`. Run `langonrock --help` for the rest.
+Useful options: `--data` (store root), `--tenant`, `--section`, `--offset`, `--limit`, `--find`, `--k`, `--summary-width`, `--strict` to exit non-zero on any diagnostic, `--dry-run` for `gc`. For `serve`: `--socket`, or `--host` and `--port` for TCP, `--tls-cert` and `--tls-key` for TLS, and `--debounce` to coalesce filesystem events. For `token`: `--tenant` and `--write`. Run `langonrock --help` for the rest.
 
 Without `--data`, the store lives in the platform data directory: `$XDG_DATA_HOME/langonrock` on Linux, `~/Library/Application Support/langonrock` on macOS, `%LOCALAPPDATA%\langonrock` on Windows. `$LANGONROCK_DATA` overrides it.
 

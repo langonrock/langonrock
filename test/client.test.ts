@@ -3,7 +3,12 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { connect } from '../src/client/client.ts'
+import {
+  FIND_WINDOW,
+  adviceFor,
+  bestWindowStart,
+  connect
+} from '../src/client/client.ts'
 import { serve } from '../src/server/http.ts'
 import { putTenantRoot } from '../src/store/writer.ts'
 
@@ -74,6 +79,21 @@ describe('the client bundles for other runtimes', () => {
     expect(text).not.toContain('Bun.')
     expect(text).not.toContain('node:fs')
     expect(text).not.toContain('node:path')
+  })
+
+  /**
+   * An editor reading a `pos` offset needs the window size that offset opens
+   * and, to quote from what comes back, somewhere to look inside it. Both are
+   * arithmetic over strings, so they belong on this side of the boundary; the
+   * assertions exist so removing them from the entry point fails here rather
+   * than in a downstream build.
+   */
+  test('carries the reading helpers an editor needs', () => {
+    expect(FIND_WINDOW).toBe(2_000)
+    expect(bestWindowStart('a needle in prose', 'needle')).toBe(0)
+    expect(adviceFor('# tenant: acme\nid\tbundle\n')).toContain(
+      'reading it whole is cheaper'
+    )
   })
 })
 

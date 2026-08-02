@@ -94,6 +94,7 @@ describe('serialize', () => {
         grain: '-',
         summary: 's',
         title: '',
+        staleAfter: '',
         links: []
       },
       {
@@ -104,6 +105,7 @@ describe('serialize', () => {
         grain: '-',
         summary: 's',
         title: '',
+        staleAfter: '',
         links: []
       }
     ]
@@ -124,6 +126,7 @@ describe('serialize', () => {
         grain: '-',
         summary: 's',
         title: '',
+        staleAfter: '',
         links: []
       }
     ]

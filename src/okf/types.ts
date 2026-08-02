@@ -15,6 +15,12 @@ export interface Concept {
   summary: string
   /** Frontmatter title. Never a manifest cell; carried for the search index. */
   title: string
+  /**
+   * ISO date after which the concept is no longer trusted, empty when none.
+   * Stored rather than judged: comparing it to the clock at compile time
+   * would make the snapshot bytes depend on the day, so the reader demotes.
+   */
+  staleAfter: string
   links: string[]
 }
 

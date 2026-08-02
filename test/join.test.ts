@@ -84,12 +84,12 @@ describe('a source entry names the concept it becomes', () => {
     expect(byPath.get('sales/tables/customers.md')).toBe('customers')
   })
 
-  test('a file with no frontmatter has no id at all', async () => {
+  test('a plain markdown file gets an id like any concept', async () => {
     const entries = await listSource(source)
     const readme = entries.find(entry => entry.path === 'README.md')
 
     expect(readme).toBeDefined()
-    expect(readme?.id).toBeUndefined()
+    expect(readme?.id).toBe('README')
   })
 
   test('the id follows the tree when a sibling arrives', async () => {
@@ -135,7 +135,7 @@ describe('sync reports what the compiler noticed', () => {
     )
     expect(
       result.diagnostics.some(entry =>
-        entry.message.startsWith('skipped: no frontmatter')
+        entry.message.startsWith('no frontmatter, compiled as plain markdown')
       )
     ).toBe(true)
     expect(result.diagnostics.every(entry => entry.level === 'warn')).toBe(true)
@@ -152,7 +152,10 @@ describe('sync reports what the compiler noticed', () => {
 
     expect(
       result.diagnostics.filter(
-        entry => !entry.message.startsWith('skipped: no frontmatter')
+        entry =>
+          !entry.message.startsWith(
+            'no frontmatter, compiled as plain markdown'
+          )
       )
     ).toEqual([])
   })

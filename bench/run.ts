@@ -1,10 +1,13 @@
 import { rm } from 'node:fs/promises'
 
 import {
+  FIND_WINDOW,
+  GET_LIMIT,
   buildTenantIndex,
   estimateTokens,
   openTenant,
   putTenantRoot,
+  renderConcepts,
   searchTenant
 } from '../src/index.ts'
 import {
@@ -18,7 +21,7 @@ import { average, bill, median, memory, rowIds, score } from './billing.ts'
 import { PROFILES } from './profiles.ts'
 
 import type { TenantIndex, TenantReader } from '../src/index.ts'
-import type { Turn } from './billing.ts'
+import type { Session, Turn } from './billing.ts'
 import type { Corpus } from './okf.ts'
 import type { Question } from './questions.ts'
 
@@ -34,6 +37,8 @@ interface Store {
   resolve: (id: string) => string
   section: Map<string, number>
   whole: Map<string, number>
+  /** Rendered find-window cost per question index, only where find hit. */
+  window: Map<number, number>
 }
 
 interface Target {
@@ -80,24 +85,238 @@ async function conceptCosts(reader: TenantReader, store: Store) {
     for (const target of question.targets) {
       const id = store.resolve(target.id)
       const whole = await reader.get([id])
-      const sliced = await reader.get([id], target.section)
+      const sliced = await reader.get([id], { section: target.section })
 
-      store.whole.set(id, estimateTokens(whole.get(id) ?? ''))
+      store.whole.set(id, estimateTokens(whole.get(id)?.text ?? ''))
       store.section.set(
         `${id}#${target.section}`,
-        estimateTokens(sliced.get(id) ?? whole.get(id) ?? '')
+        estimateTokens(sliced.get(id)?.text ?? whole.get(id)?.text ?? '')
       )
     }
   }
 
   const targets = widest(store.questions)
+  const section = targets[0]?.section
 
   return median(20, () =>
     reader.get(
       targets.map(target => store.resolve(target.id)),
-      targets[0]?.section
+      section === undefined ? undefined : { section }
     )
   )
+}
+
+/**
+ * What the same questions cost when the store locates the phrase instead of
+ * shipping the document. Billed on the rendered form, frame included, because
+ * the range and match offsets are part of what the model receives. Only a
+ * single-target question whose query occurs literally in the body can be
+ * located, and the count of those is reported so a partial column cannot pass
+ * for a complete one.
+ */
+async function windowCosts(reader: TenantReader, store: Store) {
+  for (const [index, question] of store.questions.entries()) {
+    const target = question.targets[0]
+
+    if (
+      question.manifestOnly ||
+      question.targets.length !== 1 ||
+      target === undefined
+    ) {
+      continue
+    }
+
+    const id = store.resolve(target.id)
+    const found = await reader.get([id], {
+      section: target.section,
+      find: question.named
+    })
+    const slice = found.get(id)
+
+    if (slice !== undefined && (slice.matchCount ?? 0) > 0) {
+      store.window.set(index, estimateTokens(renderConcepts([id], found)))
+    }
+  }
+
+  const first = store.questions.findIndex((_, index) => store.window.has(index))
+
+  if (first === -1) {
+    return null
+  }
+
+  const question = store.questions[first]
+  const target = question?.targets[0]
+
+  if (question === undefined || target === undefined) {
+    return null
+  }
+
+  return median(20, () =>
+    reader.get([store.resolve(target.id)], {
+      section: target.section,
+      find: question.named
+    })
+  )
+}
+
+function posOfRow(tsv: string, id: string): number | undefined {
+  for (const line of tsv.split('\n')) {
+    if (line.startsWith(`${id}\t`)) {
+      const cell = line.slice(line.lastIndexOf('\t') + 1)
+
+      return cell === '-' || cell === '' ? undefined : Number(cell)
+    }
+  }
+
+  return undefined
+}
+
+function inWindow(body: string, pos: number, needle: string): boolean {
+  return body
+    .slice(pos, pos + FIND_WINDOW)
+    .toLowerCase()
+    .includes(needle.toLowerCase())
+}
+
+/** The leading words of the summary, the passage a described query points at. */
+function describedNeedle(question: Question): string {
+  return question.described.replace(/…$/, '').split(/\s+/).slice(0, 6).join(' ')
+}
+
+interface PosCheck {
+  hits: number
+  of: number
+}
+
+/** Counts a question only when its needle occurs literally in the body. */
+function tally(
+  check: PosCheck,
+  body: string,
+  needle: string,
+  pos: number | undefined
+): void {
+  if (!body.toLowerCase().includes(needle.toLowerCase())) {
+    return
+  }
+
+  check.of++
+
+  if (pos !== undefined && inWindow(body, pos, needle)) {
+    check.hits++
+  }
+}
+
+interface PosCosts {
+  posHitNamed: PosCheck
+  posHitDescribed: PosCheck
+  describedCappedSession: Session
+  describedPosSession: Session
+  posFallbacks: number
+}
+
+/**
+ * What `pos` buys, checked rather than assumed. A hit means the wanted
+ * concept's pos window really contains the passage the query pointed at — the
+ * named phrase, or the summary's leading words for a described query — and a
+ * question only enters a denominator when that passage occurs literally in the
+ * body, so a profile whose queries are not quotes reports 0 of 0 rather than a
+ * fake miss. The two described sessions then answer the same questions by
+ * capped document reads and by pos windows; the delta is the feature. Both are
+ * billed on the wanted concept, the same optimistic convention every other
+ * session uses.
+ */
+async function posCosts(
+  reader: TenantReader,
+  store: Store,
+  found: Awaited<ReturnType<typeof retrieval>>
+): Promise<PosCosts> {
+  const named: PosCheck = { hits: 0, of: 0 }
+  const described: PosCheck = { hits: 0, of: 0 }
+  const capped: Turn[] = []
+  const windows: Turn[] = []
+  let fallbacks = 0
+
+  for (const [index, question] of store.questions.entries()) {
+    const id = store.resolve(question.wanted)
+    const searchTokens = estimateTokens(found.describedResults[index] ?? '')
+    const searchTurn: Turn = {
+      parts: [{ key: `ds:${index}`, tokens: searchTokens }]
+    }
+
+    capped.push(searchTurn)
+    windows.push(searchTurn)
+
+    if (question.manifestOnly) {
+      continue
+    }
+
+    const body = (await reader.get([id])).get(id)?.text ?? ''
+    const describedPos = posOfRow(found.describedResults[index] ?? '', id)
+
+    tally(
+      named,
+      body,
+      question.named,
+      posOfRow(found.namedResults[index] ?? '', id)
+    )
+    tally(described, body, describedNeedle(question), describedPos)
+
+    const cappedRead = renderConcepts(
+      [id],
+      await reader.get([id], { limit: GET_LIMIT })
+    )
+    const cappedTurn: Turn = {
+      parts: [{ key: `dcap:${id}`, tokens: estimateTokens(cappedRead) }]
+    }
+
+    capped.push(cappedTurn)
+
+    if (describedPos === undefined) {
+      fallbacks++
+      windows.push(cappedTurn)
+    } else {
+      const windowRead = renderConcepts(
+        [id],
+        await reader.get([id], { offset: describedPos, limit: FIND_WINDOW })
+      )
+
+      windows.push({
+        parts: [{ key: `dwin:${index}`, tokens: estimateTokens(windowRead) }]
+      })
+    }
+  }
+
+  return {
+    posHitNamed: named,
+    posHitDescribed: described,
+    describedCappedSession: bill(capped),
+    describedPosSession: bill(windows),
+    posFallbacks: fallbacks
+  }
+}
+
+/**
+ * The blowup the cap exists for: the single largest concept read naively,
+ * against the same read through the MCP default limit.
+ */
+async function largestRead(reader: TenantReader) {
+  let largestId = ''
+  let largestBody = ''
+
+  for (const [id, body] of await reader.bodies()) {
+    if (body.length > largestBody.length) {
+      largestId = id
+      largestBody = body
+    }
+  }
+
+  const capped = await reader.get([largestId], { limit: GET_LIMIT })
+
+  return {
+    largestId,
+    largestWholeTokens: estimateTokens(largestBody),
+    largestCappedTokens: estimateTokens(renderConcepts([largestId], capped))
+  }
 }
 
 async function indexCosts(reader: TenantReader, probe: string) {
@@ -109,36 +328,46 @@ async function indexCosts(reader: TenantReader, probe: string) {
   return {
     built,
     indexBuildMs,
-    queryMs: await median(20, async () => searchTenant(built, probe, { k: K })),
+    queryMs: await median(20, () =>
+      searchTenant(built, probe, { k: K }, reader.get)
+    ),
     indexMb: after.heap - before.heap,
     rssMb: after.rss
   }
 }
 
-function retrieval(store: Store) {
+async function retrieval(store: Store, reader: TenantReader) {
   const { built, questions } = store
   const wanted = questions.map(question => store.resolve(question.wanted))
   const ranked = (query: (q: Question) => string, expand: boolean) =>
-    questions.map(question =>
-      rowIds(searchTenant(built, query(question), { k: K, expand }))
+    Promise.all(
+      questions.map(async question =>
+        rowIds(
+          await searchTenant(
+            built,
+            query(question),
+            { k: K, expand },
+            reader.get
+          )
+        )
+      )
+    )
+  const results = (query: (q: Question) => string) =>
+    Promise.all(
+      questions.map(question =>
+        searchTenant(built, query(question), { k: K }, reader.get)
+      )
     )
 
+  const namedResults = await results(q => q.named)
+
   return {
-    named: score(
-      ranked(q => q.named, false),
-      wanted
-    ),
-    namedExpanded: score(
-      ranked(q => q.named, true),
-      wanted
-    ),
-    described: score(
-      ranked(q => q.described, false),
-      wanted
-    ),
-    searchCosts: questions.map(question =>
-      estimateTokens(searchTenant(built, question.named, { k: K }))
-    )
+    named: score(await ranked(q => q.named, false), wanted),
+    namedExpanded: score(await ranked(q => q.named, true), wanted),
+    described: score(await ranked(q => q.described, false), wanted),
+    namedResults,
+    describedResults: await results(q => q.described),
+    searchCosts: namedResults.map(estimateTokens)
   }
 }
 
@@ -190,6 +419,35 @@ function searchTurns(store: Store, costs: number[]): Turn[] {
 
     return turns
   })
+}
+
+/**
+ * Search first, then locate instead of fetch: the fetch turn carries the find
+ * window rather than the document. Undefined when any question could not be
+ * located, so the session is only ever compared like for like.
+ */
+function windowTurns(store: Store, costs: number[]): Turn[] | undefined {
+  const turns: Turn[] = []
+
+  for (const [index, question] of store.questions.entries()) {
+    turns.push({
+      parts: [{ key: `search:${index}`, tokens: costs[index] ?? 0 }]
+    })
+
+    if (question.manifestOnly) {
+      continue
+    }
+
+    const window = store.window.get(index)
+
+    if (window === undefined) {
+      return undefined
+    }
+
+    turns.push({ parts: [{ key: `window:${index}`, tokens: window }] })
+  }
+
+  return turns
 }
 
 function okfTurns(
@@ -301,14 +559,18 @@ interface Report {
   compiled: Awaited<ReturnType<typeof compile>>
   indexed: Awaited<ReturnType<typeof indexCosts>>
   okf: Awaited<ReturnType<typeof okfSide>>
-  found: ReturnType<typeof retrieval>
+  found: Awaited<ReturnType<typeof retrieval>>
   store: Store
+  posed: PosCosts
   getMs: number
+  findMs: number | null
+  largest: Awaited<ReturnType<typeof largestRead>>
 }
 
 function report(input: Report): string {
   const { name, corpus, compiled, indexed, okf, found, store, getMs } = input
   const targets = store.questions.flatMap(question => question.targets)
+  const windowed = windowTurns(store, found.searchCosts)
 
   return `${JSON.stringify({
     profile: name,
@@ -323,6 +585,13 @@ function report(input: Report): string {
     okfSession: bill(okfTurns(store.questions, okf.indexTokens, okf.tokensOf)),
     storeSession: bill(storeTurns(store)),
     searchSession: bill(searchTurns(store, found.searchCosts)),
+    windowSession: windowed === undefined ? null : bill(windowed),
+    locatable: store.window.size,
+    describedCappedSession: input.posed.describedCappedSession,
+    describedPosSession: input.posed.describedPosSession,
+    posFallbacks: input.posed.posFallbacks,
+    posHitNamed: input.posed.posHitNamed,
+    posHitDescribed: input.posed.posHitDescribed,
     okfConceptTokens: average(targets.map(t => okf.tokensOf(t.id))),
     wholeConceptTokens: average(
       targets.map(t => store.whole.get(store.resolve(t.id)) ?? 0)
@@ -332,12 +601,16 @@ function report(input: Report): string {
         t => store.section.get(`${store.resolve(t.id)}#${t.section}`) ?? 0
       )
     ),
+    windowConceptTokens:
+      store.window.size === 0 ? null : average([...store.window.values()]),
+    ...input.largest,
     searchTokens: average(found.searchCosts),
     compileMs: compiled.compileMs,
     openMs: compiled.openMs,
     manifestMs: compiled.manifestMs,
     sliceMs: compiled.sliceMs,
     getMs,
+    findMs: input.findMs,
     indexBuildMs: indexed.indexBuildMs,
     queryMs: indexed.queryMs,
     storeIndexMb: indexed.indexMb,
@@ -379,11 +652,15 @@ async function main(): Promise<void> {
     manifestTokens: compiled.manifestTokens,
     resolve: id => (ids.has(id) ? id : `${bundleOf.get(id) ?? ''}/${id}`),
     section: new Map(),
-    whole: new Map()
+    whole: new Map(),
+    window: new Map()
   }
 
   const getMs = await conceptCosts(compiled.reader, store)
-  const found = retrieval(store)
+  const findMs = await windowCosts(compiled.reader, store)
+  const largest = await largestRead(compiled.reader)
+  const found = await retrieval(store, compiled.reader)
+  const posed = await posCosts(compiled.reader, store, found)
   const okf = await okfSide(corpus, store.questions, profile.probe)
   const line = report({
     name,
@@ -393,7 +670,10 @@ async function main(): Promise<void> {
     okf,
     found,
     store,
-    getMs
+    posed,
+    getMs,
+    findMs,
+    largest
   })
 
   await rm(SOURCE, { recursive: true, force: true })

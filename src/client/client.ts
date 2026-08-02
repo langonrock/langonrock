@@ -6,9 +6,21 @@ import type { Connection } from '../types.ts'
 export { parseDsn } from './dsn.ts'
 export { remoteConnection } from './remote.ts'
 
+/**
+ * Reading helpers that are arithmetic over strings the server already sent, so
+ * they cost this entry point nothing: sizing the window a `pos` offset opens,
+ * locating that window in text a client already holds, and reaching the same
+ * manifest-or-search conclusion the MCP server states in its tool description.
+ */
+export { ADVICE_RATIO, adviceFor } from '../search/advice.ts'
+export { bestWindowStart } from '../search/window.ts'
+export { FIND_WINDOW } from '../store/slice.ts'
+
 export type { Target, Transport } from './dsn.ts'
 export type {
+  ConceptSlice,
   Connection,
+  GetOptions,
   SearchOptions,
   SourceEntry,
   SourceFile,

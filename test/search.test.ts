@@ -18,6 +18,10 @@ const FIXTURE = `${import.meta.dir}/fixtures/sales`
 
 let scratch = ''
 let built: TenantIndex
+let reader: Awaited<ReturnType<typeof openTenant>>
+
+/** For indexes built by hand with no store behind them: every pos is `-`. */
+const none = async () => new Map()
 
 beforeAll(async () => {
   scratch = await mkdtemp(join(tmpdir(), 'lr-search-'))
@@ -25,7 +29,8 @@ beforeAll(async () => {
   const root = join(scratch, 'data')
 
   await putBundle(FIXTURE, { root, tenant: 'acme', bundle: 'sales' })
-  built = await buildTenantIndex(await openTenant(root, 'acme'))
+  reader = await openTenant(root, 'acme')
+  built = await buildTenantIndex(reader)
 })
 
 afterAll(async () => {
@@ -247,26 +252,33 @@ describe('parseManifest', () => {
 })
 
 describe('searchTenant', () => {
-  test('finds a concept by a word that only its description contains', () => {
-    expect(ids(searchTenant(built, 'churned'))).toContain('customers')
+  test('finds a concept by a word that only its description contains', async () => {
+    expect(ids(await searchTenant(built, 'churned', {}, reader.get))).toContain(
+      'customers'
+    )
   })
 
-  test('expands one hop through the link graph', () => {
-    const result = searchTenant(built, 'churned')
+  test('expands one hop through the link graph', async () => {
+    const result = await searchTenant(built, 'churned', {}, reader.get)
 
     expect(result).toContain('1 direct, 1 linked')
     expect(ids(result)).toEqual(['customers', 'tables/orders'])
   })
 
-  test('can be told not to expand', () => {
-    const result = searchTenant(built, 'churned', { expand: false })
+  test('can be told not to expand', async () => {
+    const result = await searchTenant(
+      built,
+      'churned',
+      { expand: false },
+      reader.get
+    )
 
     expect(result).toContain('0 linked')
     expect(ids(result)).toEqual(['customers'])
   })
 
-  test('returns manifest rows, never concept bodies', () => {
-    const result = searchTenant(built, 'orders')
+  test('returns manifest rows, never concept bodies', async () => {
+    const result = await searchTenant(built, 'orders', {}, reader.get)
     const lines = result.split('\n')
     const columns = lines.findIndex(line => line.startsWith('id\t'))
 
@@ -277,20 +289,25 @@ describe('searchTenant', () => {
     )
   })
 
-  test('carries the query and the tenant header for the reader', () => {
-    const result = searchTenant(built, 'orders grain')
+  test('carries the query and the tenant header for the reader', async () => {
+    const result = await searchTenant(built, 'orders grain', {}, reader.get)
 
     expect(result).toContain('# tenant: acme')
     expect(result).toContain('# query: orders grain')
   })
 
-  test('honours k before expansion', () => {
-    const narrow = searchTenant(built, 'orders', { k: 1, expand: false })
+  test('honours k before expansion', async () => {
+    const narrow = await searchTenant(
+      built,
+      'orders',
+      { k: 1, expand: false },
+      reader.get
+    )
 
     expect(ids(narrow)).toHaveLength(1)
   })
 
-  test('caps expansion at k so one hub cannot flood the result', () => {
+  test('caps expansion at k so one hub cannot flood the result', async () => {
     const hub = parseManifest(
       [
         '# tenant: acme',
@@ -308,13 +325,13 @@ describe('searchTenant', () => {
       index: buildIndex([{ id: 'hub', text: 'hub dataset' }])
     }
 
-    const result = searchTenant(index, 'hub', { k: 2 })
+    const result = await searchTenant(index, 'hub', { k: 2 }, none)
 
     expect(result).toContain('1 direct, 2 linked')
     expect(ids(result)).toHaveLength(3)
   })
 
-  test('ranks an expansion target linked by several hits first', () => {
+  test('ranks an expansion target linked by several hits first', async () => {
     const graph = parseManifest(
       [
         '# tenant: acme',
@@ -335,20 +352,49 @@ describe('searchTenant', () => {
       ])
     }
 
-    const result = ids(searchTenant(index, 'alpha', { k: 2 }))
+    const result = ids(await searchTenant(index, 'alpha', { k: 2 }, none))
 
     expect(result.slice(2)).toEqual(['shared', 'lonely'])
   })
 
-  test('returns only headers when nothing matches', () => {
-    const result = searchTenant(built, 'zzzznotaword')
+  test('returns only headers when nothing matches', async () => {
+    const result = await searchTenant(built, 'zzzznotaword', {}, reader.get)
 
     expect(result).toContain('0 direct, 0 linked')
     expect(ids(result)).toEqual([])
   })
 
-  test('is deterministic across repeated calls', () => {
-    expect(searchTenant(built, 'orders')).toBe(searchTenant(built, 'orders'))
+  test('is deterministic across repeated calls', async () => {
+    expect(await searchTenant(built, 'orders', {}, reader.get)).toBe(
+      await searchTenant(built, 'orders', {}, reader.get)
+    )
+  })
+
+  test('appends a pos column and points a body match at its passage', async () => {
+    const result = await searchTenant(built, 'orders', {}, reader.get)
+    const lines = result.split('\n')
+    const columns = lines.find(line => line.startsWith('id\t')) ?? ''
+    const row = lines.find(line => line.startsWith('tables/orders\t')) ?? ''
+    const pos = row.slice(row.lastIndexOf('\t') + 1)
+
+    expect(columns.endsWith('\tpos')).toBe(true)
+    expect(pos).toMatch(/^\d+$/)
+  })
+
+  test('pos is "-" when the query matches only the manifest row', async () => {
+    const result = await searchTenant(built, 'churned', {}, reader.get)
+    const row = result.split('\n').find(line => line.startsWith('customers\t'))
+
+    expect(row?.endsWith('\t-')).toBe(true)
+  })
+
+  test('linked rows carry no pos', async () => {
+    const result = await searchTenant(built, 'churned', {}, reader.get)
+    const linked = result
+      .split('\n')
+      .find(line => line.startsWith('tables/orders\t'))
+
+    expect(linked?.endsWith('\t-')).toBe(true)
   })
 
   test('finds a concept by a title the compiler stripped', async () => {
@@ -364,8 +410,11 @@ describe('searchTenant', () => {
 
     await putBundle(dir, { root, tenant: 'titled', bundle: 'recipes' })
 
-    const titled = await buildTenantIndex(await openTenant(root, 'titled'))
+    const titledReader = await openTenant(root, 'titled')
+    const titled = await buildTenantIndex(titledReader)
 
-    expect(ids(searchTenant(titled, 'rabbit soup'))).toEqual(['recipe_181'])
+    expect(
+      ids(await searchTenant(titled, 'rabbit soup', {}, titledReader.get))
+    ).toEqual(['recipe_181'])
   })
 })
