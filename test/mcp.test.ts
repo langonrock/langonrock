@@ -6,7 +6,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { open } from '../src/client/connection.ts'
-import { GET_LIMIT, MANIFEST_URI, createMcpServer } from '../src/mcp/server.ts'
+import {
+  GET_LIMIT,
+  MANIFEST_URI,
+  adviceFor,
+  createMcpServer
+} from '../src/mcp/server.ts'
 import { putBundle } from '../src/store/writer.ts'
 
 const FIXTURE = `${import.meta.dir}/fixtures/sales`
@@ -328,5 +333,62 @@ describe('stdio transport', () => {
     await proc.exited
 
     expect(await new Response(proc.stderr).text()).toContain('over stdio')
+  })
+})
+
+describe('strategy advice', () => {
+  const row = (id: number) =>
+    `concept_${id}\tsales\ttable\t-\t-\tOne row per something or other.\t-`
+  const manifestOf = (rows: number) =>
+    `${[
+      '# tenant: acme',
+      '# bundles: sales',
+      'id\tbundle\tkind\tstatus\tgrain\tsummary\tlinks',
+      ...Array.from({ length: rows }, (_, id) => row(id))
+    ].join('\n')}\n`
+
+  test('a small manifest is advised into the prompt prefix', () => {
+    expect(adviceFor(manifestOf(20))).toContain(
+      'reading it whole is cheaper than searching'
+    )
+  })
+
+  test('a large manifest is advised toward search', () => {
+    expect(adviceFor(manifestOf(2000))).toContain(
+      'prefer "search" over reading it whole'
+    )
+  })
+
+  test('the advice names the manifest cost in round tokens', () => {
+    expect(adviceFor(manifestOf(2000))).toMatch(/~[\d,]+ tokens/)
+  })
+
+  test('is deterministic for the same manifest', () => {
+    expect(adviceFor(manifestOf(500))).toBe(adviceFor(manifestOf(500)))
+  })
+
+  test('reaches the client inside the manifest tool description', async () => {
+    const [clientSide, serverSide] = InMemoryTransport.createLinkedPair()
+    const advised = new Client({ name: 'test', version: '0.0.0' })
+
+    await Promise.all([
+      createMcpServer(open(dsn), 'Advice sentence under test.').connect(
+        serverSide
+      ),
+      advised.connect(clientSide)
+    ])
+
+    const { tools } = await advised.listTools()
+    const manifest = tools.find(tool => tool.name === 'manifest')
+
+    expect(manifest?.description).toEndWith('Advice sentence under test.')
+    await advised.close()
+  })
+
+  test('stays absent when no advice is given', async () => {
+    const { tools } = await client.listTools()
+    const manifest = tools.find(tool => tool.name === 'manifest')
+
+    expect(manifest?.description).not.toContain('tokens;')
   })
 })

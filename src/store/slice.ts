@@ -21,7 +21,7 @@ export const MATCH_CAP = 20
  * every mapping was one-to-one, so indexes align; otherwise the caller falls
  * back to searching the original text case-sensitively.
  */
-function folded(text: string): string | undefined {
+export function folded(text: string): string | undefined {
   const lowered = text.toLowerCase()
 
   return lowered.length === text.length ? lowered : undefined

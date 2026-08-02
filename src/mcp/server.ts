@@ -3,6 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 
 import { open } from '../client/connection.ts'
+import { estimateTokens } from '../compile/tokens.ts'
 import { renderConcepts } from '../store/slice.ts'
 
 import type { Connection } from '../client/connection.ts'
@@ -25,7 +26,7 @@ const MANIFEST_DESCRIPTION = `Read the tenant's knowledge manifest: one dense TS
 
 Call this before anything else whenever you need to know what knowledge exists. It is the index: pick ids from it, then fetch those ids with "get". Never guess an id.
 
-A status cell other than "-" means the concept is not current, for example "deprecated" or "draft"; prefer a current concept and say so if you use one that is not.
+A status cell other than "-" means the concept is not current, for example "deprecated", "draft", or "stale" for one past its stale_after date; prefer a current concept and say so if you use one that is not.
 
 Pass "bundle" to read one bundle instead of the whole tenant. On a large tenant the whole manifest can be too big to be worth reading, so narrow with "bundle" when you know the domain, or use "search" when you do not.`
 
@@ -39,13 +40,49 @@ When the question is where the text says something, pass "find" with a literal p
 
 const SEARCH_DESCRIPTION = `Rank concepts by relevance to a query and return their manifest rows, not their bodies.
 
-Reach for this instead of reading the whole manifest when the tenant is large, or when you do not already know which concept holds the answer. The result is the same TSV shape as "manifest", narrowed: pick ids from it and fetch them with "get", passing "find" to "get" when what you want is a passage inside a hit rather than the document. Results also include concepts one link away from the top matches, which is usually where the join partner, parent dataset, or metric definition lives.
+Reach for this instead of reading the whole manifest when the tenant is large, or when you do not already know which concept holds the answer. The result is the same TSV shape as "manifest" plus a trailing "pos" column: the character offset where your query's words cluster densest in that concept, "-" when they only match its manifest row. To read the passage instead of the document, call "get" with that id and {offset: pos, limit: 2000}. Results also include concepts one link away from the top matches, which is usually where the join partner, parent dataset, or metric definition lives.
 
 Pass "bundle" to rank only within one bundle.`
 
 const SNAPSHOT_DESCRIPTION = `Return the current snapshot digest and concept count.
 
 Call this to check whether the knowledge base changed since you last read the manifest. An unchanged digest means the manifest you already have is still current.`
+
+export const ADVICE_RATIO = 20
+
+/**
+ * Whether to read the whole manifest or to search first is a property of the
+ * corpus, and the store can compute it instead of leaving the model to guess.
+ * The cut compares the manifest against one estimated search result: across
+ * the eight bench profiles, manifest-first wins every corpus where the whole
+ * manifest costs up to ~10x a result and search-first wins from ~28x up, so
+ * 20 sits in the gap and classifies all eight correctly. Deterministic: same
+ * manifest, same advice.
+ */
+export function adviceFor(manifest: string): string {
+  const lines = manifest.split('\n').filter(line => line !== '')
+  const columns = lines.find(line => line.startsWith('id\t')) ?? ''
+  const rows = lines.filter(
+    line => !line.startsWith('#') && !line.startsWith('id\t')
+  )
+  const tokens = Number(estimateTokens(manifest).toPrecision(2))
+  const label = tokens.toLocaleString('en-US')
+  const whole = `This tenant's manifest measures ~${label} tokens; reading it whole is cheaper than searching.`
+
+  if (rows.length === 0) {
+    return whole
+  }
+
+  const meanRow =
+    rows.reduce((sum, row) => sum + row.length + 1, 0) / rows.length
+  // One result: a few header lines, the columns line, and up to k direct
+  // plus k linked rows at the default k of 8.
+  const resultChars = 120 + columns.length + meanRow * Math.min(16, rows.length)
+
+  return manifest.length > ADVICE_RATIO * resultChars
+    ? `This tenant's manifest measures ~${label} tokens; prefer "search" over reading it whole.`
+    : whole
+}
 
 function text(body: string): CallToolResult {
   return { content: [{ type: 'text', text: body }] }
@@ -57,12 +94,21 @@ function failure(cause: unknown): CallToolResult {
   return { content: [{ type: 'text', text: message }], isError: true }
 }
 
-function registerManifest(server: McpServer, connection: Connection): void {
+function registerManifest(
+  server: McpServer,
+  connection: Connection,
+  advice?: string
+): void {
+  const description =
+    advice === undefined
+      ? MANIFEST_DESCRIPTION
+      : `${MANIFEST_DESCRIPTION}\n\n${advice}`
+
   server.registerTool(
     'manifest',
     {
       title: 'Read the knowledge manifest',
-      description: MANIFEST_DESCRIPTION,
+      description,
       inputSchema: {
         bundle: z
           .string()
@@ -86,7 +132,7 @@ function registerManifest(server: McpServer, connection: Connection): void {
     MANIFEST_URI,
     {
       title: 'Knowledge manifest',
-      description: MANIFEST_DESCRIPTION,
+      description,
       mimeType: 'text/tab-separated-values'
     },
     async uri => ({
@@ -231,10 +277,13 @@ function registerSnapshot(server: McpServer, connection: Connection): void {
  * system prompt, so each one has to earn its place: manifest and search both
  * narrow, get fetches, snapshot invalidates.
  */
-export function createMcpServer(connection: Connection): McpServer {
+export function createMcpServer(
+  connection: Connection,
+  advice?: string
+): McpServer {
   const server = new McpServer({ name: 'langonrock', version: '0.0.0' })
 
-  registerManifest(server, connection)
+  registerManifest(server, connection, advice)
   registerSearch(server, connection)
   registerGet(server, connection)
   registerSnapshot(server, connection)
@@ -245,9 +294,19 @@ export function createMcpServer(connection: Connection): McpServer {
 /**
  * The stdio transport owns stdout: anything else written there corrupts the
  * JSON-RPC framing. Diagnostics go to stderr only.
+ *
+ * The advice is computed once, from the snapshot current at startup, and a
+ * client reads tool descriptions once per session: a tenant that changes
+ * shape underneath a running server keeps the old advice until the next
+ * session. It is a hint about corpus shape, and shape moves slowly.
  */
 export async function serveMcp(dsn: string): Promise<void> {
-  const server = createMcpServer(open(dsn))
+  const connection = open(dsn)
+  const advice = await connection
+    .manifest()
+    .then(adviceFor)
+    .catch(() => undefined)
+  const server = createMcpServer(connection, advice)
   const transport = new StdioServerTransport()
 
   await server.connect(transport)

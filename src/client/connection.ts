@@ -93,7 +93,9 @@ function embeddedConnection(target: Target): Connection {
     manifest: async bundle => (await cache(tenant)).manifest(bundle),
     get: async (ids, options) => (await cache(tenant)).get(ids, options),
     search: async (query, options) =>
-      searchTenant(await indexes(tenant), query, options ?? {}),
+      searchTenant(await indexes(tenant), query, options ?? {}, async ids =>
+        (await cache(tenant)).get(ids)
+      ),
     listSource: async () => listSource(await sourceDir()),
     readSource: async (bundle, path) =>
       readSource(await sourceDir(), bundle, path),

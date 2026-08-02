@@ -3,6 +3,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { readdir, rm, stat } from 'node:fs/promises'
 
 import {
+  adviceFor,
   buildTenantIndex,
   createMcpServer,
   estimateTokens,
@@ -96,16 +97,21 @@ async function coldVersusWarm(probe: string) {
   const coldMs = await median(5, async () => {
     const reader = await openTenant(STORE, TENANT)
 
-    searchTenant(await buildTenantIndex(reader), probe, { k: 8 })
+    await searchTenant(
+      await buildTenantIndex(reader),
+      probe,
+      { k: 8 },
+      reader.get
+    )
   })
   const reader = await openTenant(STORE, TENANT)
   const index = await buildTenantIndex(reader)
 
   return {
     coldMs,
-    warmMs: await median(50, async () => {
-      searchTenant(index, probe, { k: 8 })
-    }),
+    warmMs: await median(50, () =>
+      searchTenant(index, probe, { k: 8 }, reader.get)
+    ),
     warmManifestMs: await median(50, () => reader.manifest())
   }
 }
@@ -152,9 +158,10 @@ async function mcpCost(probe: string) {
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair()
   const client = new Client({ name: 'bench', version: '0.0.0' })
   const direct = open(`okf://${STORE}?tenant=${TENANT}`)
+  const advice = adviceFor(await direct.manifest())
 
   await Promise.all([
-    createMcpServer(open(`okf://${STORE}?tenant=${TENANT}`)).connect(
+    createMcpServer(open(`okf://${STORE}?tenant=${TENANT}`), advice).connect(
       serverSide
     ),
     client.connect(clientSide)
