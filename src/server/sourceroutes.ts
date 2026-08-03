@@ -6,6 +6,7 @@ import {
   readSource,
   writeSource
 } from '../store/source.ts'
+import { assertBundleName, assertConceptPath } from '../store/sourcepaths.ts'
 import { HttpError } from './errors.ts'
 
 /** A concept is prose. Anything this large is a mistake or an attack. */
@@ -22,7 +23,11 @@ export const MAX_BYTES = 1_000_000
 export const MAX_UPLOAD_BYTES = MAX_BYTES * 8
 
 export interface SourceContext {
-  dir: string
+  /**
+   * Resolved late, and with `create` only from the one call that has already
+   * validated everything else, so a refused write leaves no tenant behind.
+   */
+  dir: (create: boolean) => Promise<string>
   write: boolean
   bundle: string | undefined
   path: string | undefined
@@ -45,13 +50,20 @@ function quoted(hash: string): string {
  * merely discouraged, which is the same choice the server makes by refusing to
  * bind TCP without tokens.
  */
+/**
+ * `If-None-Match: *` is the write that asserts its concept is new. It is also
+ * the only write that may bring a tenant into existence, which is why the
+ * question is asked once and answered here rather than from the method.
+ */
+function creates(request: Request): boolean {
+  return request.headers.get('if-none-match') === '*'
+}
+
 function assertPrecondition(
   request: Request,
   current: string | undefined
 ): void {
-  const ifNoneMatch = request.headers.get('if-none-match')
-
-  if (ifNoneMatch === '*') {
+  if (creates(request)) {
     if (current !== undefined) {
       throw new HttpError(412, 'concept already exists')
     }
@@ -96,7 +108,7 @@ async function bodyOf(request: Request): Promise<string> {
 
 async function readOne(context: SourceContext): Promise<Response> {
   const found = await readSource(
-    context.dir,
+    await context.dir(false),
     context.bundle ?? '',
     context.path ?? ''
   )
@@ -113,23 +125,25 @@ async function readOne(context: SourceContext): Promise<Response> {
   })
 }
 
+/**
+ * Everything that can refuse this write is settled before the directory is
+ * resolved: the token's scope, the shape of the path, and the size of the body.
+ * Only then may a tenant be created, so a refusal never leaves one behind.
+ */
 async function writeOne(
   request: Request,
   context: SourceContext
 ): Promise<Response> {
   assertWritable(context)
 
-  const bundle = context.bundle ?? ''
-  const path = context.path ?? ''
+  const bundle = assertBundleName(context.bundle ?? '')
+  const path = assertConceptPath(context.path ?? '')
+  const content = await bodyOf(request)
+  const dir = await context.dir(creates(request))
 
-  assertPrecondition(request, await hashOf(context.dir, bundle, path))
+  assertPrecondition(request, await hashOf(dir, bundle, path))
 
-  const hash = await writeSource(
-    context.dir,
-    bundle,
-    path,
-    await bodyOf(request)
-  )
+  const hash = await writeSource(dir, bundle, path, content)
 
   return new Response(null, { status: 204, headers: { etag: quoted(hash) } })
 }
@@ -140,16 +154,17 @@ async function deleteOne(
 ): Promise<Response> {
   assertWritable(context)
 
+  const dir = await context.dir(false)
   const bundle = context.bundle ?? ''
   const path = context.path ?? ''
-  const current = await hashOf(context.dir, bundle, path)
+  const current = await hashOf(dir, bundle, path)
 
   if (current === undefined) {
     throw new HttpError(404, 'no such concept')
   }
 
   assertPrecondition(request, current)
-  await deleteSource(context.dir, bundle, path)
+  await deleteSource(dir, bundle, path)
 
   return new Response(null, { status: 204 })
 }
@@ -163,7 +178,7 @@ export async function sourceResponse(
       throw new HttpError(405, 'the source listing is read only')
     }
 
-    return Response.json(await listSource(context.dir))
+    return Response.json(await listSource(await context.dir(false)))
   }
 
   if (context.path === undefined || context.path === '') {
@@ -205,7 +220,7 @@ export async function bundlesResponse(
     throw new HttpError(400, 'a bundle name is required')
   }
 
-  if (!(await deleteBundle(context.dir, context.bundle))) {
+  if (!(await deleteBundle(await context.dir(false), context.bundle))) {
     throw new HttpError(404, 'no such bundle')
   }
 

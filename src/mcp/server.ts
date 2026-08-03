@@ -64,14 +64,16 @@ const SNAPSHOT_DESCRIPTION = `Return the current snapshot digest and concept cou
 
 Call this to check whether the knowledge base changed since you last read the manifest. An unchanged digest means the manifest you already have is still current.`
 
+function messageOf(cause: unknown): string {
+  return cause instanceof Error ? cause.message : String(cause)
+}
+
 function text(body: string): CallToolResult {
   return { content: [{ type: 'text', text: body }] }
 }
 
 function failure(cause: unknown): CallToolResult {
-  const message = cause instanceof Error ? cause.message : String(cause)
-
-  return { content: [{ type: 'text', text: message }], isError: true }
+  return { content: [{ type: 'text', text: messageOf(cause) }], isError: true }
 }
 
 function registerManifest(
@@ -240,49 +242,84 @@ function registerSearch(server: McpServer, connection: Connection): void {
 
 /**
  * A model has no hash to offer, and asking it to fetch one first would cost a
- * round trip on every write. So the refusal carries the hash the retry needs,
+ * round trip on every write. So a refusal carries the hash the retry needs,
  * which turns a lost update into one extra call the first time a concept is
  * replaced, and none at all when it is created.
- *
- * The lookup runs on any failure rather than on a recognised conflict: the
- * embedded path throws its own message and the remote path throws a 412, and
- * matching either string would break the moment one of them was reworded.
  */
-async function withCurrentHash(
+function retryLine(hash: string): string {
+  return `retry with replaces: "${hash}"`
+}
+
+/**
+ * The lookup runs on any failed change rather than on a recognised conflict:
+ * the embedded path throws its own message and the remote path throws a 412,
+ * and matching either string would break the moment one was reworded.
+ */
+async function refused(
   connection: Connection,
   bundle: string,
   path: string,
   cause: unknown
-): Promise<string> {
-  const message = cause instanceof Error ? cause.message : String(cause)
+): Promise<CallToolResult> {
   const current = await connection
     .readSource(bundle, path)
     .catch(() => undefined)
 
-  return current === undefined
-    ? message
-    : `${message}\nretry with replaces: "${current.hash}"`
+  return failure(
+    new Error(
+      current === undefined
+        ? messageOf(cause)
+        : `${messageOf(cause)}\n${retryLine(current.hash)}`
+    )
+  )
 }
 
 /**
- * Only the diagnostics for the file just written. A tenant's other warnings are
+ * Only the diagnostics for the file just changed. A tenant's other warnings are
  * real but they are not this caller's to act on, and on a large tenant they
  * would bury the one line that is.
  */
-function wroteReport(
-  path: string,
-  hash: string,
-  result: SyncResult,
-  bundle: string
-): string {
-  const mine = result.diagnostics
+function diagnosticsFor(result: SyncResult, path: string): string[] {
+  return result.diagnostics
     .filter(diagnostic => diagnostic.path === path)
     .map(diagnostic => `${diagnostic.level} ${path}: ${diagnostic.message}`)
+}
 
-  return [
-    `wrote ${bundle}/${path} (hash ${hash}), snapshot ${result.snapshot}, ${result.concepts} concepts`,
-    ...mine
-  ].join('\n')
+/**
+ * Both verbs are the same shape: change one concept, recompile, report the new
+ * snapshot. Only the change can fail a precondition, so the recompile is kept
+ * out of that catch. Reporting a failed recompile as a refused change would
+ * hand back the hash of a change that already landed, and the model would
+ * satisfy the precondition and make it again.
+ */
+async function mutate(
+  connection: Connection,
+  bundle: string,
+  path: string,
+  apply: () => Promise<string>
+): Promise<CallToolResult> {
+  let done: string
+
+  try {
+    done = await apply()
+  } catch (cause) {
+    return refused(connection, bundle, path, cause)
+  }
+
+  try {
+    const result = await connection.sync()
+
+    return text(
+      [
+        `${done}, snapshot ${result.snapshot}, ${result.concepts} concepts`,
+        ...diagnosticsFor(result, path)
+      ].join('\n')
+    )
+  } catch (cause) {
+    return failure(
+      new Error(`${done}, but the recompile failed: ${messageOf(cause)}`)
+    )
+  }
 }
 
 function registerWrite(server: McpServer, connection: Connection): void {
@@ -313,8 +350,8 @@ function registerWrite(server: McpServer, connection: Connection): void {
           )
       }
     },
-    async ({ bundle, path, content, replaces }) => {
-      try {
+    async ({ bundle, path, content, replaces }) =>
+      mutate(connection, bundle, path, async () => {
         const hash = await connection.writeSource(
           bundle,
           path,
@@ -322,22 +359,36 @@ function registerWrite(server: McpServer, connection: Connection): void {
           replaces
         )
 
-        return text(wroteReport(path, hash, await connection.sync(), bundle))
-      } catch (cause) {
-        return failure(
-          new Error(await withCurrentHash(connection, bundle, path, cause))
-        )
-      }
-    }
+        return `wrote ${bundle}/${path} (hash ${hash})`
+      })
   )
 }
 
 /**
- * Deleting has no create case, so the hash is required rather than optional and
- * the recovery is the only way to obtain one. Checking for the concept first is
- * what keeps the two refusals apart: a caller who omitted the hash is told the
- * hash, and one aiming at nothing is told there is nothing there.
+ * Deleting has no create case, so an omitted hash is a bad argument rather than
+ * a failed precondition, and it is answered before anything is attempted. The
+ * one lookup it costs is what keeps the two refusals apart: a caller who forgot
+ * the hash is told the hash, and one aiming at nothing is told there is nothing
+ * there.
  */
+async function missingHash(
+  connection: Connection,
+  bundle: string,
+  path: string
+): Promise<CallToolResult> {
+  const current = await connection
+    .readSource(bundle, path)
+    .catch(() => undefined)
+
+  return failure(
+    new Error(
+      current === undefined
+        ? 'concept does not exist'
+        : `deleting needs the hash of the version being removed\n${retryLine(current.hash)}`
+    )
+  )
+}
+
 function registerDelete(server: McpServer, connection: Connection): void {
   server.registerTool(
     'delete',
@@ -357,29 +408,14 @@ function registerDelete(server: McpServer, connection: Connection): void {
           )
       }
     },
-    async ({ bundle, path, replaces }) => {
-      try {
-        if (replaces === undefined) {
-          throw new Error(
-            (await connection.readSource(bundle, path)) === undefined
-              ? 'concept does not exist'
-              : 'deleting needs the hash of the version being removed'
-          )
-        }
+    async ({ bundle, path, replaces }) =>
+      replaces === undefined
+        ? missingHash(connection, bundle, path)
+        : mutate(connection, bundle, path, async () => {
+            await connection.deleteSource(bundle, path, replaces)
 
-        await connection.deleteSource(bundle, path, replaces)
-
-        const result = await connection.sync()
-
-        return text(
-          `deleted ${bundle}/${path}, snapshot ${result.snapshot}, ${result.concepts} concepts`
-        )
-      } catch (cause) {
-        return failure(
-          new Error(await withCurrentHash(connection, bundle, path, cause))
-        )
-      }
-    }
+            return `deleted ${bundle}/${path}`
+          })
   )
 }
 

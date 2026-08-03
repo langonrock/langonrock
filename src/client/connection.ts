@@ -11,6 +11,7 @@ import {
   readSource,
   writeSource
 } from '../store/source.ts'
+import { assertBundleName, assertConceptPath } from '../store/sourcepaths.ts'
 import { putTenantRoot } from '../store/writer.ts'
 import { parseDsn } from './dsn.ts'
 import { remoteConnection } from './remote.ts'
@@ -99,12 +100,19 @@ function embeddedConnection(target: Target): Connection {
     listSource: async () => listSource(await sourceDir()),
     readSource: async (bundle, path) =>
       readSource(await sourceDir(), bundle, path),
-    // The only call that creates its tenant. Reading, listing and deleting all
-    // still refuse an unconfigured tenant, because there is nothing to read
-    // from or delete out of a directory that does not exist, and saying so is
-    // more useful than conjuring an empty one.
+    // The only call that creates its tenant, and only when it is creating a
+    // concept: the path and the bundle are validated first, so a write that was
+    // never going to land leaves no tenant behind. Reading, listing and
+    // deleting still refuse an unconfigured tenant, because there is nothing to
+    // read from or delete out of a directory that does not exist.
     writeSource: async (bundle, path, content, replaces) => {
-      const dir = await ensureSource(root, tenant)
+      assertBundleName(bundle)
+      assertConceptPath(path)
+
+      const dir =
+        replaces === undefined
+          ? await ensureSource(root, tenant)
+          : await sourceDir()
 
       assertReplaces(await hashOf(dir, bundle, path), replaces)
 

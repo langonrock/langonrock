@@ -4,6 +4,7 @@ coverage/
 bench/.cache/
 bench/.corpus/
 bench/.store/
+bench/.mutate/
 *.tnt
 .DS_Store
 .agents/

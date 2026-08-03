@@ -70,17 +70,18 @@ beforeAll(async () => {
   )
 
   const sources = new Map([['acme', source]])
+  const sourceDir = (tenant: string) => sources.get(tenant)
   const sync = async (tenant: string) => putTenantRoot(source, { root, tenant })
 
   if (ON_POSIX) {
-    server = serve({ root, unix: socket, sources, sync })
+    server = serve({ root, unix: socket, sourceDir, sync })
   }
 
   tcp = serve({
     root,
     port: 0,
     hostname: '127.0.0.1',
-    sources,
+    sourceDir,
     sync,
     tokens: new Map([
       ['writer-token', { tenant: 'acme', write: true }],
@@ -444,7 +445,7 @@ describe('the source routes', () => {
     expect(request.headers.get('content-length')).toBeNull()
 
     const refusal = await sourceResponse(request, {
-      dir: source,
+      dir: async () => source,
       write: true,
       bundle: 'sales',
       path: 'tables/streamed.md'
@@ -545,8 +546,8 @@ describe('bootstrapping a tenant from nothing', () => {
       root: bare,
       port: 0,
       hostname: '127.0.0.1',
-      sources: new Map(),
-      ensure: tenant => ensureSource(bare, tenant),
+      sourceDir: (tenant: string, create: boolean) =>
+        create ? ensureSource(bare, tenant) : undefined,
       tokens: new Map([
         ['fresh-token', { tenant: 'fresh', write: true }],
         ['fresh-reader', { tenant: 'fresh', write: false }]
@@ -579,8 +580,8 @@ describe('bootstrapping a tenant from nothing', () => {
       root: untouched,
       port: 0,
       hostname: '127.0.0.1',
-      sources: new Map(),
-      ensure: tenant => ensureSource(untouched, tenant),
+      sourceDir: (tenant: string, create: boolean) =>
+        create ? ensureSource(untouched, tenant) : undefined,
       tokens: new Map([['t', { tenant: 'fresh', write: true }]])
     })
 
@@ -608,13 +609,102 @@ describe('bootstrapping a tenant from nothing', () => {
     expect(response.status).toBe(403)
   })
 
-  test('a server without ensure still refuses', async () => {
+  /**
+   * The tenant is created by the write that succeeds, never by one that was
+   * always going to be refused. Each of these is a different reason to refuse,
+   * and each is settled before the directory is resolved.
+   */
+  describe('a refused write leaves nothing behind', () => {
+    const refuse = async (
+      init: RequestInit,
+      path = '/source/inbox/x.md'
+    ): Promise<number> => {
+      const empty = await mkdtemp(join(tmpdir(), 'lr-refused-'))
+      const other = serve({
+        root: empty,
+        port: 0,
+        hostname: '127.0.0.1',
+        sourceDir: (tenant: string, create: boolean) =>
+          create ? ensureSource(empty, tenant) : undefined,
+        tokens: new Map([
+          ['t', { tenant: 'fresh', write: true }],
+          ['r', { tenant: 'fresh', write: false }]
+        ])
+      })
+
+      try {
+        const response = await fetch(
+          `http://127.0.0.1:${other.port}/v1/fresh${path}`,
+          {
+            ...init,
+            headers: {
+              authorization: 'Bearer t',
+              ...(init.headers as Record<string, string>)
+            }
+          }
+        )
+
+        expect(await Bun.file(`${empty}/sources.json`).exists()).toBe(false)
+
+        return response.status
+      } finally {
+        other.stop(true)
+        await rm(empty, { recursive: true, force: true })
+      }
+    }
+
+    test('a path that is not a concept', async () => {
+      await expect(
+        refuse(
+          { method: 'PUT', headers: { 'if-none-match': '*' }, body: CONCEPT },
+          '/source/inbox/notes.txt'
+        )
+      ).resolves.toBe(404)
+    })
+
+    test('a body past the concept limit', async () => {
+      await expect(
+        refuse({
+          method: 'PUT',
+          headers: { 'if-none-match': '*' },
+          body: 'x'.repeat(MAX_BYTES + 1)
+        })
+      ).resolves.toBe(413)
+    })
+
+    // Only `If-None-Match: *` asserts a new concept, so any other write shape
+    // is answered at the tenant level rather than at the header.
+    test('a write with no precondition at all', async () => {
+      await expect(refuse({ method: 'PUT', body: CONCEPT })).resolves.toBe(409)
+    })
+
+    test('a replacement of a concept that cannot exist', async () => {
+      await expect(
+        refuse({
+          method: 'PUT',
+          headers: { 'if-match': '"deadbeef"' },
+          body: CONCEPT
+        })
+      ).resolves.toBe(409)
+    })
+
+    test('a token that may not write', async () => {
+      await expect(
+        refuse({
+          method: 'PUT',
+          headers: { authorization: 'Bearer r', 'if-none-match': '*' },
+          body: CONCEPT
+        })
+      ).resolves.toBe(403)
+    })
+  })
+
+  test('a server with no source directories still refuses', async () => {
     const closed = await mkdtemp(join(tmpdir(), 'lr-noensure-'))
     const other = serve({
       root: closed,
       port: 0,
       hostname: '127.0.0.1',
-      sources: new Map(),
       tokens: new Map([['t', { tenant: 'fresh', write: true }]])
     })
 
@@ -632,6 +722,21 @@ describe('bootstrapping a tenant from nothing', () => {
     } finally {
       other.stop(true)
       await rm(closed, { recursive: true, force: true })
+    }
+  })
+
+  test('the embedded connection also refuses before it creates', async () => {
+    const empty = await mkdtemp(join(tmpdir(), 'lr-embedded-refused-'))
+
+    try {
+      const connection = open(`okf://${empty}?tenant=typo`)
+
+      await expect(
+        connection.writeSource('inbox', 'notes.txt', CONCEPT)
+      ).rejects.toThrow('must be a .md file')
+      expect(await Bun.file(`${empty}/sources.json`).exists()).toBe(false)
+    } finally {
+      await rm(empty, { recursive: true, force: true })
     }
   })
 

@@ -50,7 +50,7 @@ export async function loadSources(root: string): Promise<Map<string, string>> {
  * Sorted, so a registration that changes nothing leaves the file byte for byte
  * as it was and stays out of the diff of a store kept in git.
  */
-export async function saveSources(
+async function saveSources(
   root: string,
   sources: Map<string, string>
 ): Promise<void> {
@@ -64,7 +64,7 @@ export async function saveSources(
 }
 
 /** Where a tenant nobody configured keeps its Markdown. */
-export function defaultSourceDir(root: string, tenant: string): string {
+function defaultSourceDir(root: string, tenant: string): string {
   return `${root}/sources/${assertTenantId(tenant)}`
 }
 
@@ -74,9 +74,12 @@ export function defaultSourceDir(root: string, tenant: string): string {
  * registers it rather than refusing. Only the tenant the caller was already
  * scoped to is ever created, so this grants no reach it did not have.
  *
- * The lock is held across the read and the write because registering two
- * tenants at once would otherwise be a read-modify-write race, and the loser
- * would silently vanish from the file.
+ * The lock spans the read and the write because registering two tenants at once
+ * is a read-modify-write race that would drop one of them from the file with
+ * nothing to show for it. It is a try-lock rather than a queue: a second
+ * registration arriving mid-flight is refused outright instead of made to wait,
+ * which is loud where the race was silent. Within one process the caller
+ * memoises this, so the refusal only ever reaches two stores sharing a root.
  */
 export async function ensureSource(
   root: string,

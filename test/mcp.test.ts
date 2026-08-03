@@ -10,6 +10,8 @@ import { GET_LIMIT, MANIFEST_URI, createMcpServer } from '../src/mcp/server.ts'
 import { adviceFor } from '../src/search/advice.ts'
 import { putBundle } from '../src/store/writer.ts'
 
+import type { Connection } from '../src/types.ts'
+
 const FIXTURE = `${import.meta.dir}/fixtures/sales`
 const CLI = `${import.meta.dir}/../src/cli.ts`
 
@@ -236,6 +238,63 @@ describe('write', () => {
     const result = await client.callTool({ name: 'manifest', arguments: {} })
 
     expect(firstText(result)).toContain('customers')
+  })
+
+  /**
+   * The write lands on disk and the recompile is what fails. Reporting that as
+   * a refused precondition would hand back the hash of a write that already
+   * happened, and the model would satisfy it and write the same thing again.
+   */
+  describe('when the recompile fails after the write', () => {
+    let failing: Client
+
+    beforeAll(async () => {
+      const [clientSide, serverSide] = InMemoryTransport.createLinkedPair()
+      const underneath = open(`okf://${join(scratch, 'nosync')}?tenant=notes`)
+      const broken: Connection = {
+        ...underneath,
+        sync: () => Promise.reject(new Error('another writer holds the lock'))
+      }
+
+      failing = new Client({ name: 'nosync', version: '0.0.0' })
+
+      await Promise.all([
+        createMcpServer(broken).connect(serverSide),
+        failing.connect(clientSide)
+      ])
+    })
+
+    afterAll(async () => {
+      await failing.close()
+    })
+
+    test('says the write happened and the recompile did not', async () => {
+      const result = await failing.callTool({
+        name: 'write',
+        arguments: {
+          bundle: 'inbox',
+          path: 'kept.md',
+          content: '---\ntype: note\n---\n\nKept.\n'
+        }
+      })
+
+      expect(result.isError).toBe(true)
+      expect(firstText(result)).toContain('wrote inbox/kept.md')
+      expect(firstText(result)).toContain('recompile failed')
+    })
+
+    test('offers no hash to retry a write that already landed', async () => {
+      const result = await failing.callTool({
+        name: 'write',
+        arguments: {
+          bundle: 'inbox',
+          path: 'second.md',
+          content: '---\ntype: note\n---\n\nAlso kept.\n'
+        }
+      })
+
+      expect(firstText(result)).not.toContain('retry with replaces')
+    })
   })
 
   describe('delete', () => {

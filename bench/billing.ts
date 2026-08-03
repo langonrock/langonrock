@@ -70,14 +70,14 @@ export function score(ranked: string[][], wanted: string[]): Score {
 
 export async function median(
   runs: number,
-  fn: () => Promise<unknown>
+  fn: (run: number) => Promise<unknown>
 ): Promise<number> {
   const samples: number[] = []
 
   for (let index = 0; index < runs; index++) {
     const start = Bun.nanoseconds()
 
-    await fn()
+    await fn(index)
     samples.push((Bun.nanoseconds() - start) / 1e6)
   }
 

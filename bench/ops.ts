@@ -25,7 +25,9 @@ import type { Corpus } from './okf.ts'
 const HERE = import.meta.dir
 const SOURCE = `${HERE}/.corpus`
 const STORE = `${HERE}/.store`
+const MUTATE = `${HERE}/.mutate`
 const TENANT = 'ops'
+const MUTATE_TENANT = 'mut'
 const EDITS = 10
 
 async function diskUsage(tenant: string): Promise<{
@@ -148,6 +150,136 @@ async function perTenant(count: number) {
   }
 }
 
+function textOf(result: { content?: unknown }): string {
+  const parts = (result.content ?? []) as { text?: string }[]
+
+  return parts.map(part => part.text ?? '').join('\n')
+}
+
+function hashOffered(result: { content?: unknown }): string {
+  return /retry with replaces: "([0-9a-f]+)"/.exec(textOf(result))?.[1] ?? ''
+}
+
+/**
+ * Counts what a tool call spends underneath itself. A tool call is one turn to
+ * the model, but each connection call is a round trip a remote transport bills,
+ * so the two numbers move independently and only the second one moves with the
+ * implementation.
+ */
+function counting(connection: Connection): {
+  connection: Connection
+  trips: () => number
+  reset: () => void
+} {
+  let trips = 0
+
+  const count = async <T>(run: () => Promise<T>): Promise<T> => {
+    trips++
+
+    return run()
+  }
+
+  return {
+    connection: {
+      ...connection,
+      readSource: (bundle, path) =>
+        count(() => connection.readSource(bundle, path)),
+      writeSource: (bundle, path, content, replaces) =>
+        count(() => connection.writeSource(bundle, path, content, replaces)),
+      deleteSource: (bundle, path, replaces) =>
+        count(() => connection.deleteSource(bundle, path, replaces)),
+      sync: () => count(() => connection.sync())
+    },
+    trips: () => trips,
+    reset: () => {
+      trips = 0
+    }
+  }
+}
+
+/**
+ * What a model actually pays to change knowledge. It holds no hash, so
+ * replacing and deleting are two tool calls each: one refused, one accepted.
+ * The tool calls are fixed by the protocol; the round trips underneath them are
+ * not, and they are what a remote transport bills.
+ */
+async function mcpMutationCost() {
+  await rm(MUTATE, { recursive: true, force: true })
+
+  const counted = counting(open(`okf://${MUTATE}?tenant=${MUTATE_TENANT}`))
+  const [clientSide, serverSide] = InMemoryTransport.createLinkedPair()
+  const client = new Client({ name: 'bench-mutate', version: '0.0.0' })
+
+  await Promise.all([
+    createMcpServer(counted.connection).connect(serverSide),
+    client.connect(clientSide)
+  ])
+
+  const body = '---\ntype: note\n---\n\nBenchmark concept.\n'
+  const write = (path: string, args: Record<string, string> = {}) =>
+    client.callTool({
+      name: 'write',
+      arguments: { bundle: 'inbox', path, content: body, ...args }
+    })
+  const remove = (path: string, args: Record<string, string> = {}) =>
+    client.callTool({
+      name: 'delete',
+      arguments: { bundle: 'inbox', path, ...args }
+    })
+
+  counted.reset()
+
+  const created = await write('one.md')
+  const createTrips = counted.trips()
+
+  counted.reset()
+
+  const refusedWrite = await write('one.md', { content: `${body}\nAgain.\n` })
+  const replaced = await write('one.md', {
+    content: `${body}\nAgain.\n`,
+    replaces: hashOffered(refusedWrite)
+  })
+  const replaceTrips = counted.trips()
+
+  counted.reset()
+
+  const refusedDelete = await remove('one.md')
+  const deleted = await remove('one.md', {
+    replaces: hashOffered(refusedDelete)
+  })
+  const deleteTrips = counted.trips()
+
+  const createMs = await median(25, (run: number) => write(`create${run}.md`))
+  const replaceMs = await median(25, async (run: number) => {
+    const path = `create${run}.md`
+
+    await write(path, {
+      content: `${body}\nRun.\n`,
+      replaces: hashOffered(await write(path, { content: `${body}\nRun.\n` }))
+    })
+  })
+
+  await client.close()
+  await counted.connection.close()
+  await rm(MUTATE, { recursive: true, force: true })
+
+  return {
+    createTrips,
+    replaceTrips,
+    deleteTrips,
+    createTokens: estimateTokens(textOf(created)),
+    refusalTokens: estimateTokens(textOf(refusedWrite)),
+    replaceTokens: estimateTokens(textOf(replaced)),
+    deleteTokens: estimateTokens(textOf(deleted)),
+    deleteRefusalTokens: estimateTokens(textOf(refusedDelete)),
+    createMs,
+    replaceMs,
+    mutationsRefused: [refusedWrite, refusedDelete].filter(
+      result => result.isError === true
+    ).length
+  }
+}
+
 /**
  * The four tool definitions sit in the client's system prompt for the whole
  * session, whether or not the model ever asks about knowledge. That is a fixed
@@ -193,11 +325,10 @@ async function mcpCost(probe: string) {
  */
 async function daemon(corpus: Corpus, probe: string) {
   const socket = `/tmp/lr-ops-${process.pid}.sock`
-  const sources = new Map([[TENANT, SOURCE]])
   const server = serve({
     root: STORE,
     unix: socket,
-    sources,
+    sourceDir: (tenant: string) => (tenant === TENANT ? SOURCE : undefined),
     sync: (tenant: string) => putTenantRoot(SOURCE, { root: STORE, tenant })
   })
   const connection = open(`okf+unix://${socket}?tenant=${TENANT}`)
@@ -315,6 +446,7 @@ async function main(): Promise<void> {
   const round = await editRoundTrip(corpus)
   const served = await daemon(corpus, profile.probe)
   const mcp = await mcpCost(profile.probe)
+  const mutation = await mcpMutationCost()
   const tenants = await perTenant(5)
 
   await rm(SOURCE, { recursive: true, force: true })
@@ -329,6 +461,7 @@ async function main(): Promise<void> {
       ...round,
       ...served,
       ...mcp,
+      ...mutation,
       ...tenants
     })}\n`
   )
