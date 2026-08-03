@@ -102,7 +102,10 @@ describe('write', () => {
   }
 
   beforeAll(async () => {
-    fresh = join(scratch, 'fromzero')
+    // Forward slashes because this path is also a DSN: normalizeDsn rewrites a
+    // Windows drive path into the file-URL shape, so the root the store ends up
+    // registering is slashed even when join() handed us backslashes.
+    fresh = join(scratch, 'fromzero').replaceAll('\\', '/')
     scratchWriter = await connect(`okf://${fresh}?tenant=notes`)
   })
 
