@@ -1,6 +1,6 @@
 {
   "name": "langonrock",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Compiles OKF knowledge bundles into a dense, token-efficient manifest for AI agents",
   "type": "module",
   "license": "MIT",

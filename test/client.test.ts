@@ -51,7 +51,7 @@ beforeAll(async () => {
     root,
     port: 0,
     hostname: '127.0.0.1',
-    sources: new Map([['acme', source]]),
+    sourceDir: (tenant: string) => (tenant === 'acme' ? source : undefined),
     sync: async tenant => putTenantRoot(source, { root, tenant }),
     tokens: new Map([['tok', { tenant: 'acme', write: true }]])
   })

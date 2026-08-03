@@ -44,8 +44,16 @@ export interface Tls {
 export interface ServeOptions {
   root: string
   tokens?: Map<string, Grant>
-  /** Tenant to the directory holding its OKF Markdown. Absent means read only. */
-  sources?: Map<string, string>
+  /**
+   * Where a tenant's OKF Markdown lives, or undefined when it has none. Absent
+   * altogether means no tenant is writable. `create` is passed only by a write
+   * that has already been accepted on every other ground, so answering it is
+   * what brings a tenant into existence.
+   */
+  sourceDir?: (
+    tenant: string,
+    create: boolean
+  ) => Promise<string | undefined> | string | undefined
   /** Recompiles a tenant now, so a client can make its write visible. */
   sync?: (tenant: string) => Promise<PutResult>
   /**
@@ -308,10 +316,30 @@ async function toResponse(request: Request, cause: unknown): Promise<Response> {
 }
 
 /**
- * Binding to TCP without tokens would expose every tenant to any process that
- * can reach the port. A unix socket is already guarded by file permissions, so
- * it is the only transport allowed to run unauthenticated.
+ * A tenant is created only by a caller already scoped to it, so bootstrapping
+ * reaches nothing that caller could not already write. Everything else asks
+ * with `create` false: listing, reading or deleting a tenant that does not
+ * exist is a mistake worth reporting, not a reason to conjure an empty
+ * directory.
  */
+function sourceDirFor(
+  access: Access,
+  options: ServeOptions
+): (create: boolean) => Promise<string> {
+  return async create => {
+    const dir = await options.sourceDir?.(access.tenant, create)
+
+    if (dir === undefined) {
+      throw new HttpError(
+        409,
+        `tenant "${access.tenant}" has no source directory: create one by writing a concept, or add it to sources.json`
+      )
+    }
+
+    return dir
+  }
+}
+
 /**
  * Write routes never touch the reader. A tenant whose first concept is being
  * created has no snapshot yet, and opening one would fail before the write ever
@@ -323,16 +351,13 @@ async function dispatchWrite(
   access: Access,
   options: ServeOptions
 ): Promise<Response> {
-  const dir = options.sources?.get(access.tenant)
-
-  if (dir === undefined) {
-    throw new HttpError(
-      409,
-      `tenant "${access.tenant}" has no source directory: add it to sources.json to make it writable`
-    )
-  }
+  const dir = sourceDirFor(access, options)
 
   if (matched.verb === 'sync') {
+    // A tenant with no source directory has nothing to recompile, and saying so
+    // is more useful than whatever the recompile itself would fail with.
+    await dir(false)
+
     if (options.sync === undefined) {
       throw new HttpError(409, 'this server cannot recompile on request')
     }

@@ -8,7 +8,7 @@ import { estimateTokens } from './compile/tokens.ts'
 import { serveMcp } from './mcp/server.ts'
 import { createSearchCache } from './search/cache.ts'
 import { serve } from './server/http.ts'
-import { loadSources } from './server/sources.ts'
+import { ensureSource, loadSources } from './server/sources.ts'
 import { TOKENS_FILE, addToken, loadTokens } from './server/tokens.ts'
 import { resolveDataDir } from './store/datadir.ts'
 import { collect, collectAll } from './store/gc.ts'
@@ -394,52 +394,101 @@ async function serveOptions(flags: Flags, root: string): Promise<ServeOptions> {
   return options
 }
 
+interface Writable {
+  sync: (tenant: string) => Promise<PutResult>
+  sourceDir: (tenant: string, create: boolean) => Promise<string | undefined>
+}
+
 /**
  * One watcher per writable tenant, kept rather than discarded, so a client that
  * writes through the API can ask for the recompile and be told the new digest.
  * The result arrives through onSync, which is why it is captured here.
+ *
+ * A tenant with no directory yet gets one on its first write, which is why the
+ * set is not fixed at startup and why `started` is keyed on the promise rather
+ * than the watcher: two writes arriving together for the same new tenant share
+ * one registration instead of racing to build two watchers over one directory.
  */
 async function startWatchers(
   root: string,
   sources: Map<string, string>,
   flags: Flags,
   warm: (tenant: string) => void
-): Promise<(tenant: string) => Promise<PutResult>> {
-  const watchers = new Map<string, Watcher>()
+): Promise<Writable> {
+  const started = new Map<string, Promise<Watcher>>()
   const results = new Map<string, PutResult>()
 
-  for (const [tenant, source] of sources) {
-    const options = watchOptions({ ...flags, tenant }, source)
+  const start = (tenant: string, source?: string): Promise<Watcher> => {
+    const running = started.get(tenant)
 
-    options.onSync = result => {
-      results.set(tenant, result)
-      reportPut(result)
-      warm(tenant)
+    if (running !== undefined) {
+      return running
     }
 
-    const watcher = watchTenant(options)
+    const pending = (async () => {
+      const dir = source ?? (await ensureSource(root, tenant))
+      const options = watchOptions({ ...flags, tenant }, dir)
 
-    await watcher.ready
-    watchers.set(tenant, watcher)
-    console.error(`watching ${source} for tenant ${tenant}`)
+      options.onSync = result => {
+        results.set(tenant, result)
+        reportPut(result)
+        warm(tenant)
+      }
+
+      const watcher = watchTenant(options)
+
+      await watcher.ready
+      sources.set(tenant, dir)
+      console.error(`watching ${dir} for tenant ${tenant}`)
+
+      return watcher
+      // A tenant that failed to start is forgotten rather than remembered as
+      // broken, so fixing sources.json and writing again works without a
+      // restart.
+    })().catch(cause => {
+      started.delete(tenant)
+
+      throw cause
+    })
+
+    started.set(tenant, pending)
+
+    return pending
   }
 
-  return async tenant => {
-    const watcher = watchers.get(tenant)
+  for (const [tenant, source] of sources) {
+    await start(tenant, source)
+  }
 
-    if (watcher === undefined) {
-      throw new Error(`tenant "${tenant}" is not writable`)
+  return {
+    sync: async tenant => {
+      const running = started.get(tenant)
+
+      if (running === undefined) {
+        throw new Error(`tenant "${tenant}" is not writable`)
+      }
+
+      await (await running).sync()
+
+      const result = results.get(tenant)
+
+      if (result === undefined) {
+        throw new Error(`sync for "${tenant}" produced no result`)
+      }
+
+      return result
+    },
+    sourceDir: async (tenant, create) => {
+      const known = sources.get(tenant)
+
+      if (known !== undefined || !create) {
+        return known
+      }
+
+      await start(tenant)
+
+      return sources.get(tenant)
     }
-
-    await watcher.sync()
-
-    const result = results.get(tenant)
-
-    if (result === undefined) {
-      throw new Error(`sync for "${tenant}" produced no result`)
-    }
-
-    return result
   }
 }
 
@@ -469,7 +518,6 @@ const runServe: Command = async (_positionals, flags) => {
   const sources = await loadSources(root)
 
   options.tokens = await loadTokens(root)
-  options.sources = sources
 
   // Rebuilding right after a sync moves the index build off the query path:
   // the first search after a save finds the index already warm.
@@ -481,9 +529,12 @@ const runServe: Command = async (_positionals, flags) => {
 
   options.indexes = indexes
 
-  if (sources.size > 0) {
-    options.sync = await startWatchers(root, sources, flags, warm)
-  }
+  // Started even with nothing configured: a store whose first tenant has not
+  // been created yet is exactly the case that needs to be able to create one.
+  const writable = await startWatchers(root, sources, flags, warm)
+
+  options.sync = writable.sync
+  options.sourceDir = writable.sourceDir
 
   const server = serve(options)
   const where =

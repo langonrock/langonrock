@@ -1,6 +1,6 @@
 import { createSearchCache } from '../search/cache.ts'
 import { searchTenant } from '../search/tenant.ts'
-import { loadSources } from '../server/sources.ts'
+import { ensureSource, loadSources } from '../server/sources.ts'
 import { createReaderCache } from '../store/cache.ts'
 import { resolveDataDir } from '../store/datadir.ts'
 import {
@@ -11,6 +11,7 @@ import {
   readSource,
   writeSource
 } from '../store/source.ts'
+import { assertBundleName, assertConceptPath } from '../store/sourcepaths.ts'
 import { putTenantRoot } from '../store/writer.ts'
 import { parseDsn } from './dsn.ts'
 import { remoteConnection } from './remote.ts'
@@ -80,7 +81,7 @@ function embeddedConnection(target: Target): Connection {
 
     if (dir === undefined) {
       throw new Error(
-        `tenant "${tenant}" has no source directory: add it to ${root}/sources.json to make it writable`
+        `tenant "${tenant}" has no source directory yet: write a concept to create one, or add it to ${root}/sources.json`
       )
     }
 
@@ -99,8 +100,19 @@ function embeddedConnection(target: Target): Connection {
     listSource: async () => listSource(await sourceDir()),
     readSource: async (bundle, path) =>
       readSource(await sourceDir(), bundle, path),
+    // The only call that creates its tenant, and only when it is creating a
+    // concept: the path and the bundle are validated first, so a write that was
+    // never going to land leaves no tenant behind. Reading, listing and
+    // deleting still refuse an unconfigured tenant, because there is nothing to
+    // read from or delete out of a directory that does not exist.
     writeSource: async (bundle, path, content, replaces) => {
-      const dir = await sourceDir()
+      assertBundleName(bundle)
+      assertConceptPath(path)
+
+      const dir =
+        replaces === undefined
+          ? await ensureSource(root, tenant)
+          : await sourceDir()
 
       assertReplaces(await hashOf(dir, bundle, path), replaces)
 
