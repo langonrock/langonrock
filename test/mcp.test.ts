@@ -52,14 +52,16 @@ afterAll(async () => {
 })
 
 describe('tool surface', () => {
-  test('exposes exactly four verbs', async () => {
+  test('exposes exactly six verbs', async () => {
     const { tools } = await client.listTools()
 
     expect(tools.map(tool => tool.name).sort()).toEqual([
+      'delete',
       'get',
       'manifest',
       'search',
-      'snapshot'
+      'snapshot',
+      'write'
     ])
   })
 
@@ -77,6 +79,235 @@ describe('tool surface', () => {
     const get = tools.find(tool => tool.name === 'get')
 
     expect(get?.inputSchema.required).toEqual(['ids'])
+  })
+})
+
+describe('write', () => {
+  let fresh = ''
+  let scratchWriter: Client
+
+  const write = async (args: Record<string, string>) =>
+    scratchWriter.callTool({ name: 'write', arguments: args })
+
+  const hashFrom = (body: string): string => {
+    const found = /retry with replaces: "([0-9a-f]+)"/.exec(body)
+
+    if (found?.[1] === undefined) {
+      throw new Error(`no hash offered in: ${body}`)
+    }
+
+    return found[1]
+  }
+
+  beforeAll(async () => {
+    fresh = join(scratch, 'fromzero')
+    scratchWriter = await connect(`okf://${fresh}?tenant=notes`)
+  })
+
+  afterAll(async () => {
+    await scratchWriter.close()
+  })
+
+  test('creates a tenant that does not exist yet', async () => {
+    const result = await write({
+      bundle: 'inbox',
+      path: 'idea.md',
+      content: '---\ntype: note\n---\n\nShip the thing.\n'
+    })
+
+    expect(result.isError).toBeUndefined()
+    expect(firstText(result)).toContain('wrote inbox/idea.md')
+    expect(firstText(result)).toContain('1 concepts')
+  })
+
+  test('registers the new tenant so the store finds it again', async () => {
+    const registered = await Bun.file(`${fresh}/sources.json`).json()
+
+    expect(registered).toEqual({ notes: `${fresh}/sources/notes` })
+  })
+
+  test('makes the concept immediately readable', async () => {
+    const result = await scratchWriter.callTool({
+      name: 'get',
+      arguments: { ids: ['idea'] }
+    })
+
+    expect(firstText(result)).toContain('Ship the thing.')
+  })
+
+  test('refuses to replace without a precondition', async () => {
+    const result = await write({
+      bundle: 'inbox',
+      path: 'idea.md',
+      content: 'overwritten\n'
+    })
+
+    expect(result.isError).toBe(true)
+    expect(firstText(result)).toContain('already exists')
+  })
+
+  test('names the hash the retry needs', async () => {
+    const result = await write({
+      bundle: 'inbox',
+      path: 'idea.md',
+      content: 'overwritten\n'
+    })
+
+    expect(hashFrom(firstText(result))).toMatch(/^[0-9a-f]{64}$/)
+  })
+
+  test('accepts the replacement once that hash is offered', async () => {
+    const refused = await write({
+      bundle: 'inbox',
+      path: 'idea.md',
+      content: 'second draft\n'
+    })
+    const result = await write({
+      bundle: 'inbox',
+      path: 'idea.md',
+      content: '---\ntype: note\n---\n\nSecond draft.\n',
+      replaces: hashFrom(firstText(refused))
+    })
+
+    expect(result.isError).toBeUndefined()
+
+    const read = await scratchWriter.callTool({
+      name: 'get',
+      arguments: { ids: ['idea'] }
+    })
+
+    expect(firstText(read)).toContain('Second draft.')
+  })
+
+  test('refuses a hash that is no longer current', async () => {
+    const result = await write({
+      bundle: 'inbox',
+      path: 'idea.md',
+      content: 'third draft\n',
+      replaces: 'a'.repeat(64)
+    })
+
+    expect(result.isError).toBe(true)
+    expect(firstText(result)).toContain('changed since it was read')
+  })
+
+  test('reports the compiler diagnostics for the file it wrote', async () => {
+    const result = await write({
+      bundle: 'inbox',
+      path: 'bare.md',
+      content: 'No frontmatter here.\n'
+    })
+
+    expect(firstText(result)).toContain('not an OKF concept')
+  })
+
+  test('leaves another file out of those diagnostics', async () => {
+    const result = await write({
+      bundle: 'inbox',
+      path: 'second.md',
+      content: '---\ntype: note\n---\n\nFine.\n'
+    })
+
+    expect(firstText(result)).not.toContain('bare.md')
+  })
+
+  test('rejects a path that is not markdown', async () => {
+    const result = await write({
+      bundle: 'inbox',
+      path: 'notes.txt',
+      content: 'x\n'
+    })
+
+    expect(result.isError).toBe(true)
+    expect(firstText(result)).toContain('must be a .md file')
+  })
+
+  test('refuses to bootstrap over a tenant compiled from an unregistered directory', async () => {
+    const result = await client.callTool({
+      name: 'write',
+      arguments: { bundle: 'sales', path: 'new.md', content: 'x\n' }
+    })
+
+    expect(result.isError).toBe(true)
+    expect(firstText(result)).toContain('replaced by an empty one')
+  })
+
+  test('leaves that manifest intact after refusing', async () => {
+    const result = await client.callTool({ name: 'manifest', arguments: {} })
+
+    expect(firstText(result)).toContain('customers')
+  })
+
+  describe('delete', () => {
+    const remove = async (args: Record<string, string>) =>
+      scratchWriter.callTool({ name: 'delete', arguments: args })
+
+    test('refuses without the hash of what it would remove', async () => {
+      const result = await remove({ bundle: 'inbox', path: 'second.md' })
+
+      expect(result.isError).toBe(true)
+      expect(firstText(result)).toContain('needs the hash')
+    })
+
+    test('names that hash so the retry can succeed', async () => {
+      const result = await remove({ bundle: 'inbox', path: 'second.md' })
+
+      expect(hashFrom(firstText(result))).toMatch(/^[0-9a-f]{64}$/)
+    })
+
+    test('removes the concept once the hash is offered', async () => {
+      const refused = await remove({ bundle: 'inbox', path: 'second.md' })
+      const result = await remove({
+        bundle: 'inbox',
+        path: 'second.md',
+        replaces: hashFrom(firstText(refused))
+      })
+
+      expect(result.isError).toBeUndefined()
+      expect(firstText(result)).toContain('deleted inbox/second.md')
+    })
+
+    test('takes it out of the manifest', async () => {
+      const result = await scratchWriter.callTool({
+        name: 'manifest',
+        arguments: {}
+      })
+
+      expect(firstText(result)).not.toContain('second')
+    })
+
+    test('says so when there is nothing to remove', async () => {
+      const result = await remove({ bundle: 'inbox', path: 'second.md' })
+
+      expect(result.isError).toBe(true)
+      expect(firstText(result)).toContain('does not exist')
+    })
+
+    test('offers no hash for a concept that is not there', async () => {
+      const result = await remove({ bundle: 'inbox', path: 'second.md' })
+
+      expect(firstText(result)).not.toContain('retry with replaces')
+    })
+
+    test('refuses a hash that is no longer current', async () => {
+      const result = await remove({
+        bundle: 'inbox',
+        path: 'idea.md',
+        replaces: 'a'.repeat(64)
+      })
+
+      expect(result.isError).toBe(true)
+      expect(firstText(result)).toContain('changed since it was read')
+    })
+
+    test('leaves the concept alone after refusing', async () => {
+      const result = await scratchWriter.callTool({
+        name: 'get',
+        arguments: { ids: ['idea'] }
+      })
+
+      expect(firstText(result)).toContain('Second draft.')
+    })
   })
 })
 

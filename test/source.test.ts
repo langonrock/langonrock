@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { open } from '../src/client/connection.ts'
 import { serve } from '../src/server/http.ts'
 import { MAX_BYTES, sourceResponse } from '../src/server/sourceroutes.ts'
-import { loadSources } from '../src/server/sources.ts'
+import { ensureSource, loadSources } from '../src/server/sources.ts'
 import { openTenant } from '../src/store/reader.ts'
 import {
   deleteSource,
@@ -522,6 +522,131 @@ describe('tenants without a source directory', () => {
       )
     } finally {
       await rm(elsewhere, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('bootstrapping a tenant from nothing', () => {
+  let bare = ''
+  let started: LangonrockServer | undefined
+
+  const call = (path: string, init: RequestInit = {}): Promise<Response> =>
+    fetch(`http://127.0.0.1:${started?.port}/v1/fresh${path}`, {
+      ...init,
+      headers: {
+        authorization: 'Bearer fresh-token',
+        ...(init.headers as Record<string, string>)
+      }
+    })
+
+  beforeAll(async () => {
+    bare = await mkdtemp(join(tmpdir(), 'lr-bootstrap-'))
+    started = serve({
+      root: bare,
+      port: 0,
+      hostname: '127.0.0.1',
+      sources: new Map(),
+      ensure: tenant => ensureSource(bare, tenant),
+      tokens: new Map([
+        ['fresh-token', { tenant: 'fresh', write: true }],
+        ['fresh-reader', { tenant: 'fresh', write: false }]
+      ])
+    })
+  })
+
+  afterAll(async () => {
+    started?.stop(true)
+    await rm(bare, { recursive: true, force: true })
+  })
+
+  test('a put creates the tenant it writes into', async () => {
+    const response = await call('/source/inbox/first.md', {
+      method: 'PUT',
+      headers: { 'if-none-match': '*' },
+      body: CONCEPT
+    })
+
+    expect(response.status).toBe(204)
+  })
+
+  test('and registers it so the next start finds it', async () => {
+    expect((await loadSources(bare)).get('fresh')).toBe(`${bare}/sources/fresh`)
+  })
+
+  test('a listing does not create anything', async () => {
+    const untouched = await mkdtemp(join(tmpdir(), 'lr-bootstrap-get-'))
+    const other = serve({
+      root: untouched,
+      port: 0,
+      hostname: '127.0.0.1',
+      sources: new Map(),
+      ensure: tenant => ensureSource(untouched, tenant),
+      tokens: new Map([['t', { tenant: 'fresh', write: true }]])
+    })
+
+    try {
+      const response = await fetch(
+        `http://127.0.0.1:${other.port}/v1/fresh/source`,
+        { headers: { authorization: 'Bearer t' } }
+      )
+
+      expect(response.status).toBe(409)
+      expect(await Bun.file(`${untouched}/sources.json`).exists()).toBe(false)
+    } finally {
+      other.stop(true)
+      await rm(untouched, { recursive: true, force: true })
+    }
+  })
+
+  test('a read only token cannot bootstrap', async () => {
+    const response = await call('/source/inbox/denied.md', {
+      method: 'PUT',
+      headers: { authorization: 'Bearer fresh-reader', 'if-none-match': '*' },
+      body: CONCEPT
+    })
+
+    expect(response.status).toBe(403)
+  })
+
+  test('a server without ensure still refuses', async () => {
+    const closed = await mkdtemp(join(tmpdir(), 'lr-noensure-'))
+    const other = serve({
+      root: closed,
+      port: 0,
+      hostname: '127.0.0.1',
+      sources: new Map(),
+      tokens: new Map([['t', { tenant: 'fresh', write: true }]])
+    })
+
+    try {
+      const response = await fetch(
+        `http://127.0.0.1:${other.port}/v1/fresh/source/inbox/x.md`,
+        {
+          method: 'PUT',
+          headers: { authorization: 'Bearer t', 'if-none-match': '*' },
+          body: CONCEPT
+        }
+      )
+
+      expect(response.status).toBe(409)
+    } finally {
+      other.stop(true)
+      await rm(closed, { recursive: true, force: true })
+    }
+  })
+
+  test('a tenant compiled from an unregistered directory is left alone', async () => {
+    await expect(ensureSource(root, 'acme')).resolves.toBe(source)
+
+    const orphan = await mkdtemp(join(tmpdir(), 'lr-orphan-'))
+
+    try {
+      await putTenantRoot(source, { root: orphan, tenant: 'acme' })
+      await expect(ensureSource(orphan, 'acme')).rejects.toThrow(
+        'replaced by an empty one'
+      )
+    } finally {
+      await rm(orphan, { recursive: true, force: true })
     }
   })
 })

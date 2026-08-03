@@ -39,7 +39,8 @@ That corpus is a warehouse catalogue, and the saving is a property of the docume
 - **Multi-tenant.** A tenant is a directory boundary with its own snapshots and its own index.
 - **Three connection modes, one interface.** Embedded, local daemon, or HTTP server, selected by a connection string.
 - **Refuses to leak its own credentials.** TCP needs a token, and any address past loopback needs TLS, or the server declines to start.
-- **MCP server.** Four verbs for Claude Code, Cursor, or anything else that speaks MCP — with tool descriptions that carry the tenant's own numbers: the server measures the manifest at startup and advises manifest-first or search-first.
+- **MCP server.** Six verbs for Claude Code, Cursor, or anything else that speaks MCP — four to read and two to write, with tool descriptions that carry the tenant's own numbers: the server measures the manifest at startup and advises manifest-first or search-first.
+- **A model can persist knowledge, safely.** The MCP `write` and `delete` tools change a concept and recompile, and a tenant that does not exist yet is created by the first write. Both still need the hash they replace, and the refusal names that hash, so a model satisfies the precondition without a lost update.
 - **Editable over the network.** Create, change and delete concepts through the API, with a mandatory precondition so two editors cannot silently overwrite each other.
 - **No database.** Two runtime dependencies, both for MCP.
 
@@ -120,7 +121,7 @@ claude mcp add langonrock -- langonrock mcp "okf:///abs/path/to/data?tenant=acme
 
 Everything after `--` is the command being registered, and the path in the connection string has to be absolute. The client is what starts the process, and its working directory is not yours.
 
-At the start of each session the client runs that command, asks the server what it offers, and puts the four tool definitions in its system prompt. Nothing is discovered and nothing is fetched, so a server that fails to start shows up as tools that are quietly absent. `claude mcp list` is what tells you.
+At the start of each session the client runs that command, asks the server what it offers, and puts the six tool definitions in its system prompt. Nothing is discovered and nothing is fetched, so a server that fails to start shows up as tools that are quietly absent. `claude mcp list` is what tells you.
 
 Any connection string works, so point it at a [running daemon](#running-a-server) and every agent invocation shares one process with warm indexes rather than paying cold start:
 
@@ -131,9 +132,9 @@ claude mcp add langonrock -s project -- langonrock mcp "okf+unix:///tmp/okf.sock
 `-s project` writes to `.mcp.json` in the repository instead of your own settings, so committing it hands the same knowledge to everyone who clones. That only works if the connection string resolves on their machines too, which in practice means a socket or a server rather than a path.
 
 > [!TIP]
-> MCP is not the only way in. A client that can run shell commands can call the CLI directly, with a line in its instructions saying the command exists. The four tool definitions cost tokens in every session whether or not anyone asks about knowledge, and a line of prose costs almost nothing but relies on the model remembering. Register the server when knowledge is consulted constantly, and reach for the CLI when it is occasional.
+> MCP is not the only way in. A client that can run shell commands can call the CLI directly, with a line in its instructions saying the command exists. The six tool definitions cost tokens in every session whether or not anyone asks about knowledge, and a line of prose costs almost nothing but relies on the model remembering. Register the server when knowledge is consulted constantly, and reach for the CLI when it is occasional.
 
-Four tools, and no more, because every tool definition costs tokens in the client's system prompt:
+Six tools, and no more, because every tool definition costs tokens in the client's system prompt:
 
 | Tool       | What it does                                                                                                                                                                                                                                                       |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -141,6 +142,27 @@ Four tools, and no more, because every tool definition costs tokens in the clien
 | `search`   | BM25 over the manifest and bodies, plus a capped one-hop expansion. Returns manifest rows, never bodies; each direct hit ends in `pos`, the offset of the densest passage, for a windowed `get`.                                                                   |
 | `get`      | Concepts by id, batched; optionally one `section`, an `offset`/`limit` window, or a `find` phrase to locate. Capped at 15,000 chars per concept by default.                                                                                                        |
 | `snapshot` | The current digest, to check whether the manifest you hold is stale.                                                                                                                                                                                               |
+| `write`    | Creates or replaces one concept, recompiles, and returns the new digest with that file's compiler warnings. Naming a new bundle creates it, and a tenant with no knowledge yet is created by the write itself.                                                     |
+| `delete`   | Removes one concept and recompiles. The hash is required rather than optional, because deleting has no create case to spend the omission on.                                                                                                                       |
+
+### Writing from a model
+
+A model has no content hash, so the precondition that protects every other client would be unusable if it had to fetch one first. Instead the refusal carries what the retry needs:
+
+```
+write {bundle: "inbox", path: "idea.md", content: "..."}
+  → concept already exists: re-read the concept and retry with its new hash
+    retry with replaces: "968f33390cab..."
+
+write {bundle: "inbox", path: "idea.md", content: "...", replaces: "968f33390cab..."}
+  → wrote inbox/idea.md (hash 4c1e...), snapshot 19e8c4026a96, 1 concepts
+```
+
+Creating costs one call, because omitting `replaces` is what asserts the concept is new. Replacing costs two the first time, and none of them can silently lose someone else's edit.
+
+`delete` works the same way, minus the create case: the hash is not optional there, so a deletion is always two calls, and omitting the hash against a concept that is not there is answered with `concept does not exist` rather than a hash to retry with.
+
+> A write creates its tenant only when that tenant has no knowledge at all. A tenant that already has snapshots but no `sources.json` entry — which is what `langonrock sync` on the command line leaves behind — is refused instead, because pointing it at a fresh empty directory would replace its whole manifest with one file. Register that directory before writing to it.
 
 ## Connection modes
 
@@ -687,11 +709,18 @@ The write path, through the HTTP source routes where the precondition lives:
 
 **Memory tracks bytes, not concepts.** Twelve to sixteen times the snapshot size resides in memory once indexed, so one daemon holds roughly fifteen tenants of 5,000 concepts per gigabyte. The heap delta around a single index build is unusable — it comes back negative as often as positive — so this is the slope of resident memory across tenants loaded one at a time.
 
-| Registering the MCP server           | Tokens |
-| ------------------------------------ | -----: |
-| Four tool definitions, every session |  1,122 |
+| Registering the MCP server          | Tokens |
+| ----------------------------------- | -----: |
+| The four read tools, every session  |  1,122 |
+| `write` on top of them              |    413 |
+| `delete` on top of that             |    206 |
+| Six tool definitions, every session |  1,741 |
 
-That is the entry fee, paid in the client's system prompt whether or not the model ever asks about knowledge, and it does not change with corpus size. The slicing parameters on `get` are 229 tokens of it, repaid the first time one window replaces one chapter; the newest sixty are the `pos` column's explanation, the tenant's own strategy advice, and the `stale` status — repaid by one avoided capped read about sixty times over. Worth it when knowledge is consulted repeatedly, which is the same conclusion the tip above reaches, now with a number on it.
+That is the entry fee, paid in the client's system prompt whether or not the model ever asks about knowledge, and it does not change with corpus size. The slicing parameters on `get` are 229 tokens of it, repaid the first time one window replaces one chapter; sixty more are the `pos` column's explanation, the tenant's own strategy advice, and the `stale` status — repaid by one avoided capped read about sixty times over. Worth it when knowledge is consulted repeatedly, which is the same conclusion the tip above reaches, now with a number on it.
+
+The write side is 619 tokens of that, 55 percent on top of the read-only figure it was measured against. `write` alone ties `get` as the most expensive definition in the set, and 70 of its tokens are the one paragraph teaching a model to recover from a refused precondition — the price of not shipping a separate read-the-hash tool, which would have cost a whole definition instead. `delete` is half the size because it inherits that lesson by reference rather than restating it.
+
+A deployment that only ever reads pays all 619 for nothing. That is the argument for a flag that omits both tools; there is none today.
 
 ## CLI
 

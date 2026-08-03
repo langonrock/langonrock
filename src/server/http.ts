@@ -49,6 +49,11 @@ export interface ServeOptions {
   /** Recompiles a tenant now, so a client can make its write visible. */
   sync?: (tenant: string) => Promise<PutResult>
   /**
+   * Creates and starts watching a tenant that has no source directory yet.
+   * Absent means a tenant must be configured before it can be written to.
+   */
+  ensure?: (tenant: string) => Promise<string>
+  /**
    * Share the search cache with the caller, so a watcher can rebuild an index
    * right after a sync instead of leaving the cost on the first search.
    */
@@ -317,20 +322,45 @@ async function toResponse(request: Request, cause: unknown): Promise<Response> {
  * created has no snapshot yet, and opening one would fail before the write ever
  * happened.
  */
+/**
+ * A tenant is created only by the one call that has something to put in it, and
+ * only by a token already scoped to it, so bootstrapping reaches nothing the
+ * caller could not already write. Every other method still refuses: listing or
+ * deleting a tenant that does not exist is a mistake worth reporting, not a
+ * reason to conjure an empty directory.
+ */
+async function sourceDirFor(
+  request: Request,
+  access: Access,
+  options: ServeOptions
+): Promise<string> {
+  const configured = options.sources?.get(access.tenant)
+
+  if (configured !== undefined) {
+    return configured
+  }
+
+  if (options.ensure === undefined || request.method !== 'PUT') {
+    throw new HttpError(
+      409,
+      `tenant "${access.tenant}" has no source directory: add it to sources.json to make it writable`
+    )
+  }
+
+  if (!access.write) {
+    throw new HttpError(403, 'this token may read but not write')
+  }
+
+  return options.ensure(access.tenant)
+}
+
 async function dispatchWrite(
   request: Request,
   matched: Route,
   access: Access,
   options: ServeOptions
 ): Promise<Response> {
-  const dir = options.sources?.get(access.tenant)
-
-  if (dir === undefined) {
-    throw new HttpError(
-      409,
-      `tenant "${access.tenant}" has no source directory: add it to sources.json to make it writable`
-    )
-  }
+  const dir = await sourceDirFor(request, access, options)
 
   if (matched.verb === 'sync') {
     if (options.sync === undefined) {

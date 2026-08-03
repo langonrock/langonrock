@@ -8,7 +8,7 @@ import { renderConcepts } from '../store/slice.ts'
 
 import type { Connection } from '../client/connection.ts'
 import type { SearchOptions } from '../search/tenant.ts'
-import type { GetOptions } from '../types.ts'
+import type { GetOptions, SyncResult } from '../types.ts'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 
 export const MANIFEST_URI = 'okf://manifest'
@@ -43,6 +43,22 @@ const SEARCH_DESCRIPTION = `Rank concepts by relevance to a query and return the
 Reach for this instead of reading the whole manifest when the tenant is large, or when you do not already know which concept holds the answer. The result is the same TSV shape as "manifest" plus a trailing "pos" column: the character offset where your query's words cluster densest in that concept, "-" when they only match its manifest row. To read the passage instead of the document, call "get" with that id and {offset: pos, limit: 2000}. Results also include concepts one link away from the top matches, which is usually where the join partner, parent dataset, or metric definition lives.
 
 Pass "bundle" to rank only within one bundle.`
+
+const WRITE_DESCRIPTION = `Create or replace one concept's Markdown source, then recompile so the change is immediately visible to "manifest", "search" and "get".
+
+Pass the whole document in "content", not a patch: this replaces the file. Write OKF frontmatter with at least a "type" so the concept compiles as a concept rather than as plain Markdown.
+
+Naming a "bundle" that does not exist creates it, and writing to a tenant that has no knowledge yet starts it from nothing, so persisting a first note needs no setup.
+
+Replacing an existing concept needs "replaces", the hash of the version you are replacing. You are not expected to know it: write without it, and the refusal tells you the current hash to retry with. Omit it when creating, where its absence is what asserts the concept is new.
+
+Ids are derived from paths, so adding a file can rename a concept nobody edited; re-read the manifest after writing rather than reusing ids you saw before.`
+
+const DELETE_DESCRIPTION = `Remove one concept and recompile, so it leaves "manifest", "search" and "get" immediately.
+
+Needs "replaces", the hash of the version being removed. Call without it and the refusal names the hash to retry with, the same way "write" does.
+
+Removing the last concept of a bundle removes the bundle.`
 
 const SNAPSHOT_DESCRIPTION = `Return the current snapshot digest and concept count.
 
@@ -222,6 +238,151 @@ function registerSearch(server: McpServer, connection: Connection): void {
   )
 }
 
+/**
+ * A model has no hash to offer, and asking it to fetch one first would cost a
+ * round trip on every write. So the refusal carries the hash the retry needs,
+ * which turns a lost update into one extra call the first time a concept is
+ * replaced, and none at all when it is created.
+ *
+ * The lookup runs on any failure rather than on a recognised conflict: the
+ * embedded path throws its own message and the remote path throws a 412, and
+ * matching either string would break the moment one of them was reworded.
+ */
+async function withCurrentHash(
+  connection: Connection,
+  bundle: string,
+  path: string,
+  cause: unknown
+): Promise<string> {
+  const message = cause instanceof Error ? cause.message : String(cause)
+  const current = await connection
+    .readSource(bundle, path)
+    .catch(() => undefined)
+
+  return current === undefined
+    ? message
+    : `${message}\nretry with replaces: "${current.hash}"`
+}
+
+/**
+ * Only the diagnostics for the file just written. A tenant's other warnings are
+ * real but they are not this caller's to act on, and on a large tenant they
+ * would bury the one line that is.
+ */
+function wroteReport(
+  path: string,
+  hash: string,
+  result: SyncResult,
+  bundle: string
+): string {
+  const mine = result.diagnostics
+    .filter(diagnostic => diagnostic.path === path)
+    .map(diagnostic => `${diagnostic.level} ${path}: ${diagnostic.message}`)
+
+  return [
+    `wrote ${bundle}/${path} (hash ${hash}), snapshot ${result.snapshot}, ${result.concepts} concepts`,
+    ...mine
+  ].join('\n')
+}
+
+function registerWrite(server: McpServer, connection: Connection): void {
+  server.registerTool(
+    'write',
+    {
+      title: 'Create or replace a concept',
+      description: WRITE_DESCRIPTION,
+      inputSchema: {
+        bundle: z
+          .string()
+          .describe(
+            'Bundle to write into, from the bundle column. A new name creates it.'
+          ),
+        path: z
+          .string()
+          .describe(
+            'Path within the bundle, ending in .md, for example "tables/orders.md".'
+          ),
+        content: z
+          .string()
+          .describe("The concept's entire Markdown, frontmatter included."),
+        replaces: z
+          .string()
+          .optional()
+          .describe(
+            'Hash of the version being replaced. Omit to create; a refusal names the hash to use.'
+          )
+      }
+    },
+    async ({ bundle, path, content, replaces }) => {
+      try {
+        const hash = await connection.writeSource(
+          bundle,
+          path,
+          content,
+          replaces
+        )
+
+        return text(wroteReport(path, hash, await connection.sync(), bundle))
+      } catch (cause) {
+        return failure(
+          new Error(await withCurrentHash(connection, bundle, path, cause))
+        )
+      }
+    }
+  )
+}
+
+/**
+ * Deleting has no create case, so the hash is required rather than optional and
+ * the recovery is the only way to obtain one. Checking for the concept first is
+ * what keeps the two refusals apart: a caller who omitted the hash is told the
+ * hash, and one aiming at nothing is told there is nothing there.
+ */
+function registerDelete(server: McpServer, connection: Connection): void {
+  server.registerTool(
+    'delete',
+    {
+      title: 'Delete a concept',
+      description: DELETE_DESCRIPTION,
+      inputSchema: {
+        bundle: z.string().describe('Bundle the concept sits in.'),
+        path: z
+          .string()
+          .describe('Path within the bundle, for example "tables/orders.md".'),
+        replaces: z
+          .string()
+          .optional()
+          .describe(
+            'Hash of the version being removed. A refusal names the hash to use.'
+          )
+      }
+    },
+    async ({ bundle, path, replaces }) => {
+      try {
+        if (replaces === undefined) {
+          throw new Error(
+            (await connection.readSource(bundle, path)) === undefined
+              ? 'concept does not exist'
+              : 'deleting needs the hash of the version being removed'
+          )
+        }
+
+        await connection.deleteSource(bundle, path, replaces)
+
+        const result = await connection.sync()
+
+        return text(
+          `deleted ${bundle}/${path}, snapshot ${result.snapshot}, ${result.concepts} concepts`
+        )
+      } catch (cause) {
+        return failure(
+          new Error(await withCurrentHash(connection, bundle, path, cause))
+        )
+      }
+    }
+  )
+}
+
 function registerSnapshot(server: McpServer, connection: Connection): void {
   server.registerTool(
     'snapshot',
@@ -237,9 +398,9 @@ function registerSnapshot(server: McpServer, connection: Connection): void {
 }
 
 /**
- * Four verbs, and no more. Every tool definition costs tokens in the client's
+ * Six verbs, and no more. Every tool definition costs tokens in the client's
  * system prompt, so each one has to earn its place: manifest and search both
- * narrow, get fetches, snapshot invalidates.
+ * narrow, get fetches, snapshot invalidates, write persists, delete retracts.
  */
 export function createMcpServer(
   connection: Connection,
@@ -251,6 +412,8 @@ export function createMcpServer(
   registerSearch(server, connection)
   registerGet(server, connection)
   registerSnapshot(server, connection)
+  registerWrite(server, connection)
+  registerDelete(server, connection)
 
   return server
 }

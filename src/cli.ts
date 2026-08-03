@@ -8,7 +8,7 @@ import { estimateTokens } from './compile/tokens.ts'
 import { serveMcp } from './mcp/server.ts'
 import { createSearchCache } from './search/cache.ts'
 import { serve } from './server/http.ts'
-import { loadSources } from './server/sources.ts'
+import { ensureSource, loadSources } from './server/sources.ts'
 import { TOKENS_FILE, addToken, loadTokens } from './server/tokens.ts'
 import { resolveDataDir } from './store/datadir.ts'
 import { collect, collectAll } from './store/gc.ts'
@@ -399,16 +399,21 @@ async function serveOptions(flags: Flags, root: string): Promise<ServeOptions> {
  * writes through the API can ask for the recompile and be told the new digest.
  * The result arrives through onSync, which is why it is captured here.
  */
+interface Writable {
+  sync: (tenant: string) => Promise<PutResult>
+  ensure: (tenant: string) => Promise<string>
+}
+
 async function startWatchers(
   root: string,
   sources: Map<string, string>,
   flags: Flags,
   warm: (tenant: string) => void
-): Promise<(tenant: string) => Promise<PutResult>> {
+): Promise<Writable> {
   const watchers = new Map<string, Watcher>()
   const results = new Map<string, PutResult>()
 
-  for (const [tenant, source] of sources) {
+  const start = async (tenant: string, source: string): Promise<void> => {
     const options = watchOptions({ ...flags, tenant }, source)
 
     options.onSync = result => {
@@ -424,22 +429,42 @@ async function startWatchers(
     console.error(`watching ${source} for tenant ${tenant}`)
   }
 
-  return async tenant => {
-    const watcher = watchers.get(tenant)
+  for (const [tenant, source] of sources) {
+    await start(tenant, source)
+  }
 
-    if (watcher === undefined) {
-      throw new Error(`tenant "${tenant}" is not writable`)
+  return {
+    sync: async tenant => {
+      const watcher = watchers.get(tenant)
+
+      if (watcher === undefined) {
+        throw new Error(`tenant "${tenant}" is not writable`)
+      }
+
+      await watcher.sync()
+
+      const result = results.get(tenant)
+
+      if (result === undefined) {
+        throw new Error(`sync for "${tenant}" produced no result`)
+      }
+
+      return result
+    },
+    // `sources` is the same map the server holds, so registering a tenant here
+    // is what makes it writable there, with no restart and no second copy of
+    // the registry to keep in step.
+    ensure: async tenant => {
+      const dir = await ensureSource(root, tenant)
+
+      sources.set(tenant, dir)
+
+      if (!watchers.has(tenant)) {
+        await start(tenant, dir)
+      }
+
+      return dir
     }
-
-    await watcher.sync()
-
-    const result = results.get(tenant)
-
-    if (result === undefined) {
-      throw new Error(`sync for "${tenant}" produced no result`)
-    }
-
-    return result
   }
 }
 
@@ -481,9 +506,12 @@ const runServe: Command = async (_positionals, flags) => {
 
   options.indexes = indexes
 
-  if (sources.size > 0) {
-    options.sync = await startWatchers(root, sources, flags, warm)
-  }
+  // Started even with nothing configured: a store whose first tenant has not
+  // been created yet is exactly the case that needs to be able to create one.
+  const writable = await startWatchers(root, sources, flags, warm)
+
+  options.sync = writable.sync
+  options.ensure = writable.ensure
 
   const server = serve(options)
   const where =
