@@ -782,7 +782,7 @@ checks unused files, dependencies, and exports. Unused exports and types are
 warnings; unused files, dependency errors, and unresolved imports fail the
 check. CI and the pre-push hook run these checks alongside the test suite.
 
-CI runs the suite on Linux, macOS and Windows. Pushing a `v*` tag cross-compiles six binaries, checksums them, and publishes a release.
+CI runs the suite on Linux, macOS and Windows. Pushing a `v*` tag builds six binaries on matching OS and architecture runners, checksums them, and publishes a release.
 
 > [!NOTE]
 > While the repository is private, `install.sh` cannot download anonymously and falls back to an authenticated `gh release download`. Install `gh` and run `gh auth login` first, or grab the asset from the releases page.

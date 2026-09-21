@@ -86,9 +86,16 @@ File byte offsets differ from the character offsets used by `ConceptSlice`.
 The native reader pins its file descriptor under a brief retention lock. The
 shared read cache holds at most 16 tenants and keeps request leases alive through
 ranking and body retrieval. Eviction or close releases the cache's ownership
-without closing active requests. Search indexes also refresh at the evaluation
+without closing active requests. HTTP and watcher warm-up share the same cache,
+which closes when the server stops. Public reader and search cache factories
+also expose `close()`. Search indexes also refresh at the evaluation
 date boundary so staleness remains current. Writer metadata retains at most one
 tenant and has size/count limits; it does not retain decompressed body text.
+
+Snapshot conversion lives in `compile/snapshot.ts`, and shared writer/collection
+types live in `store/contracts.ts`. Native storage uses these common modules
+without importing the legacy writer implementation. Native MCP mutations use
+the transaction result directly; only legacy mutations require a follow-up sync.
 
 ## Invariants
 

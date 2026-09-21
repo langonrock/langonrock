@@ -31,10 +31,8 @@ if (target === undefined) {
 
 /**
  * Bun 1.3.12 writes a truncated LC_CODE_SIGNATURE for every macOS target, and
- * the kernel SIGKILLs the process before any code runs. It applies to
- * cross-compiled darwin output too, not just a native build, so every darwin
- * artifact has to be re-signed. `codesign` only exists on macOS, which is why
- * the release matrix builds the darwin targets on a macOS runner.
+ * the kernel SIGKILLs the process before any code runs. Every darwin artifact
+ * must be re-signed with `codesign` on its matching macOS runner.
  * See https://github.com/oven-sh/bun/issues/29361
  */
 const darwin =

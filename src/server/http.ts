@@ -61,16 +61,15 @@ export interface ServeOptions {
   /** Enables native writes for tenants granted write access. Defaults to false. */
   writable?: boolean
   /**
-   * Where a tenant's OKF Markdown lives, or undefined when it has none. Absent
-   * altogether means no tenant is writable. `create` is passed only by a write
-   * that has already been accepted on every other ground, so answering it is
-   * what brings a tenant into existence.
+   * Legacy source lookup and optional native write authorization. Native writes
+   * enabled by `writable` do not require a source folder. `create` is passed only
+   * after request validation and token authorization.
    */
   sourceDir?: (
     tenant: string,
     create: boolean
   ) => Promise<string | undefined> | string | undefined
-  /** Recompiles a tenant now, so a client can make its write visible. */
+  /** Recompiles legacy sources after edits. Native writes commit directly. */
   sync?: (tenant: string) => Promise<PutResult>
   /**
    * Share the search cache with the caller, so a watcher can rebuild an index

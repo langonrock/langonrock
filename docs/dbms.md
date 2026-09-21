@@ -24,6 +24,21 @@ jobs but have not been executed for this change. Their verification remains an
 open release requirement. Killing processes tests crash recovery, not loss of
 power or every filesystem's durability behavior.
 
+## Reader and cache lifetime
+
+`open(dsn)` connections release their cached readers through `await close()`.
+Direct readers from `openTenant()` should be closed with `reader.close?.()` in a
+`finally` block; legacy readers do not own a descriptor. The callable factories
+`createReaderCache(root)` and `createSearchCache(root)` both expose `close()`.
+Closing a cache rejects new acquisitions and releases its ownership. Existing
+reader leases remain usable until their own `close()` calls.
+
+The CLI daemon shares one read cache between HTTP requests and watcher warm-up.
+Stopping the server closes that cache. Native MCP writes and deletes return their
+transaction's snapshot and diagnostics without a follow-up sync. Legacy tenants
+retain source editing followed by recompilation. The six default MCP tools and
+the three opt-in database tools remain unchanged.
+
 ## Create and edit documents
 
 ```ts

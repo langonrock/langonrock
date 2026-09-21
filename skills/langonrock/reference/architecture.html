@@ -730,10 +730,20 @@ Unmigrated legacy sources
               lock. The shared read cache holds at most 16 tenants and keeps
               request leases alive through ranking and body retrieval. Eviction
               or close releases the cache's ownership without closing active
-              requests. Search indexes also refresh at the evaluation date
-              boundary so staleness remains current. Writer metadata retains at
-              most one tenant and has size/count limits; it does not retain
-              decompressed body text.
+              requests. HTTP and watcher warm-up share the same cache, which
+              closes when the server stops. Public reader and search cache
+              factories also expose <code>close()</code>. Search indexes also
+              refresh at the evaluation date boundary so staleness remains
+              current. Writer metadata retains at most one tenant and has
+              size/count limits; it does not retain decompressed body text.
+            </p>
+            <p>
+              Snapshot conversion lives in <code>compile/snapshot.ts</code>, and
+              shared writer/collection types live in
+              <code>store/contracts.ts</code>. Native storage uses these common
+              modules without importing the legacy writer implementation. Native
+              MCP mutations use the transaction result directly; only legacy
+              mutations require a follow-up sync.
             </p>
           </details>
           <details class="card" id="invariants">
