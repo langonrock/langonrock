@@ -2,7 +2,7 @@ import { applyChanges, validateRequest } from './changes.ts'
 import { readBase } from './base.ts'
 import { releaseBuffer } from '../buffers.ts'
 import { prepare, prepareFolder } from './documents.ts'
-import { ConflictError } from './errors.ts'
+import { ConflictError, LegacyTenantError } from './errors.ts'
 import { readHead } from './head.ts'
 import { withHead } from './history.ts'
 import { publish } from './publish.ts'
@@ -28,9 +28,7 @@ export async function requireNative(target: DatabaseTarget): Promise<void> {
     (await readHead(target)) === undefined &&
     (await Bun.file(currentFile(target.root, target.tenant)).exists())
   ) {
-    throw new Error(
-      'legacy tenant: migrate with original sources before using database transactions'
-    )
+    throw new LegacyTenantError()
   }
 }
 

@@ -262,8 +262,9 @@ describe('write', () => {
     beforeAll(async () => {
       const [clientSide, serverSide] = InMemoryTransport.createLinkedPair()
       const underneath = open(`okf://${join(scratch, 'nosync')}?tenant=notes`)
+      const { transact: _transact, ...legacy } = underneath
       const broken: Connection = {
-        ...underneath,
+        ...legacy,
         sync: () => Promise.reject(new Error('another writer holds the lock'))
       }
 

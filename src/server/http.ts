@@ -2,6 +2,7 @@ import {
   ConflictError,
   IndeterminateCommitError,
   InvalidRequestError,
+  LegacyTenantError,
   MissingDatabaseError
 } from '../db/errors.ts'
 import { readHead } from '../db/head.ts'
@@ -331,7 +332,7 @@ async function toResponse(request: Request, cause: unknown): Promise<Response> {
     return new Response(cause.message, { status: cause.status })
   }
 
-  if (cause instanceof ConflictError) {
+  if (cause instanceof ConflictError || cause instanceof LegacyTenantError) {
     return Response.json(
       { code: cause.code, message: cause.message },
       { status: 409 }

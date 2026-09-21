@@ -1,5 +1,15 @@
 export class InvalidRequestError extends Error {}
 
+export class LegacyTenantError extends Error {
+  readonly code = 'LEGACY_TENANT'
+
+  constructor() {
+    super(
+      'legacy tenant: migrate with original sources before using database transactions'
+    )
+  }
+}
+
 export class ConflictError extends Error {
   readonly code = 'CONFLICT'
 
