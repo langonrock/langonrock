@@ -1,0 +1,788 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Architecture | langonrock blueprint</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      :root {
+        color-scheme: dark;
+        --page: #09090b;
+        --ink: #f4f4f5;
+        --muted: #a1a1aa;
+        --card: rgba(24, 24, 27, 0.65);
+        --line: #3f3f46;
+        --accent: #a7f3d0;
+        --code: #111113;
+      }
+      html.light {
+        color-scheme: light;
+        --page: #fafaf9;
+        --ink: #18181b;
+        --muted: #52525b;
+        --card: rgba(255, 255, 255, 0.85);
+        --line: #d4d4d8;
+        --accent: #065f46;
+        --code: #f1f1f0;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--page) !important;
+        color: var(--ink) !important;
+        font:
+          16px/1.7 ui-sans-serif,
+          system-ui,
+          sans-serif;
+      }
+      a {
+        color: var(--accent);
+        text-underline-offset: 4px;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+      button,
+      summary,
+      a {
+        -webkit-tap-highlight-color: transparent;
+      }
+      :focus-visible {
+        outline: 3px solid var(--accent);
+        outline-offset: 4px;
+      }
+      button {
+        font: inherit;
+        font-size: 0.875rem;
+        cursor: pointer;
+        padding: 0.5rem 0.85rem;
+        border: 1px solid var(--line);
+        border-radius: 0.5rem;
+        background: var(--card);
+        color: var(--ink);
+      }
+      button:hover {
+        border-color: var(--accent);
+      }
+      .skip {
+        position: absolute;
+        left: 1rem;
+        top: -100px;
+        padding: 0.5rem 1rem;
+        background: var(--page);
+        z-index: 10;
+      }
+      .skip:focus {
+        top: 1rem;
+      }
+      .shell {
+        display: grid;
+        grid-template-columns: 230px minmax(0, 1fr);
+        max-width: 1400px;
+        margin: auto;
+      }
+      aside {
+        padding: 2rem 1.25rem;
+        border-right: 1px solid var(--line);
+        align-self: start;
+        position: sticky;
+        top: 0;
+        max-height: 100vh;
+        overflow: auto;
+      }
+      .brand {
+        display: block;
+        color: var(--ink);
+        font-weight: 700;
+        letter-spacing: -0.04em;
+        font-size: 1.45rem;
+        text-decoration: none;
+      }
+      .eyebrow {
+        color: var(--muted);
+        font-size: 0.7rem;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        margin: 0 0 0.5rem;
+      }
+      nav details {
+        margin: 1.3rem 0 0;
+      }
+      nav summary {
+        color: var(--muted);
+        font-size: 0.8rem;
+        cursor: pointer;
+        margin-bottom: 0.5rem;
+      }
+      nav a {
+        display: block;
+        color: var(--muted);
+        padding: 0.35rem 0.55rem;
+        text-decoration: none;
+        border-radius: 0.4rem;
+        font-size: 0.875rem;
+      }
+      nav a[aria-current] {
+        color: var(--accent);
+        background: var(--card);
+        box-shadow: inset 2px 0 var(--accent);
+      }
+      main {
+        min-width: 0;
+        padding: 3.5rem clamp(1.2rem, 4vw, 4rem);
+        max-width: 1120px;
+      }
+      header {
+        margin-bottom: 2rem;
+      }
+      h1 {
+        font-size: clamp(2rem, 4vw, 3.4rem);
+        font-weight: 650;
+        line-height: 1.15;
+        letter-spacing: -0.04em;
+        margin: 0.8rem 0 1.1rem;
+        overflow-wrap: anywhere;
+      }
+      h2 {
+        font-size: 1.12rem;
+        font-weight: 600;
+        display: inline;
+        line-height: 1.4;
+        margin: 0;
+      }
+      h3 {
+        font-size: 1rem;
+        font-weight: 600;
+        margin: 1.6rem 0 0.5rem;
+      }
+      p {
+        margin: 0.8rem 0;
+      }
+      .muted {
+        color: var(--muted);
+      }
+      .badges,
+      .tools {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.6rem;
+      }
+      .tools {
+        margin-top: 1.4rem;
+      }
+      .badge {
+        font-size: 0.72rem;
+        padding: 0.15rem 0.6rem;
+        border: 1px solid var(--line);
+        border-radius: 2rem;
+        color: var(--muted);
+      }
+      .badge:first-child {
+        color: var(--accent);
+      }
+      .card {
+        background: var(--card);
+        backdrop-filter: blur(12px);
+        border: 1px solid var(--line);
+        border-radius: 0.8rem;
+        padding: 1.2rem 1.4rem;
+        margin: 1rem 0;
+        overflow-wrap: anywhere;
+        scroll-margin-top: 1rem;
+      }
+      .card summary {
+        cursor: pointer;
+      }
+      .card[open] summary {
+        margin-bottom: 1rem;
+      }
+      .intro p:first-child {
+        margin-top: 0;
+      }
+      .intro p:last-child {
+        margin-bottom: 0;
+      }
+      ul,
+      ol {
+        padding-left: 1.4rem;
+        margin: 0.8rem 0;
+      }
+      li {
+        margin: 0.4rem 0;
+      }
+      li::marker {
+        color: var(--muted);
+      }
+      code {
+        font:
+          0.87em/1.65 ui-monospace,
+          SFMono-Regular,
+          Consolas,
+          monospace;
+        background: var(--code);
+        padding: 0.15em 0.35em;
+        border-radius: 0.2rem;
+        overflow-wrap: anywhere;
+      }
+      pre {
+        padding: 1rem;
+        border: 1px solid var(--line);
+        border-radius: 0.5rem;
+        overflow: auto;
+        background: var(--code);
+        line-height: 1.5;
+        font-size: 0.84rem;
+      }
+      pre code {
+        padding: 0;
+        background: none;
+        white-space: pre;
+        overflow-wrap: normal;
+      }
+      .table-wrap {
+        max-width: 100%;
+        overflow: auto;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.875rem;
+        text-align: left;
+      }
+      th {
+        color: var(--muted);
+        font-size: 0.75rem;
+        font-weight: 600;
+      }
+      th,
+      td {
+        vertical-align: top;
+        padding: 0.8rem 0.7rem;
+        border-bottom: 1px solid var(--line);
+        min-width: 110px;
+      }
+      td code {
+        white-space: normal;
+      }
+      hr {
+        border: 0;
+        border-top: 1px solid var(--line);
+        margin: 1.5rem 0;
+      }
+      blockquote {
+        margin: 1rem 0;
+        padding-left: 1rem;
+        border-left: 2px solid var(--accent);
+        color: var(--muted);
+      }
+      input[type='checkbox'] {
+        margin-right: 0.5rem;
+        accent-color: var(--accent);
+      }
+      footer {
+        margin-top: 2rem;
+        color: var(--muted);
+        font-size: 0.8rem;
+      }
+      @media (max-width: 800px) {
+        .shell {
+          display: block;
+        }
+        aside {
+          position: static;
+          max-height: none;
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+          padding: 1.1rem;
+        }
+        nav {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 0 1rem;
+        }
+        nav details {
+          margin-top: 0.8rem;
+        }
+        main {
+          padding: 1.8rem 1rem;
+        }
+        .card {
+          padding: 1rem;
+        }
+      }
+      @media print {
+        aside,
+        .tools,
+        .skip {
+          display: none;
+        }
+        .shell {
+          display: block;
+        }
+        main {
+          max-width: none;
+          padding: 0;
+        }
+        .card {
+          break-inside: avoid;
+          backdrop-filter: none;
+        }
+      }
+    </style>
+  </head>
+  <body class="bg-zinc-950 text-zinc-100">
+    <a class="skip" href="#content">Skip to content</a>
+    <div class="shell">
+      <aside>
+        <p class="eyebrow">Project blueprint</p>
+        <a class="brand" href="../README.html">langonrock</a>
+        <nav aria-label="Blueprint navigation">
+          <details open>
+            <summary>Project</summary>
+            <a href="../../../AGENTS.html">Start here</a>
+            <a href="../README.html">Project skill</a>
+          </details>
+          <details open>
+            <summary>References</summary>
+            <a href="architecture.html" aria-current="page">Architecture</a>
+            <a href="verification.html">Verification</a>
+            <a href="engineering-guidelines.html">Engineering guidelines</a>
+            <a href="routing-matrix.html">Routing matrix</a>
+            <a href="role-contracts.html">Role contracts</a>
+          </details>
+          <details open>
+            <summary>Workflows</summary>
+            <a href="../workflows/implement/README.html">Implement</a>
+            <a href="../workflows/review/README.html">Review</a>
+            <a href="../workflows/document/README.html">Document</a>
+          </details>
+          <details open>
+            <summary>Runbooks</summary>
+            <a href="../../../docs/runbooks/agent-role-system.html"
+              >Agent runbook</a
+            >
+          </details>
+        </nav>
+      </aside>
+      <main id="content" tabindex="-1">
+        <header>
+          <p class="eyebrow">References</p>
+          <h1>Architecture</h1>
+          <div class="badges">
+            <span class="badge">Repository guide</span
+            ><span class="badge">Markdown source</span
+            ><span class="badge">Bun + TypeScript</span>
+          </div>
+          <div class="tools">
+            <button id="theme" type="button" aria-pressed="false">
+              Use light theme</button
+            ><button type="button" data-expand="true">Expand sections</button
+            ><button type="button" data-expand="false">Collapse sections</button
+            ><a href="architecture.md">Read Markdown</a>
+          </div>
+        </header>
+        <div class="document">
+          <section class="card intro">
+            <p>
+              This map describes the code in this repository.
+              <a href="../../../README.md">README.md</a> is the user guide.
+              <a href="../../../DESIGN.md">DESIGN.md</a> records design
+              rationale and earlier proposals; verify current behavior in source
+              and tests before using it as an API specification.
+            </p>
+          </section>
+          <details class="card" id="entry-points" open>
+            <summary><h2>Entry points</h2></summary>
+            <div
+              class="table-wrap"
+              tabindex="0"
+              role="region"
+              aria-label="Scrollable table"
+            >
+              <table>
+                <thead>
+                  <tr>
+                    <th>Entry</th>
+                    <th>Contract</th>
+                    <th>Implementation</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><code>langonrock</code> CLI</td>
+                    <td>
+                      Compile, sync, watch, serve, query, and administer stores
+                    </td>
+                    <td><a href="../../../src/cli.ts">src/cli.ts</a></td>
+                  </tr>
+                  <tr>
+                    <td><code>langonrock</code> package</td>
+                    <td>
+                      Bun-backed <code>open(dsn)</code> plus compiler/store
+                      exports
+                    </td>
+                    <td>
+                      <a href="../../../src/index.ts">src/index.ts</a>,
+                      <a href="../../../src/client/connection.ts"
+                        >connection.ts</a
+                      >
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>langonrock/client</code> package</td>
+                    <td>
+                      Fetch-based <code>connect(dsn)</code> with no Bun runtime
+                      dependency
+                    </td>
+                    <td>
+                      <a href="../../../src/client/client.ts">client.ts</a>,
+                      <a href="../../../src/client/remote.ts">remote.ts</a>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Shared connection</td>
+                    <td>Reads, source edits, sync, and close</td>
+                    <td><a href="../../../src/types.ts">src/types.ts</a></td>
+                  </tr>
+                  <tr>
+                    <td>HTTP daemon</td>
+                    <td>
+                      <code>/v1</code> routes, token-scoped tenants, source
+                      access
+                    </td>
+                    <td>
+                      <a href="../../../src/server/http.ts">http.ts</a>,
+                      <a href="../../../src/server/sourceroutes.ts"
+                        >sourceroutes.ts</a
+                      >
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>MCP stdio server</td>
+                    <td>
+                      <code>manifest</code>, <code>search</code>,
+                      <code>get</code>, <code>snapshot</code>,
+                      <code>write</code>, <code>delete</code>
+                    </td>
+                    <td>
+                      <a href="../../../src/mcp/server.ts">mcp/server.ts</a>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </details>
+          <details class="card" id="data-flow">
+            <summary><h2>Data flow</h2></summary>
+            <pre><code class="language-text">Markdown source directories
+  -&gt; okf/scan, frontmatter, ids, links
+  -&gt; compile/manifest and compile/tenant
+  -&gt; store/writer -&gt; store/format -&gt; immutable .tnt snapshot + current pointer
+  -&gt; store/reader and store/cache -&gt; manifest and sliced concept reads
+  -&gt; search/bm25, search/tenant and search/cache -&gt; ranked manifest rows
+  -&gt; client/connection or server/http -&gt; CLI, remote client, MCP
+</code></pre>
+            <p>
+              This is a data-flow outline, not an import graph. The shared
+              connection types contain no runtime imports. Keep HTTP and MCP
+              behavior in their adapters, and keep the compiler and storage
+              contracts independent of those protocols.
+            </p>
+          </details>
+          <details class="card" id="module-map">
+            <summary><h2>Module map</h2></summary>
+            <div
+              class="table-wrap"
+              tabindex="0"
+              role="region"
+              aria-label="Scrollable table"
+            >
+              <table>
+                <thead>
+                  <tr>
+                    <th>Area</th>
+                    <th>Responsibility</th>
+                    <th>Start with</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Markdown ingestion</td>
+                    <td>
+                      Scan bundles, parse frontmatter, derive shortest
+                      unambiguous ids, resolve links
+                    </td>
+                    <td>
+                      <a href="../../../src/okf/scan.ts">scan.ts</a>,
+                      <a href="../../../src/okf/ids.ts">ids.ts</a>,
+                      <a href="../../../src/okf/links.ts">links.ts</a>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Compilation</td>
+                    <td>
+                      Produce sorted TSV, diagnostics, bodies, section names,
+                      and tenant-wide ids
+                    </td>
+                    <td>
+                      <a href="../../../src/compile/manifest.ts">manifest.ts</a
+                      >, <a href="../../../src/compile/tenant.ts">tenant.ts</a>,
+                      <a href="../../../src/compile/sections.ts">sections.ts</a>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Snapshot storage</td>
+                    <td>
+                      Encode/decode TNT1 files, publish snapshots, read slices,
+                      invalidate cached readers
+                    </td>
+                    <td>
+                      <a href="../../../src/store/format.ts">format.ts</a>,
+                      <a href="../../../src/store/writer.ts">writer.ts</a>,
+                      <a href="../../../src/store/reader.ts">reader.ts</a>,
+                      <a href="../../../src/store/slice.ts">slice.ts</a>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Source editing</td>
+                    <td>
+                      Validate paths, edit Markdown, register source roots,
+                      watch changes
+                    </td>
+                    <td>
+                      <a href="../../../src/store/source.ts">source.ts</a>,
+                      <a href="../../../src/store/sourcepaths.ts"
+                        >sourcepaths.ts</a
+                      >,
+                      <a href="../../../src/server/sources.ts">sources.ts</a>,
+                      <a href="../../../src/store/watch.ts">watch.ts</a>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Search</td>
+                    <td>
+                      BM25, bounded link expansion, passage offsets,
+                      snapshot-keyed indexes
+                    </td>
+                    <td>
+                      <a href="../../../src/search/bm25.ts">bm25.ts</a>,
+                      <a href="../../../src/search/tenant.ts">tenant.ts</a>,
+                      <a href="../../../src/search/cache.ts">cache.ts</a>,
+                      <a href="../../../src/search/window.ts">window.ts</a>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Transport</td>
+                    <td>
+                      DSN parsing, remote requests, auth grants, HTTP errors,
+                      MCP schemas
+                    </td>
+                    <td>
+                      <a href="../../../src/client/dsn.ts">dsn.ts</a>,
+                      <a href="../../../src/server/tokens.ts">tokens.ts</a>,
+                      <a href="../../../src/server/errors.ts">errors.ts</a>,
+                      <a href="../../../src/mcp/server.ts">server.ts</a>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Maintenance</td>
+                    <td>
+                      Data directory selection, snapshot collection, platform
+                      builds
+                    </td>
+                    <td>
+                      <a href="../../../src/store/datadir.ts">datadir.ts</a>,
+                      <a href="../../../src/store/gc.ts">gc.ts</a>,
+                      <a href="../../../scripts/build.ts">build.ts</a>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Measurement</td>
+                    <td>Token, retrieval, corpus, and serving benchmarks</td>
+                    <td>
+                      <a href="../../../bench/run.ts">bench/run.ts</a>,
+                      <a href="../../../bench/ops.ts">bench/ops.ts</a>,
+                      <a href="../../../bench/real/">bench/real/</a>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </details>
+          <details class="card" id="storage-boundaries">
+            <summary><h2>Storage boundaries</h2></summary>
+            <p>
+              Each immediate non-hidden directory under a tenant's source root
+              is a bundle. The store's <code>sources.json</code> maps tenant
+              names to those source roots. A first source creation can register
+              a new tenant automatically. Existing snapshots without a source
+              mapping must be registered with the original source directory
+              before editing; an empty replacement root would discard knowledge
+              on sync.
+            </p>
+            <pre><code class="language-text">&lt;data root&gt;/
+  sources.json
+  tokens.json
+  sources/&lt;tenant&gt;/                 default root for a newly created tenant
+  tenants/&lt;tenant&gt;/
+    current                        active SHA-256 digest
+    snapshots/&lt;digest&gt;.tnt         compiled snapshot
+    log.jsonl                      sync log
+    lock                           writer lock while held
+</code></pre>
+            <p>
+              The snapshot contains a 32-byte TNT1 header, an uncompressed
+              manifest, a JSON directory of offsets and section ranges, and a
+              zstd-compressed body per concept. File byte offsets differ from
+              the character offsets used by <code>ConceptSlice</code>. Reader
+              and search caches refresh when the current snapshot digest
+              changes.
+            </p>
+          </details>
+          <details class="card" id="invariants">
+            <summary><h2>Invariants</h2></summary>
+            <ul>
+              <li>
+                Identical ordered input produces identical compiled snapshot
+                bytes. Do not put wall-clock values in the compiled read model.
+                Staleness is computed when reading a manifest; the sync log may
+                contain timestamps.
+              </li>
+              <li>
+                Publish complete snapshot files through temporary files, sync,
+                and rename. Replace the <code>current</code> pointer atomically
+                under the tenant writer lock. Readers use immutable snapshots
+                without taking that lock.
+              </li>
+              <li>
+                Preserve existing TNT1 compatibility when changing the encoder
+                or reader. Changes to the on-disk contract need explicit
+                compatibility decisions and format/restore coverage.
+              </li>
+              <li>
+                Derive ids through the shared compiler rules. A new sibling can
+                change a concept's id; source paths and concept ids are not
+                interchangeable.
+              </li>
+              <li>
+                Plain Markdown still compiles and emits diagnostics. CLI
+                <code>--strict</code> is the conformance gate; missing
+                frontmatter is not a universal ingestion failure.
+              </li>
+              <li>
+                Validate tenant, bundle, and concept paths before filesystem
+                access. Keep tenant identity bound to the selected transport and
+                token grant.
+              </li>
+              <li>
+                TCP requires tokens; a non-loopback listener requires TLS. Unix
+                socket access uses filesystem permissions. Write access over TCP
+                requires a writable grant.
+              </li>
+              <li>
+                At the <code>Connection</code> boundary, omitted
+                <code>replaces</code> asserts creation; replacing or deleting
+                one source file checks its current hash. HTTP expresses these
+                preconditions through conditional headers. Low-level source
+                helpers do not enforce the connection's hash contract.
+                Whole-bundle deletion has a separate API and no per-file
+                replacement hash.
+              </li>
+              <li>
+                <code>writeSource</code> changes source;
+                <code>sync</code> publishes the compiled model. MCP
+                <code>write</code> and <code>delete</code> perform the mutation
+                and sync together. Keep that distinction when documenting
+                callers of the lower-level connection interface.
+              </li>
+              <li>
+                Keep embedded and remote <code>Connection</code> results
+                compatible. The remote-only package must not gain a runtime
+                dependency on Bun or the filesystem store. Windows named-pipe
+                DSNs parse but opening them is explicitly unsupported.
+              </li>
+              <li>
+                Search returns manifest rows with passage positions, not full
+                bodies. Link expansion is one hop capped at <code>k</code>. MCP
+                <code>get</code> applies a default limit of 15,000 characters
+                per concept; the underlying read API can return full text.
+              </li>
+              <li>
+                MCP owns stdout. Send diagnostics to stderr to preserve stdio
+                framing.
+              </li>
+            </ul>
+          </details>
+          <details class="card" id="references">
+            <summary><h2>References</h2></summary>
+            <ul>
+              <li><a href="../README.html">Project entry</a></li>
+              <li>
+                <a href="verification.html">Verification by affected layer</a>
+              </li>
+              <li>
+                <a href="../../../README.md">Public usage and protocol</a>
+              </li>
+              <li>
+                <a href="../../../DESIGN.md">Historical design rationale</a>
+              </li>
+              <li><a href="architecture.html">Visual HTML version</a></li>
+            </ul>
+          </details>
+        </div>
+        <footer>
+          Source:
+          <a href="architecture.md"
+            >skills/langonrock/reference/architecture.md</a
+          >. Edit the Markdown source and regenerate this view.
+        </footer>
+      </main>
+    </div>
+    <script>
+      const themeButton = document.querySelector('#theme')
+      function setTheme(light) {
+        document.documentElement.classList.toggle('light', light)
+        document.documentElement.classList.toggle('dark', !light)
+        themeButton.textContent = light ? 'Use dark theme' : 'Use light theme'
+        themeButton.setAttribute('aria-pressed', String(light))
+      }
+      let saved = null
+      try {
+        saved = sessionStorage.getItem('langonrock-blueprint-theme')
+      } catch {}
+      setTheme(saved === 'light')
+      themeButton.addEventListener('click', () => {
+        const light = !document.documentElement.classList.contains('light')
+        setTheme(light)
+        try {
+          sessionStorage.setItem(
+            'langonrock-blueprint-theme',
+            light ? 'light' : 'dark'
+          )
+        } catch {}
+      })
+      for (const button of document.querySelectorAll('[data-expand]')) {
+        button.addEventListener('click', () => {
+          for (const section of document.querySelectorAll('main details'))
+            section.open = button.dataset.expand === 'true'
+        })
+      }
+      function revealAnchor() {
+        const target = document.getElementById(
+          decodeURIComponent(location.hash.slice(1))
+        )
+        const section = target?.closest('details')
+        if (section) {
+          section.open = true
+          target.scrollIntoView()
+        }
+      }
+      window.addEventListener('hashchange', revealAnchor)
+      revealAnchor()
+    </script>
+  </body>
+</html>
