@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Start here | langonrock blueprint</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      :root {
+        color-scheme: dark;
+        --page: #09090b;
+        --ink: #f4f4f5;
+        --muted: #a1a1aa;
+        --card: rgba(24, 24, 27, 0.65);
+        --line: #3f3f46;
+        --accent: #a7f3d0;
+        --code: #111113;
+      }
+      html.light {
+        color-scheme: light;
+        --page: #fafaf9;
+        --ink: #18181b;
+        --muted: #52525b;
+        --card: rgba(255, 255, 255, 0.85);
+        --line: #d4d4d8;
+        --accent: #065f46;
+        --code: #f1f1f0;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--page) !important;
+        color: var(--ink) !important;
+        font:
+          16px/1.7 ui-sans-serif,
+          system-ui,
+          sans-serif;
+      }
+      a {
+        color: var(--accent);
+        text-underline-offset: 4px;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+      button,
+      summary,
+      a {
+        -webkit-tap-highlight-color: transparent;
+      }
+      :focus-visible {
+        outline: 3px solid var(--accent);
+        outline-offset: 4px;
+      }
+      button {
+        font: inherit;
+        font-size: 0.875rem;
+        cursor: pointer;
+        padding: 0.5rem 0.85rem;
+        border: 1px solid var(--line);
+        border-radius: 0.5rem;
+        background: var(--card);
+        color: var(--ink);
+      }
+      button:hover {
+        border-color: var(--accent);
+      }
+      .skip {
+        position: absolute;
+        left: 1rem;
+        top: -100px;
+        padding: 0.5rem 1rem;
+        background: var(--page);
+        z-index: 10;
+      }
+      .skip:focus {
+        top: 1rem;
+      }
+      .shell {
+        display: grid;
+        grid-template-columns: 230px minmax(0, 1fr);
+        max-width: 1400px;
+        margin: auto;
+      }
+      aside {
+        padding: 2rem 1.25rem;
+        border-right: 1px solid var(--line);
+        align-self: start;
+        position: sticky;
+        top: 0;
+        max-height: 100vh;
+        overflow: auto;
+      }
+      .brand {
+        display: block;
+        color: var(--ink);
+        font-weight: 700;
+        letter-spacing: -0.04em;
+        font-size: 1.45rem;
+        text-decoration: none;
+      }
+      .eyebrow {
+        color: var(--muted);
+        font-size: 0.7rem;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        margin: 0 0 0.5rem;
+      }
+      nav details {
+        margin: 1.3rem 0 0;
+      }
+      nav summary {
+        color: var(--muted);
+        font-size: 0.8rem;
+        cursor: pointer;
+        margin-bottom: 0.5rem;
+      }
+      nav a {
+        display: block;
+        color: var(--muted);
+        padding: 0.35rem 0.55rem;
+        text-decoration: none;
+        border-radius: 0.4rem;
+        font-size: 0.875rem;
+      }
+      nav a[aria-current] {
+        color: var(--accent);
+        background: var(--card);
+        box-shadow: inset 2px 0 var(--accent);
+      }
+      main {
+        min-width: 0;
+        padding: 3.5rem clamp(1.2rem, 4vw, 4rem);
+        max-width: 1120px;
+      }
+      header {
+        margin-bottom: 2rem;
+      }
+      h1 {
+        font-size: clamp(2rem, 4vw, 3.4rem);
+        font-weight: 650;
+        line-height: 1.15;
+        letter-spacing: -0.04em;
+        margin: 0.8rem 0 1.1rem;
+        overflow-wrap: anywhere;
+      }
+      h2 {
+        font-size: 1.12rem;
+        font-weight: 600;
+        display: inline;
+        line-height: 1.4;
+        margin: 0;
+      }
+      h3 {
+        font-size: 1rem;
+        font-weight: 600;
+        margin: 1.6rem 0 0.5rem;
+      }
+      p {
+        margin: 0.8rem 0;
+      }
+      .muted {
+        color: var(--muted);
+      }
+      .badges,
+      .tools {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.6rem;
+      }
+      .tools {
+        margin-top: 1.4rem;
+      }
+      .badge {
+        font-size: 0.72rem;
+        padding: 0.15rem 0.6rem;
+        border: 1px solid var(--line);
+        border-radius: 2rem;
+        color: var(--muted);
+      }
+      .badge:first-child {
+        color: var(--accent);
+      }
+      .card {
+        background: var(--card);
+        backdrop-filter: blur(12px);
+        border: 1px solid var(--line);
+        border-radius: 0.8rem;
+        padding: 1.2rem 1.4rem;
+        margin: 1rem 0;
+        overflow-wrap: anywhere;
+        scroll-margin-top: 1rem;
+      }
+      .card summary {
+        cursor: pointer;
+      }
+      .card[open] summary {
+        margin-bottom: 1rem;
+      }
+      .intro p:first-child {
+        margin-top: 0;
+      }
+      .intro p:last-child {
+        margin-bottom: 0;
+      }
+      ul,
+      ol {
+        padding-left: 1.4rem;
+        margin: 0.8rem 0;
+      }
+      li {
+        margin: 0.4rem 0;
+      }
+      li::marker {
+        color: var(--muted);
+      }
+      code {
+        font:
+          0.87em/1.65 ui-monospace,
+          SFMono-Regular,
+          Consolas,
+          monospace;
+        background: var(--code);
+        padding: 0.15em 0.35em;
+        border-radius: 0.2rem;
+        overflow-wrap: anywhere;
+      }
+      pre {
+        padding: 1rem;
+        border: 1px solid var(--line);
+        border-radius: 0.5rem;
+        overflow: auto;
+        background: var(--code);
+        line-height: 1.5;
+        font-size: 0.84rem;
+      }
+      pre code {
+        padding: 0;
+        background: none;
+        white-space: pre;
+        overflow-wrap: normal;
+      }
+      .table-wrap {
+        max-width: 100%;
+        overflow: auto;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.875rem;
+        text-align: left;
+      }
+      th {
+        color: var(--muted);
+        font-size: 0.75rem;
+        font-weight: 600;
+      }
+      th,
+      td {
+        vertical-align: top;
+        padding: 0.8rem 0.7rem;
+        border-bottom: 1px solid var(--line);
+        min-width: 110px;
+      }
+      td code {
+        white-space: normal;
+      }
+      hr {
+        border: 0;
+        border-top: 1px solid var(--line);
+        margin: 1.5rem 0;
+      }
+      blockquote {
+        margin: 1rem 0;
+        padding-left: 1rem;
+        border-left: 2px solid var(--accent);
+        color: var(--muted);
+      }
+      input[type='checkbox'] {
+        margin-right: 0.5rem;
+        accent-color: var(--accent);
+      }
+      footer {
+        margin-top: 2rem;
+        color: var(--muted);
+        font-size: 0.8rem;
+      }
+      @media (max-width: 800px) {
+        .shell {
+          display: block;
+        }
+        aside {
+          position: static;
+          max-height: none;
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+          padding: 1.1rem;
+        }
+        nav {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 0 1rem;
+        }
+        nav details {
+          margin-top: 0.8rem;
+        }
+        main {
+          padding: 1.8rem 1rem;
+        }
+        .card {
+          padding: 1rem;
+        }
+      }
+      @media print {
+        aside,
+        .tools,
+        .skip {
+          display: none;
+        }
+        .shell {
+          display: block;
+        }
+        main {
+          max-width: none;
+          padding: 0;
+        }
+        .card {
+          break-inside: avoid;
+          backdrop-filter: none;
+        }
+      }
+    </style>
+  </head>
+  <body class="bg-zinc-950 text-zinc-100">
+    <a class="skip" href="#content">Skip to content</a>
+    <div class="shell">
+      <aside>
+        <p class="eyebrow">Project blueprint</p>
+        <a class="brand" href="skills/langonrock/README.html">langonrock</a>
+        <nav aria-label="Blueprint navigation">
+          <details open>
+            <summary>Project</summary>
+            <a href="AGENTS.html" aria-current="page">Start here</a>
+            <a href="skills/langonrock/README.html">Project skill</a>
+          </details>
+          <details open>
+            <summary>References</summary>
+            <a href="skills/langonrock/reference/architecture.html"
+              >Architecture</a
+            >
+            <a href="skills/langonrock/reference/verification.html"
+              >Verification</a
+            >
+            <a href="skills/langonrock/reference/engineering-guidelines.html"
+              >Engineering guidelines</a
+            >
+            <a href="skills/langonrock/reference/routing-matrix.html"
+              >Routing matrix</a
+            >
+            <a href="skills/langonrock/reference/role-contracts.html"
+              >Role contracts</a
+            >
+          </details>
+          <details open>
+            <summary>Workflows</summary>
+            <a href="skills/langonrock/workflows/implement/README.html"
+              >Implement</a
+            >
+            <a href="skills/langonrock/workflows/review/README.html">Review</a>
+            <a href="skills/langonrock/workflows/document/README.html"
+              >Document</a
+            >
+          </details>
+          <details open>
+            <summary>Runbooks</summary>
+            <a href="docs/runbooks/agent-role-system.html">Agent runbook</a>
+          </details>
+        </nav>
+      </aside>
+      <main id="content" tabindex="-1">
+        <header>
+          <p class="eyebrow">Project</p>
+          <h1>Agent instructions</h1>
+          <div class="badges">
+            <span class="badge">Repository guide</span
+            ><span class="badge">Markdown source</span
+            ><span class="badge">Bun + TypeScript</span>
+          </div>
+          <div class="tools">
+            <button id="theme" type="button" aria-pressed="false">
+              Use light theme</button
+            ><button type="button" data-expand="true">Expand sections</button
+            ><button type="button" data-expand="false">Collapse sections</button
+            ><a href="AGENTS.md">Read Markdown</a>
+          </div>
+        </header>
+        <div class="document">
+          <details class="card" id="start-here" open>
+            <summary><h2>Start here</h2></summary>
+            <p>
+              Read the
+              <a href="skills/langonrock/reference/engineering-guidelines.html"
+                >engineering guidelines</a
+              >
+              before working in this repository. They preserve the project's
+              existing rules and apply to every task.
+            </p>
+            <p>
+              Use the
+              <a href="skills/langonrock/README.html"
+                >langonrock project skill</a
+              >
+              to select a workflow. The
+              <a href="skills/langonrock/README.html">project manual</a>
+              provides a browsable version.
+            </p>
+          </details>
+          <details class="card" id="workflows">
+            <summary><h2>Workflows</h2></summary>
+            <div
+              class="table-wrap"
+              tabindex="0"
+              role="region"
+              aria-label="Scrollable table"
+            >
+              <table>
+                <thead>
+                  <tr>
+                    <th>Request</th>
+                    <th>Contract</th>
+                    <th>Manual</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Implement or fix behavior</td>
+                    <td>
+                      <a
+                        href="skills/langonrock/workflows/implement/README.html"
+                        >implement</a
+                      >
+                    </td>
+                    <td>
+                      <a
+                        href="skills/langonrock/workflows/implement/README.html"
+                        >HTML</a
+                      >
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Review a change</td>
+                    <td>
+                      <a href="skills/langonrock/workflows/review/README.html"
+                        >review</a
+                      >
+                    </td>
+                    <td>
+                      <a href="skills/langonrock/workflows/review/README.html"
+                        >HTML</a
+                      >
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Update project documentation</td>
+                    <td>
+                      <a href="skills/langonrock/workflows/document/README.html"
+                        >document</a
+                      >
+                    </td>
+                    <td>
+                      <a href="skills/langonrock/workflows/document/README.html"
+                        >HTML</a
+                      >
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </details>
+          <details class="card" id="references">
+            <summary><h2>References</h2></summary>
+            <ul>
+              <li>
+                <a href="skills/langonrock/reference/architecture.html"
+                  >Architecture</a
+                >
+              </li>
+              <li>
+                <a href="skills/langonrock/reference/verification.html"
+                  >Verification commands</a
+                >
+              </li>
+              <li>
+                <a href="docs/runbooks/agent-role-system.html">Agent runbook</a>
+                and <a href="docs/runbooks/agent-role-system.html">HTML</a>
+              </li>
+              <li><a href="AGENTS.html">Visual HTML version</a></li>
+            </ul>
+          </details>
+        </div>
+        <footer>
+          Source: <a href="AGENTS.md">AGENTS.md</a>. Edit the Markdown source
+          and regenerate this view.
+        </footer>
+      </main>
+    </div>
+    <script>
+      const themeButton = document.querySelector('#theme')
+      function setTheme(light) {
+        document.documentElement.classList.toggle('light', light)
+        document.documentElement.classList.toggle('dark', !light)
+        themeButton.textContent = light ? 'Use dark theme' : 'Use light theme'
+        themeButton.setAttribute('aria-pressed', String(light))
+      }
+      let saved = null
+      try {
+        saved = sessionStorage.getItem('langonrock-blueprint-theme')
+      } catch {}
+      setTheme(saved === 'light')
+      themeButton.addEventListener('click', () => {
+        const light = !document.documentElement.classList.contains('light')
+        setTheme(light)
+        try {
+          sessionStorage.setItem(
+            'langonrock-blueprint-theme',
+            light ? 'light' : 'dark'
+          )
+        } catch {}
+      })
+      for (const button of document.querySelectorAll('[data-expand]')) {
+        button.addEventListener('click', () => {
+          for (const section of document.querySelectorAll('main details'))
+            section.open = button.dataset.expand === 'true'
+        })
+      }
+      function revealAnchor() {
+        const target = document.getElementById(
+          decodeURIComponent(location.hash.slice(1))
+        )
+        const section = target?.closest('details')
+        if (section) {
+          section.open = true
+          target.scrollIntoView()
+        }
+      }
+      window.addEventListener('hashchange', revealAnchor)
+      revealAnchor()
+    </script>
+  </body>
+</html>
