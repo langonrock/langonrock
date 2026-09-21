@@ -16,6 +16,6 @@
     "noFallthroughCasesInSwitch": true,
     "exactOptionalPropertyTypes": true
   },
-  "include": ["src", "test", "scripts", "bench/dbms", "bench/operations"],
+  "include": ["src", "test", "scripts", "bench"],
   "exclude": ["node_modules", "dist"]
 }
