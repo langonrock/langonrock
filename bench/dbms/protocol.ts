@@ -1,6 +1,6 @@
 import type { ConceptSlice, TenantReader } from '../../src/index.ts'
 
-export const BASELINE = '1cbcc009bd93814d56410ed3473d65c101f97d8d'
+export const BASELINE = '0021f08ac63d5123380beb4872a416a016217a5a'
 export const SIZES = [500, 5000, 20000]
 export const SEED = 7
 export const TENANT = 'benchmark'

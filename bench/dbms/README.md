@@ -11,11 +11,18 @@ bun bench/dbms/compare.ts bench/results/dbms/comparison.json
 ```
 
 The baseline is extracted from commit
-`1cbcc009bd93814d56410ed3473d65c101f97d8d`. Extraction and stores use a unique
+`0021f08ac63d5123380beb4872a416a016217a5a`. Extraction and stores use a unique
 temporary directory. No checkout, reset, user source, or existing benchmark
 directory is modified. The runner uses the installed dependencies and records
 the Bun version. Run both sides on the same runtime and machine without other
 benchmark workers.
+
+The recorded captures retain the original baseline id
+`1cbcc009bd93814d56410ed3473d65c101f97d8d`. The current id has the same Git
+tree; rewriting commit timestamps changed its identity without changing its
+files. New captures use the reachable id so they work from a fresh clone.
+Existing captures and their provenance hashes remain unchanged. Clone with
+full history when running comparisons; a shallow checkout may omit the baseline.
 
 Each size uses seed 7 with 500 concepts per bundle. Each independent pair runs
 five child processes per side: import, open, read/search, edits, and five-tenant

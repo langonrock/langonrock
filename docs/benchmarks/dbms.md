@@ -6,6 +6,11 @@ Langonrock document engine. "Before" is commit
 into TNT snapshots. "After" commits authoritative documents with atomic batches,
 history, and restore. Neither column is direct folder access or Chroma.
 
+For new captures, the runner uses baseline commit
+`0021f08ac63d5123380beb4872a416a016217a5a`, which has the same Git tree as the
+recorded baseline above. Its identity changed when commit timestamps were
+rewritten. Historical captures keep their original ids and exact bytes.
+
 Performance acceptance remains unresolved. The final comparison has thirty
 independent pairs at each size: 109 metric rows pass and five are inconclusive.
 No row is a definite failure, and every point estimate fits its budget, but the
