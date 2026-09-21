@@ -10,11 +10,11 @@ export function fixEvaluationDate(): void {
         target,
         args.length === 0 ? [timestamp] : args,
         newTarget
-      ),
+      ) as Date,
     apply: () => new OriginalDate(timestamp).toString(),
     get: (target, property, receiver) =>
       property === 'now'
         ? () => timestamp
-        : Reflect.get(target, property, receiver)
+        : (Reflect.get(target, property, receiver) as unknown)
   })
 }

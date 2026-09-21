@@ -489,7 +489,7 @@ async function okfSide(corpus: Corpus, questions: Question[], probe: string) {
   )
   const loadMs = await median(1, () => loadBundle(SOURCE, [...pathOf.values()]))
   const bundle = await loadBundle(SOURCE, [...pathOf.values()])
-  const buildMs = await median(1, async () => buildOkfIndex(bundle))
+  const buildMs = await median(1, () => Promise.resolve(buildOkfIndex(bundle)))
   const index = buildOkfIndex(bundle)
   const after = memory()
   const tokens = new Map(
@@ -512,8 +512,8 @@ async function okfSide(corpus: Corpus, questions: Question[], probe: string) {
     loadMs,
     buildMs,
     rssMb: after.rss,
-    queryMs: await median(20, async () =>
-      searchConcepts(bundle, index, probe, K)
+    queryMs: await median(20, () =>
+      Promise.resolve(searchConcepts(bundle, index, probe, K))
     ),
     coldMs: await median(20, async () => {
       await readIndex(SOURCE, corpus.bundles[0] as string)

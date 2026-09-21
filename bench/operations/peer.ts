@@ -28,7 +28,9 @@ export function peer(request: Request) {
   const iterator = messages(child.stdout)
 
   return {
-    send: (command: string) => child.stdin.write(`${command}\n`),
+    send: async (command: string) => {
+      await child.stdin.write(`${command}\n`)
+    },
     next: async <T>(): Promise<T> => {
       const timeout = setTimeout(() => child.kill('SIGKILL'), 60000)
 
@@ -43,7 +45,7 @@ export function peer(request: Request) {
       }
     },
     finish: async () => {
-      child.stdin.end()
+      await child.stdin.end()
       check((await child.exited) === 0, `${request.role} worker failed`)
     },
     kill: async () => {

@@ -6,7 +6,7 @@ import { createMcpServer } from '../../src/mcp/lazy.ts'
 import { check } from './types.ts'
 
 export async function schema(root: string, databaseTools: boolean) {
-  const connection = await open(`okf://${root}?tenant=schemas`)
+  const connection = open(`okf://${root}?tenant=schemas`)
   const server = createMcpServer(connection, undefined, { databaseTools })
   const client = new Client({ name: 'schema-benchmark', version: '1' })
   const [left, right] = InMemoryTransport.createLinkedPair()

@@ -46,7 +46,7 @@ async function nativeAdapter(
         ]
       })
     },
-    restoreSource: async () => undefined
+    restoreSource: () => Promise.resolve()
   }
 }
 

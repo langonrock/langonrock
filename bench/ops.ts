@@ -150,13 +150,13 @@ async function perTenant(count: number) {
   }
 }
 
-function textOf(result: { content?: unknown }): string {
+function textOf(result: Record<string, unknown>): string {
   const parts = (result.content ?? []) as { text?: string }[]
 
   return parts.map(part => part.text ?? '').join('\n')
 }
 
-function hashOffered(result: { content?: unknown }): string {
+function hashOffered(result: Record<string, unknown>): string {
   return /retry with replaces: "([0-9a-f]+)"/.exec(textOf(result))?.[1] ?? ''
 }
 
@@ -355,7 +355,7 @@ async function daemon(corpus: Corpus, probe: string) {
   }
 
   await connection.close()
-  server.stop(true)
+  await server.stop(true)
   await rm(socket, { force: true })
 
   return timings

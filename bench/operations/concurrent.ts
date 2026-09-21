@@ -18,7 +18,7 @@ async function ready(child: Peer): Promise<void> {
 
 async function group(input: Request, children: Peer[]) {
   await Promise.all(children.map(ready))
-  children.forEach(child => child.send('sample'))
+  await Promise.all(children.map(child => child.send('sample')))
   const memory = await Promise.all(
     children.map(child =>
       child.next<{ rssBytes: number; peakRssBytes: number }>()
@@ -26,7 +26,7 @@ async function group(input: Request, children: Peer[]) {
   )
   const coordinatorRssBytes = process.memoryUsage().rss
 
-  children.forEach(child => child.send('go'))
+  await Promise.all(children.map(child => child.send('go')))
   const [writerA, writerB, reader] = children
 
   check(writerA && writerB && reader, 'missing contention participant')
@@ -35,7 +35,7 @@ async function group(input: Request, children: Peer[]) {
     writerB.next<Outcome>()
   ])
 
-  reader.send('verify')
+  await reader.send('verify')
   const pinned = await reader.next<Outcome>()
   const winner = writers.find(result => result.outcome === 'committed')
 
