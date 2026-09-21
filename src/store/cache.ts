@@ -45,5 +45,3 @@ export function createReaderCache(root: string) {
     return reader
   }
 }
-
-export type ReaderCache = ReturnType<typeof createReaderCache>

@@ -15,8 +15,6 @@ import type { SearchOptions } from '../search/tenant.ts'
 import type { GetOptions, SyncResult } from '../types.ts'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 
-export { GET_LIMIT, MANIFEST_URI } from './constants.ts'
-
 const MANIFEST_DESCRIPTION = `Read the tenant's knowledge manifest: one dense TSV row per concept with its id, bundle, kind, status, grain, a one-line summary, and outgoing links.
 
 Call this before anything else whenever you need to know what knowledge exists. It is the index: pick ids from it, then fetch those ids with "get". Never guess an id.

@@ -5,8 +5,8 @@ const TOKEN = /[\p{L}\p{N}]+/gu
 const NON_ASCII = /[\u0080-\uffff]/
 const MARKS = /\p{M}+/gu
 
-export const K1 = 1.2
-export const B = 0.75
+const K1 = 1.2
+const B = 0.75
 
 /**
  * How many times a manifest cell counts against a word of prose. Compiling the
@@ -19,7 +19,7 @@ export const B = 0.75
  * start costing recall on queries that describe a concept instead of naming
  * one, so this is the smallest value that captures the gain.
  */
-export const FIELD_WEIGHT = 2
+const FIELD_WEIGHT = 2
 
 /**
  * How many times the concept's own names — its id and its frontmatter title —
@@ -33,7 +33,7 @@ export const FIELD_WEIGHT = 2
  * outside noise, and describing queries never move at all — the recall cost
  * that capped FIELD_WEIGHT does not apply to a concept's own name.
  */
-export const NAME_WEIGHT = 4
+const NAME_WEIGHT = 4
 
 export interface Document {
   id: string

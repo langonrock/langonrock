@@ -43,7 +43,7 @@ export async function withHead<T>(
   }
 }
 
-export function checkRoot(head: Head, revision: Revision): void {
+function checkRoot(head: Head, revision: Revision): void {
   if (
     head.snapshot !== revision.snapshot ||
     head.archive !== revision.archive ||

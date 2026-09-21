@@ -24,7 +24,7 @@ export interface Concept {
   links: string[]
 }
 
-export type DiagnosticLevel = 'warn' | 'error'
+type DiagnosticLevel = 'warn' | 'error'
 
 export interface Diagnostic {
   level: DiagnosticLevel

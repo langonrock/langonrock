@@ -1,6 +1,6 @@
 const MD_EXTENSION = /\.md$/i
 
-export function stripExtension(path: string): string {
+function stripExtension(path: string): string {
   return path.replace(MD_EXTENSION, '')
 }
 

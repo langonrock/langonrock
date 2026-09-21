@@ -7,8 +7,8 @@ import { currentFile } from './paths.ts'
 
 import type { PutResult } from './writer.ts'
 
-export const DEFAULT_DEBOUNCE_MS = 200
-export const DEFAULT_RESCAN_MS = 30_000
+const DEFAULT_DEBOUNCE_MS = 200
+const DEFAULT_RESCAN_MS = 30_000
 
 export interface WatchOptions {
   source: string

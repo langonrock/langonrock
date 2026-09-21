@@ -26,7 +26,7 @@ export async function measure(run: () => Promise<unknown>): Promise<number> {
   return (Bun.nanoseconds() - started) / 1e6
 }
 
-export function random(seed: number): () => number {
+function random(seed: number): () => number {
   let state = seed >>> 0
 
   return () => {

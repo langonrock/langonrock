@@ -18,8 +18,6 @@ import type { DirEntry } from '../store/format.ts'
 import type { EncodedBody } from './compression.ts'
 import type { ImportLocation } from './importstate.ts'
 
-export { scanDocuments } from './input.ts'
-
 export interface ReusableContent {
   encoded?: Map<string, EncodedBody>
   capture?: boolean

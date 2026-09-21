@@ -25,9 +25,7 @@ export interface ScannedImport {
   bundles: string[]
 }
 
-export async function scanImport(
-  location: ImportLocation
-): Promise<ScannedImport> {
+async function scanImport(location: ImportLocation): Promise<ScannedImport> {
   const source = await realpath(location.source)
   const bundles =
     location.bundle === undefined

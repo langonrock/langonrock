@@ -18,7 +18,7 @@ export interface GcOptions {
   dryRun?: boolean
 }
 
-export interface Skipped {
+interface Skipped {
   name: string
   reason: string
 }

@@ -3,7 +3,6 @@ import {
   compileContents,
   compileSource
 } from '../compile/manifest.ts'
-import { discoverBundles } from '../compile/tenant.ts'
 import { isConceptPath } from '../okf/scan.ts'
 import { deriveIds } from '../okf/ids.ts'
 import { assertBundleName, assertConceptPath } from '../store/sourcepaths.ts'
@@ -14,23 +13,6 @@ import { readText } from './text.ts'
 import type { CompileData, ConceptResult } from '../compile/manifest.ts'
 import type { OriginalSource } from './sourcearchive.ts'
 import type { DocumentRecord } from './types.ts'
-
-export async function readBundle(
-  name: string,
-  dir: string
-): Promise<DocumentRecord[]> {
-  assertBundleName(name)
-
-  const paths = await bundlePaths(dir)
-
-  return Promise.all(
-    paths.map(async path => ({
-      bundle: name,
-      path,
-      source: await readText(Bun.file(`${dir}/${path}`))
-    }))
-  )
-}
 
 export async function bundlePaths(dir: string): Promise<string[]> {
   const paths: string[] = []
@@ -85,14 +67,6 @@ export async function compileFolder(
         .filter((part): part is ConceptResult => part !== undefined)
     )
   }
-}
-
-export async function scanDocuments(root: string): Promise<DocumentRecord[]> {
-  const bundles = await discoverBundles(root)
-
-  return (
-    await Promise.all(bundles.map(({ name, dir }) => readBundle(name, dir)))
-  ).flat()
 }
 
 export interface CompiledInput {

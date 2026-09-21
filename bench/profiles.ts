@@ -8,12 +8,12 @@ import * as spec from './real/spec.ts'
 import type { Corpus } from './okf.ts'
 import type { Question } from './questions.ts'
 
-export interface Built {
+interface Built {
   corpus: Corpus
   questions: Question[]
 }
 
-export interface SizeOptions {
+interface SizeOptions {
   bundles: number
   perBundle: number
 }

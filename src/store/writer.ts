@@ -181,7 +181,7 @@ function widthOf(options: PutOptions): TenantCompileOptionsShape {
 
 type TenantCompileOptionsShape = { summaryWidth?: number }
 
-export async function putTenant(
+async function putTenant(
   sources: BundleSource[],
   options: PutOptions
 ): Promise<PutResult> {

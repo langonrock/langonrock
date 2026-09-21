@@ -14,7 +14,7 @@ export const DEFAULT_K = 8
 const EMPTY_CELL = '-'
 
 export { parseManifest } from '../compile/parsed.ts'
-export type { Manifest, ManifestRow } from '../compile/parsed.ts'
+export type { Manifest } from '../compile/parsed.ts'
 
 export interface TenantIndex {
   snapshot: string

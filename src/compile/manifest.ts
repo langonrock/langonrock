@@ -222,7 +222,7 @@ export async function compileBundle(
   return compileFiles(files, { bundle, summaryWidth })
 }
 
-export function compileFiles(
+function compileFiles(
   files: SourceFile[],
   options: CompileOptions
 ): CompileResult {

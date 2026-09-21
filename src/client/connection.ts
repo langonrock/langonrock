@@ -12,23 +12,7 @@ import { sourceWriting } from './sourcewriting.ts'
 import type { DatabaseConnection } from '../types.ts'
 import type { Target } from './dsn.ts'
 
-export type {
-  ConceptSlice,
-  Connection,
-  DatabaseConnection,
-  DocumentChange,
-  GetOptions,
-  HistoryOptions,
-  RestoreRequest,
-  RevisionInfo,
-  RevisionPage,
-  RevisionResult,
-  SearchOptions,
-  SourceEntry,
-  SourceFile,
-  SyncResult,
-  TransactionRequest
-} from '../types.ts'
+export type { Connection, DatabaseConnection, GetOptions } from '../types.ts'
 
 const NPIPE_UNSUPPORTED =
   'npipe transport is unavailable: Bun.serve has no Windows named pipe support. ' +

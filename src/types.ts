@@ -1,7 +1,7 @@
 import type { Transport } from './client/dsn.ts'
 import type { Diagnostic } from './okf/types.ts'
 
-export type { Diagnostic, DiagnosticLevel } from './okf/types.ts'
+export type { Diagnostic } from './okf/types.ts'
 
 /**
  * The contract shared by every transport, kept free of any runtime import so a

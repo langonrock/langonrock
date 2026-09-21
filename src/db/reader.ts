@@ -120,7 +120,7 @@ export interface PinnedSources {
   archive: SourceArchive
 }
 
-export async function loadArchive(
+async function loadArchive(
   target: DatabaseTarget,
   head: Head
 ): Promise<SourceArchive> {
