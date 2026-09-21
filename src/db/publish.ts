@@ -191,7 +191,7 @@ export async function publish(
   candidate: Candidate
 ): Promise<RevisionResult> {
   if (candidate.base === undefined) {
-    await ensureLayout(target)
+    ensureLayout(target)
   }
 
   const release = await lock(`${directory(target)}/writer.lock`)

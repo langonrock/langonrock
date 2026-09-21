@@ -58,10 +58,10 @@ export async function compileFolder(
 
   const paths = await bundlePaths(dir)
   const ids = deriveIds(paths.filter(isConceptPath))
-  const parts: {
+  const parts = new Array<{
     compiled: ConceptResult | undefined
     source: OriginalSource
-  }[] = new Array(paths.length)
+  }>(paths.length)
 
   await visit(paths.entries(), async ([index, path]) => {
     const source = await readText(Bun.file(`${dir}/${path}`))

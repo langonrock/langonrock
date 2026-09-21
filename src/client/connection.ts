@@ -58,7 +58,9 @@ function embeddedConnection(target: Target): DatabaseConnection {
   return {
     transport: 'embedded',
     snapshot: () =>
-      withReader(cache, tenant, async ({ reader }) => reader.snapshot),
+      withReader(cache, tenant, ({ reader }) =>
+        Promise.resolve(reader.snapshot)
+      ),
     manifest: bundle =>
       withReader(cache, tenant, ({ reader }) => reader.manifest(bundle)),
     get: (ids, options) =>
@@ -84,6 +86,8 @@ function embeddedConnection(target: Target): DatabaseConnection {
     close: async () => {
       closed = true
       cache.close()
+
+      return Promise.resolve()
     }
   }
 }

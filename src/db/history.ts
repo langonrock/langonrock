@@ -97,7 +97,9 @@ function decodeCursor(cursor: string, tenant: string): string {
   }
 
   try {
-    const value = JSON.parse(Buffer.from(cursor, 'base64url').toString())
+    const value = JSON.parse(
+      Buffer.from(cursor, 'base64url').toString()
+    ) as Record<string, unknown>
 
     if (value.version !== 1 || value.tenant !== tenant) {
       throw new InvalidRequestError('invalid history cursor')
@@ -105,7 +107,7 @@ function decodeCursor(cursor: string, tenant: string): string {
 
     assertHash(value.before)
 
-    return value.before as string
+    return value.before
   } catch {
     throw new InvalidRequestError('invalid history cursor')
   }

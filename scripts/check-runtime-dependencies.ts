@@ -57,7 +57,10 @@ export async function checkRuntimeDependencies(
     )
   }
 
-  const manifest = await Bun.file(resolve(root, 'package.json')).json()
+  const manifest = (await Bun.file(resolve(root, 'package.json')).json()) as {
+    dependencies?: Record<string, unknown>
+    devDependencies?: Record<string, unknown>
+  }
   const lock = Bun.JSONC.parse(
     await Bun.file(resolve(root, 'bun.lock')).text()
   ) as { packages: Record<string, unknown> }

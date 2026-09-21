@@ -267,7 +267,9 @@ function databaseOf(call: Call, prefix: string) {
         query.set('limit', String(options.limit))
       }
 
-      const response = await assertOk(await call(`${prefix}/history?${query}`))
+      const response = await assertOk(
+        await call(`${prefix}/history?${query.toString()}`)
+      )
 
       return (await response.json()) as RevisionPage
     }
@@ -284,6 +286,6 @@ export function remoteConnection(target: Target): DatabaseConnection {
     ...readingOf(call, prefix),
     ...writingOf(call, prefix),
     ...databaseOf(call, prefix),
-    close: async () => undefined
+    close: () => Promise.resolve()
   }
 }

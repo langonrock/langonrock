@@ -2,7 +2,7 @@ import { releaseBuffer } from '../buffers.ts'
 
 const ASCII_TOKEN = /[a-z0-9]+/g
 const TOKEN = /[\p{L}\p{N}]+/gu
-const NON_ASCII = /[^\x00-\x7f]/
+const NON_ASCII = /[\u0080-\uffff]/
 const MARKS = /\p{M}+/gu
 
 export const K1 = 1.2

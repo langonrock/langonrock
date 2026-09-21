@@ -92,8 +92,8 @@ function restoreRequest(value: unknown): RestoreRequest {
   assertHash(value.expectedRevision)
 
   return {
-    revision: value.revision as string,
-    expectedRevision: value.expectedRevision as string
+    revision: value.revision,
+    expectedRevision: value.expectedRevision
   }
 }
 
