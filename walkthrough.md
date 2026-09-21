@@ -143,6 +143,9 @@ costs separately from the unchanged document manifests.
 
 ## Release notes
 
+The standalone [changelog](CHANGELOG.md) includes before/after tables, gains,
+regressions, current connectors, upgrade notes, and open release requirements.
+
 Unreleased native DBMS changes, derived from commit `6c3a94b`. Local correctness,
 build, packaging, and documentation checks pass. Five performance confidence
 gates and Linux/Windows execution remain open; this is not release approval.
