@@ -1,6 +1,6 @@
 import { appendFile, mkdir, rename } from 'node:fs/promises'
 
-import { splitSections } from '../compile/sections.ts'
+import { toTntConcepts } from '../compile/snapshot.ts'
 import { lock } from '../db/platform.ts'
 import { compileTenant, discoverBundles } from '../compile/tenant.ts'
 import { syncDir, writeSynced } from './atomic.ts'
@@ -16,57 +16,11 @@ import {
 } from './paths.ts'
 
 import type { BundleSource, TenantCompileResult } from '../compile/tenant.ts'
-import type { Diagnostic } from '../okf/types.ts'
-import type { SectionRange, TntConcept } from './format.ts'
+import type { PutOptions, PutResult } from './contracts.ts'
+
+export type { PutOptions, PutResult } from './contracts.ts'
 
 const encoder = new TextEncoder()
-
-export interface PutOptions {
-  root: string
-  tenant: string
-  bundle?: string
-  summaryWidth?: number
-}
-
-export interface PutResult {
-  snapshot: string
-  bundles: string[]
-  concepts: number
-  bytes: number
-  reused: boolean
-  diagnostics: Diagnostic[]
-}
-
-function sectionMap(body: string): Record<string, SectionRange> {
-  const map: Record<string, SectionRange> = {}
-
-  for (const section of splitSections(body)) {
-    map[section.name] = { start: section.start, end: section.end }
-  }
-
-  return map
-}
-
-export function toTntConcepts(compiled: TenantCompileResult): TntConcept[] {
-  return compiled.concepts.map(concept => {
-    const content = compiled.bodies.get(concept.id) ?? ''
-    const tnt: TntConcept = {
-      id: concept.id,
-      content,
-      sections: sectionMap(content)
-    }
-
-    if (concept.title !== '') {
-      tnt.title = concept.title
-    }
-
-    if (concept.staleAfter !== '') {
-      tnt.staleAfter = concept.staleAfter
-    }
-
-    return tnt
-  })
-}
 
 function digest(bytes: Uint8Array): string {
   const hasher = new Bun.CryptoHasher('sha256')

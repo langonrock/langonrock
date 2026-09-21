@@ -2,7 +2,7 @@ import { collect as legacyCollect, listTenants } from '../store/gc.ts'
 import { collect as nativeCollect } from './gc.ts'
 import { readHead } from './head.ts'
 
-import type { GcOptions, GcResult } from '../store/gc.ts'
+import type { GcOptions, GcResult } from '../store/contracts.ts'
 
 export async function collect(options: GcOptions): Promise<GcResult> {
   return (await readHead(options)) === undefined

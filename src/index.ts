@@ -60,7 +60,8 @@ export {
   platformDataDir,
   resolveDataDir
 } from './store/datadir.ts'
-export { DEFAULT_GRACE_MS, DEFAULT_KEEP, listTenants } from './store/gc.ts'
+export { DEFAULT_GRACE_MS, DEFAULT_KEEP } from './store/contracts.ts'
+export { listTenants } from './store/gc.ts'
 export { collect, collectAll } from './db/collect.ts'
 export { assertTenantId } from './store/paths.ts'
 export {
@@ -117,7 +118,7 @@ export type { Bm25Index, Document, Hit } from './search/bm25.ts'
 export type { Manifest, TenantIndex } from './search/tenant.ts'
 export type { ServeOptions } from './server/http.ts'
 export type { Grant } from './server/tokens.ts'
-export type { GcOptions, GcResult } from './store/gc.ts'
+export type { GcOptions, GcResult } from './store/contracts.ts'
 export type { CompileOptions, CompileResult } from './compile/manifest.ts'
 export type { Section } from './compile/sections.ts'
 export type {
@@ -129,4 +130,4 @@ export type { WatchOptions, Watcher } from './store/watch.ts'
 export type { Concept, Diagnostic, Frontmatter } from './okf/types.ts'
 export type { DirEntry, TntConcept, TntHeader } from './store/format.ts'
 export type { TenantReader } from './store/reader.ts'
-export type { PutOptions, PutResult } from './store/writer.ts'
+export type { PutOptions, PutResult } from './store/contracts.ts'

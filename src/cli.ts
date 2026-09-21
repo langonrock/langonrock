@@ -31,9 +31,9 @@ import type { Diagnostic } from './okf/types.ts'
 import type { Connection, GetOptions } from './client/connection.ts'
 import type { SearchOptions } from './search/tenant.ts'
 import type { ServeOptions, Tls } from './server/http.ts'
-import type { GcOptions, GcResult } from './store/gc.ts'
+import type { GcOptions, GcResult } from './store/contracts.ts'
 import type { WatchOptions, Watcher } from './store/watch.ts'
-import type { PutOptions, PutResult } from './store/writer.ts'
+import type { PutOptions, PutResult } from './store/contracts.ts'
 
 const USAGE = `langonrock - a token-efficient store for OKF knowledge bundles
 

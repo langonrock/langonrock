@@ -3,7 +3,7 @@ import { lstat, readdir, rm } from 'node:fs/promises'
 import { directory } from './head.ts'
 import { flushDirectory } from './platform.ts'
 
-import type { GcResult } from '../store/gc.ts'
+import type { GcResult } from '../store/contracts.ts'
 import type { DatabaseTarget } from './types.ts'
 
 interface Garbage {

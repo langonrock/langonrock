@@ -1,39 +1,16 @@
 import { readFile, readdir, stat, unlink } from 'node:fs/promises'
 
 import { HEADER_BYTES, parseHeader } from './format.ts'
+import { DEFAULT_KEEP, DEFAULT_GRACE_MS } from './contracts.ts'
 import { acquireWriteLock } from './lock.ts'
 import { currentFile, lockFile, snapshotsDir, tenantDir } from './paths.ts'
 
-export const DEFAULT_KEEP = 10
-export const DEFAULT_GRACE_MS = 3_600_000
+import type { GcOptions, GcResult } from './contracts.ts'
+
+export type { GcOptions, GcResult } from './contracts.ts'
 
 const SNAPSHOT = '.tnt'
 const PARTIAL = '.tnt.tmp'
-
-export interface GcOptions {
-  root: string
-  tenant: string
-  keep?: number
-  graceMs?: number
-  dryRun?: boolean
-}
-
-interface Skipped {
-  name: string
-  reason: string
-}
-
-export interface GcResult {
-  tenant: string
-  current: string
-  currentCorrupt: boolean
-  kept: number
-  removed: string[]
-  partials: string[]
-  corrupt: string[]
-  skipped: Skipped[]
-  bytesFreed: number
-}
 
 interface Candidate {
   name: string
@@ -109,7 +86,7 @@ async function remove(
 
 interface Sweep {
   removed: string[]
-  skipped: Skipped[]
+  skipped: GcResult['skipped']
   bytesFreed: number
 }
 
@@ -124,7 +101,7 @@ async function sweep(
   dryRun: boolean
 ): Promise<Sweep> {
   const removed: string[] = []
-  const skipped: Skipped[] = []
+  const skipped: GcResult['skipped'] = []
   let bytesFreed = 0
 
   for (const candidate of candidates) {

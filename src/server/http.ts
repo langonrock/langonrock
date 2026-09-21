@@ -17,7 +17,7 @@ import type { SearchCache } from '../search/cache.ts'
 import type { SearchOptions, TenantIndex } from '../search/tenant.ts'
 import type { GetOptions } from '../types.ts'
 import type { TenantReader } from '../store/reader.ts'
-import type { PutResult } from '../store/writer.ts'
+import type { PutResult } from '../store/contracts.ts'
 import type { Grant } from './tokens.ts'
 
 export type LangonrockServer = ReturnType<typeof Bun.serve>

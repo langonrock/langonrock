@@ -1,4 +1,4 @@
-import { DEFAULT_KEEP } from '../store/gc.ts'
+import { DEFAULT_KEEP } from '../store/contracts.ts'
 import { currentFile } from '../store/paths.ts'
 import { assertHash } from './format.ts'
 import { directory, readHead } from './head.ts'
@@ -9,7 +9,7 @@ import { replaceHead } from './publish.ts'
 import { garbage, sweep } from './sweep.ts'
 import { releasePrepared, verifiedArtifacts } from './verified.ts'
 
-import type { GcOptions, GcResult } from '../store/gc.ts'
+import type { GcOptions, GcResult } from '../store/contracts.ts'
 import type { CommitStep } from './publish.ts'
 import type { DatabaseTarget, Head } from './types.ts'
 

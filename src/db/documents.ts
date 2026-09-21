@@ -1,7 +1,7 @@
 import { realpath } from 'node:fs/promises'
 
 import { combineBundles, discoverBundles } from '../compile/tenant.ts'
-import { toTntConcepts } from '../store/writer.ts'
+import { toTntConcepts } from '../compile/snapshot.ts'
 import { encodeTntParts, parseHeader } from '../store/format.ts'
 import { snapshotChecksums } from '../store/integrity.ts'
 import { hash } from './format.ts'

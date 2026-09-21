@@ -4,7 +4,7 @@ import { artifact, readHead } from './head.ts'
 import { importFolders } from './import.ts'
 
 import type { BundleSource } from '../compile/tenant.ts'
-import type { PutOptions, PutResult } from '../store/writer.ts'
+import type { PutOptions, PutResult } from '../store/contracts.ts'
 import type { ImportLocation } from './importstate.ts'
 
 async function put(
