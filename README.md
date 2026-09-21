@@ -451,7 +451,7 @@ The tables below document the earlier OKF/read-model benchmarks. They are not th
 
 A corpus generated to match the shape of Google's OKF samples: v0.2 frontmatter, prose written for people, `# Schema` and `# Joins` headings, links between concepts, about 2 KB each. Twenty fixed questions with a stated ground truth, and both paths charged for delivering the same concepts. The baseline is the OKF reference consumption pattern: read `index.md`, read a concept, follow its links. It runs the same BM25 this project uses over the raw Markdown, with perfect navigation and never a wrong turn.
 
-Every number below comes from one script, on one machine. Reproduce it with `bun bench/run.ts [profile] [bundles] [concepts per bundle]`, which prints a JSON line: `1 500` for the token tables, `10 500` and `40 500` for the scale rows, and a profile name for [the other document shapes](#document-shape).
+The numbers below record earlier runs on one machine. Run the current native implementation with `bun bench/run.ts [profile] [bundles] [concepts per bundle]`, which prints a JSON line: `1 500` for the token tables, `10 500` and `40 500` for the scale rows, and a profile name for [the other document shapes](#document-shape).
 
 ### Tokens, 500 concepts in one bundle
 
@@ -673,7 +673,7 @@ Indexing the title costs zero prompt tokens and no manifest width: it rides in t
 
 ### The serving layer
 
-Everything above measures reading. The rest of the store is a serving layer, and it has its own costs. `bun bench/ops.ts [profile] [bundles] [concepts per bundle]` prints these; they are medians over repeated runs on one machine.
+The tables below retain earlier serving-layer measurements. Run `bun bench/ops.ts [profile] [bundles] [concepts per bundle]` for current native measurements. Its `diskBytes` and `diskAllocatedBytes` cover the complete tenant, including source archives, revisions, and import metadata; `diskSnapshotBytes` reports snapshots separately. `diskAmplification` compares complete logical tenant bytes after and before the edits. These fields differ from the earlier snapshot-only accounting. MCP mutation counts now include native transactions, and benchmark readers are closed after use.
 
 |                                | 500 concepts | 1,189, `scripture` | 5,000 concepts |
 | ------------------------------ | -----------: | -----------------: | -------------: |

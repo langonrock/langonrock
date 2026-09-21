@@ -62,20 +62,31 @@ async function compile(corpus: Corpus) {
     putTenantRoot(SOURCE, { root: STORE, tenant: 'bench' })
   )
   const put = await putTenantRoot(SOURCE, { root: STORE, tenant: 'bench' })
-  const openMs = await median(5, () => openTenant(STORE, 'bench'))
-  const reader = await openTenant(STORE, 'bench')
-  const manifest = await reader.manifest()
-  const first = corpus.bundles[0] as string
+  const openMs = await median(5, async () => {
+    const opened = await openTenant(STORE, 'bench')
 
-  return {
-    put,
-    compileMs,
-    openMs,
-    reader,
-    manifestTokens: estimateTokens(manifest),
-    sliceTokens: estimateTokens(await reader.manifest(first)),
-    manifestMs: await median(20, () => reader.manifest()),
-    sliceMs: await median(20, () => reader.manifest(first))
+    opened.close?.()
+  })
+  const reader = await openTenant(STORE, 'bench')
+
+  try {
+    const manifest = await reader.manifest()
+    const first = corpus.bundles[0] as string
+
+    return {
+      put,
+      compileMs,
+      openMs,
+      reader,
+      manifestTokens: estimateTokens(manifest),
+      sliceTokens: estimateTokens(await reader.manifest(first)),
+      manifestMs: await median(20, () => reader.manifest()),
+      sliceMs: await median(20, () => reader.manifest(first))
+    }
+  } catch (cause) {
+    reader.close?.()
+
+    throw cause
   }
 }
 
@@ -641,40 +652,47 @@ async function main(): Promise<void> {
     perBundle
   })
   const compiled = await compile(corpus)
-  const indexed = await indexCosts(compiled.reader, profile.probe)
-  const ids = new Set(compiled.reader.ids)
-  const bundleOf = new Map(
-    corpus.concepts.map(concept => [concept.id, concept.bundle])
-  )
-  const store: Store = {
-    built: indexed.built,
-    questions,
-    manifestTokens: compiled.manifestTokens,
-    resolve: id => (ids.has(id) ? id : `${bundleOf.get(id) ?? ''}/${id}`),
-    section: new Map(),
-    whole: new Map(),
-    window: new Map()
-  }
+  let line: string
 
-  const getMs = await conceptCosts(compiled.reader, store)
-  const findMs = await windowCosts(compiled.reader, store)
-  const largest = await largestRead(compiled.reader)
-  const found = await retrieval(store, compiled.reader)
-  const posed = await posCosts(compiled.reader, store, found)
-  const okf = await okfSide(corpus, store.questions, profile.probe)
-  const line = report({
-    name,
-    corpus,
-    compiled,
-    indexed,
-    okf,
-    found,
-    store,
-    posed,
-    getMs,
-    findMs,
-    largest
-  })
+  try {
+    const indexed = await indexCosts(compiled.reader, profile.probe)
+    const ids = new Set(compiled.reader.ids)
+    const bundleOf = new Map(
+      corpus.concepts.map(concept => [concept.id, concept.bundle])
+    )
+    const store: Store = {
+      built: indexed.built,
+      questions,
+      manifestTokens: compiled.manifestTokens,
+      resolve: id => (ids.has(id) ? id : `${bundleOf.get(id) ?? ''}/${id}`),
+      section: new Map(),
+      whole: new Map(),
+      window: new Map()
+    }
+
+    const getMs = await conceptCosts(compiled.reader, store)
+    const findMs = await windowCosts(compiled.reader, store)
+    const largest = await largestRead(compiled.reader)
+    const found = await retrieval(store, compiled.reader)
+    const posed = await posCosts(compiled.reader, store, found)
+    const okf = await okfSide(corpus, store.questions, profile.probe)
+
+    line = report({
+      name,
+      corpus,
+      compiled,
+      indexed,
+      okf,
+      found,
+      store,
+      posed,
+      getMs,
+      findMs,
+      largest
+    })
+  } finally {
+    compiled.reader.close?.()
+  }
 
   await rm(SOURCE, { recursive: true, force: true })
   await rm(STORE, { recursive: true, force: true })
