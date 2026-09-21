@@ -600,7 +600,7 @@ describe('stdio transport', () => {
       stderr: 'pipe'
     })
 
-    proc.stdin.write(
+    await proc.stdin.write(
       `${JSON.stringify({
         jsonrpc: '2.0',
         id: 1,

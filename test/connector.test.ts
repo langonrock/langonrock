@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { stripVTControlCharacters } from 'node:util'
 
 const CLI = `${import.meta.dir}/../src/cli.ts`
 
@@ -28,10 +29,6 @@ interface Run {
   code: number
 }
 
-// Bun paints console.error red, so a hash read off stderr arrives wrapped in
-// escape codes and would be passed straight back as a bogus precondition.
-const ANSI = /\[\d+m/g
-
 async function run(args: string[], stdin?: string): Promise<Run> {
   const proc = Bun.spawn(['bun', CLI, ...args], {
     stdin: stdin === undefined ? 'ignore' : new TextEncoder().encode(stdin),
@@ -45,7 +42,7 @@ async function run(args: string[], stdin?: string): Promise<Run> {
     proc.exited
   ])
 
-  return { stdout, stderr: stderr.replaceAll(ANSI, ''), code }
+  return { stdout, stderr: stripVTControlCharacters(stderr), code }
 }
 
 async function query(args: string[], stdin?: string): Promise<Run> {

@@ -13,7 +13,12 @@ import { createMcpServer } from '../src/mcp/lazy.ts'
 import { searchTenant } from '../src/search/tenant.ts'
 import { serve } from '../src/server/http.ts'
 
-import type { DatabaseConnection } from '../src/types.ts'
+import type {
+  DatabaseConnection,
+  RevisionPage,
+  RevisionResult
+} from '../src/types.ts'
+import type { VerifyResult } from '../src/db/verify.ts'
 
 let root: string
 let server: ReturnType<typeof serve>
@@ -332,7 +337,7 @@ test('CLI commits JSON batches, paginates history, restores, and verifies native
     JSON.stringify({ changes: [write('a.md', '# CLI body')] })
   )
 
-  const run = async (args: string[]) => {
+  const run = async <T>(args: string[]): Promise<T> => {
     const child = Bun.spawn(
       [
         process.execPath,
@@ -351,16 +356,16 @@ test('CLI commits JSON batches, paginates history, restores, and verifies native
     expect(error).toBe('')
     expect(await child.exited).toBe(0)
 
-    return JSON.parse(output)
+    return JSON.parse(output) as T
   }
 
-  const first = await run(['transact', '--from', batch])
-  const page = await run(['history', '--limit', '1'])
+  const first = await run<RevisionResult>(['transact', '--from', batch])
+  const page = await run<RevisionPage>(['history', '--limit', '1'])
 
-  expect(page.revisions[0].revision).toBe(first.revision)
+  expect(page.revisions[0]?.revision).toBe(first.revision)
   expect(
     (
-      await run([
+      await run<RevisionResult>([
         'restore',
         first.revision,
         '--expected-revision',
@@ -368,5 +373,5 @@ test('CLI commits JSON batches, paginates history, restores, and verifies native
       ])
     ).snapshot
   ).toBe(first.snapshot)
-  expect((await run(['verify'])).ok).toBe(true)
+  expect((await run<VerifyResult>(['verify'])).ok).toBe(true)
 })

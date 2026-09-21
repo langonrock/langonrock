@@ -169,10 +169,12 @@ test('interruption before publication leaves the old revision authoritative', as
       transact(
         target,
         { changes: [{ ...write('a.md', 'new'), replaces: hash('old') }] },
-        async step => {
+        step => {
           if (step === stop) {
-            throw new Error(`interrupt ${step}`)
+            return Promise.reject(new Error(`interrupt ${step}`))
           }
+
+          return Promise.resolve()
         }
       )
     ).rejects.toThrow('interrupt')
@@ -188,10 +190,12 @@ test('failure after replacement reports an indeterminate commit identity', async
     transact(
       target,
       { changes: [{ ...write('a.md', 'new'), replaces: hash('old') }] },
-      async step => {
+      step => {
         if (step === 'head-replaced') {
-          throw new Error('failed durability barrier')
+          return Promise.reject(new Error('failed durability barrier'))
         }
+
+        return Promise.resolve()
       }
     )
   ).rejects.toMatchObject({

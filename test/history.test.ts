@@ -81,10 +81,12 @@ test('prepared orphan revisions never enter history and cannot be restored', asy
     transact(
       target,
       { changes: [write('orphan.md', 'never committed')] },
-      async step => {
+      step => {
         if (step === 'head-ready') {
-          throw new Error('stop')
+          return Promise.reject(new Error('stop'))
         }
+
+        return Promise.resolve()
       }
     )
   ).rejects.toThrow('stop')

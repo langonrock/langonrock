@@ -15,6 +15,8 @@ import { currentFile, lockFile } from '../src/store/paths.ts'
 import { putTenantRoot } from '../src/store/writer.ts'
 
 import type { DatabaseTarget } from '../src/db/types.ts'
+import type { MigrationResult } from '../src/db/migration.ts'
+import type { ExportResult } from '../src/db/export.ts'
 
 let target: DatabaseTarget
 let source: string
@@ -161,7 +163,7 @@ test('migration refuses an active legacy writer and leaves another tenant indepe
 })
 
 test('CLI migration dry run and exact export use the same native contract', async () => {
-  const run = async (args: string[]) => {
+  const run = async <T>(args: string[]): Promise<T> => {
     const child = Bun.spawn(
       [
         process.execPath,
@@ -180,15 +182,19 @@ test('CLI migration dry run and exact export use the same native contract', asyn
     expect(error).toBe('')
     expect(await child.exited).toBe(0)
 
-    return JSON.parse(output)
+    return JSON.parse(output) as T
   }
 
-  expect((await run(['migrate', source, '--dry-run'])).dryRun).toBe(true)
+  expect(
+    (await run<MigrationResult>(['migrate', source, '--dry-run'])).dryRun
+  ).toBe(true)
   expect(await readHead(target)).toBeUndefined()
-  expect((await run(['migrate', source])).alreadyMigrated).toBe(false)
+  expect(
+    (await run<MigrationResult>(['migrate', source])).alreadyMigrated
+  ).toBe(false)
   const destination = `${dirname(target.root)}/exported`
 
-  expect((await run(['export', destination])).files).toBe(2)
+  expect((await run<ExportResult>(['export', destination])).files).toBe(2)
   expect(await Bun.file(`${destination}/docs/a.md`).text()).toBe(
     await Bun.file(`${source}/docs/a.md`).text()
   )

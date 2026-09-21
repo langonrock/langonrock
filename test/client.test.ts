@@ -58,7 +58,7 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
-  server?.stop(true)
+  await server?.stop(true)
   await rm(scratch, { recursive: true, force: true })
 })
 

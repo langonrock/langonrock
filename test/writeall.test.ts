@@ -8,13 +8,13 @@ test('finishes short writes at the correct source and file offsets', async () =>
 
   await writeAll(
     {
-      write: async (bytes, offset, length, position) => {
+      write: (bytes, offset, length, position) => {
         const count = Math.min(2, length)
 
         positions.push(position)
         stored.set(bytes.subarray(offset, offset + count), position)
 
-        return { bytesWritten: count }
+        return Promise.resolve({ bytesWritten: count })
       }
     },
     new Uint8Array([1, 2, 3, 4, 5])
@@ -26,7 +26,10 @@ test('finishes short writes at the correct source and file offsets', async () =>
 test('refuses zero, oversized, and invalid write counts', async () => {
   for (const bytesWritten of [0, -1, 5, NaN, 0.5]) {
     await expect(
-      writeAll({ write: async () => ({ bytesWritten }) }, new Uint8Array(2))
+      writeAll(
+        { write: () => Promise.resolve({ bytesWritten }) },
+        new Uint8Array(2)
+      )
     ).rejects.toThrow('invalid progress')
   }
 })

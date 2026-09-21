@@ -61,7 +61,7 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
-  server?.stop(true)
+  await server?.stop(true)
   await rm(socket, { force: true })
   await rm(scratch, { recursive: true, force: true })
 })
@@ -104,7 +104,7 @@ describe('manifest by bundle', () => {
   })
 
   test('names the bundles it does have when asked for one it does not', async () => {
-    expect(reader.manifest('marketing')).rejects.toThrow(
+    await expect(reader.manifest('marketing')).rejects.toThrow(
       /no bundle "marketing".*ops, sales/s
     )
   })

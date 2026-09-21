@@ -39,10 +39,12 @@ async function releaseFailure(stop?: CommitStep) {
           { operation: 'write', bundle: 'docs', path: 'a.md', content: 'A' }
         ]
       },
-      async step => {
+      step => {
         if (step === stop) {
-          throw new Error(`injected ${stop} failure`)
+          return Promise.reject(new Error(`injected ${stop} failure`))
         }
+
+        return Promise.resolve()
       }
     ).catch((error: unknown) => error)
   } finally {
