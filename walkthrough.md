@@ -11,6 +11,12 @@ maintenance repetitions pass; Linux and Windows execution remains unverified.
 Review corrections are included in the measured candidate. Open verification
 gates prevent release approval.
 
+Phases 8 and 9 completed two local review/fix cycles. Phase 10 updated the
+contracts and manuals. Phase 11 generated the release notes below from local
+implementation commit `6c3a94b`. No push, release, or deployment was performed.
+The task is delivered for review, with performance and platform acceptance
+explicitly incomplete.
+
 ## Integrated correctness and packaging
 
 - All 549 tests pass on macOS arm64 with Bun 1.3.12. Coverage is 96.07% lines
@@ -114,7 +120,7 @@ build, lint, types, formatting, dependency checks, and both packaging smokes pas
 The seven new failure-path tests were observed failing before their fixes. The
 re-review found no remaining blocker/high code finding. Performance acceptance
 and cross-platform execution are separate open gates, not approved by this code
-review. Code review verdict: **APPROVED**. Local task commits remain pending.
+review. Code review verdict: **APPROVED**. Local implementation commit: `6c3a94b`.
 Performance verdict: **INCONCLUSIVE**, with five open
 rows after the planned thirty-pair limit.
 
@@ -134,6 +140,44 @@ concepts, total retained allocated disk including original sources rises from
 306,720,768 to 518,946,816 bytes, about 69%. Default/opt-in MCP schemas remain
 six/nine tools and 1,718/2,228 estimated tokens. The final report includes these
 costs separately from the unchanged document manifests.
+
+## Release notes
+
+Unreleased native DBMS changes, derived from commit `6c3a94b`. Local correctness,
+build, packaging, and documentation checks pass. Five performance confidence
+gates and Linux/Windows execution remain open; this is not release approval.
+
+### Features
+
+- Commit document creates, replacements, and deletions atomically. Successful
+  native writes are immediately searchable without a separate sync step.
+- Browse retained history, restore a previous state as a new revision, collect
+  old data, verify a store, and explicitly select a verified repair candidate.
+- Use database operations through the CLI, HTTP client, embedded connection, or
+  opt-in MCP tools. Migrate legacy stores explicitly and exchange exact Markdown
+  through tracked imports and exports.
+
+### Fixes
+
+- Preserve frontmatter, CRLF, Unicode, byte-order marks, and navigation documents
+  in source round trips. Reject invalid UTF-8 before committing it.
+- Abort a whole conflicting batch and keep readers on one committed revision
+  through concurrent writes and collection. Ambiguous commit errors retain the
+  revision identity needed to inspect the outcome.
+- Delete empty imported bundles, preserve database-side deletions through
+  unrelated folder edits, and restore their earlier state from history.
+
+### Improvements
+
+- At 20,000 concepts, measured median import time falls 6.21%, warm search time
+  23.86%, and edit-to-search time 46.13%. Manifest growth is zero. Import peak
+  RSS rises 3.64%; retained allocated disk including originals rises about 69%.
+  The [full report](docs/benchmarks/dbms.md) includes every inconclusive row.
+- Keep six MCP tools by default. Three database tools are opt-in and add 510
+  estimated schema tokens, measured separately from document manifests.
+- Build the native adapter without Python or an external database engine.
+  Remote-only consumers need no native build. Source consumers build the adapter
+  explicitly; standalone binaries embed it. Benchmarks now use Bun throughout.
 
 ## Confirmed decisions
 

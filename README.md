@@ -447,7 +447,7 @@ Back up complete tenant directories with writers and collection stopped, or take
 
 ## Benchmarks
 
-The tables below document the earlier OKF/read-model benchmarks. They are not the DBMS before/after comparison. The conversion uses a pinned original commit, fresh paired processes, and separate performance limits at 500, 5,000, and 20,000 concepts. See the [DBMS performance report](docs/benchmarks/dbms.md), [measurement protocol](bench/dbms/README.md), and [current verification record](walkthrough.md). Final performance approval is still pending.
+The tables below document the earlier OKF/read-model benchmarks. They are not the DBMS before/after comparison. The conversion uses a pinned original commit, fresh paired processes, and separate performance limits at 500, 5,000, and 20,000 concepts. See the [DBMS performance report](docs/benchmarks/dbms.md), [measurement protocol](bench/dbms/README.md), and [current verification record](walkthrough.md). After thirty pairs per size, 109 metrics pass and five remain inconclusive. Performance acceptance and Linux/Windows execution remain open.
 
 A corpus generated to match the shape of Google's OKF samples: v0.2 frontmatter, prose written for people, `# Schema` and `# Joins` headings, links between concepts, about 2 KB each. Twenty fixed questions with a stated ground truth, and both paths charged for delivering the same concepts. The baseline is the OKF reference consumption pattern: read `index.md`, read a concept, follow its links. It runs the same BM25 this project uses over the raw Markdown, with perfect navigation and never a wrong turn.
 

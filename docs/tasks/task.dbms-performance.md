@@ -1,6 +1,7 @@
 # Native document DBMS with measured performance limits
 
-Status: approved by the user; execution in progress.
+Status: implementation delivered locally. Performance acceptance and
+Linux/Windows execution remain open.
 
 ## Confirmed request
 
@@ -591,9 +592,10 @@ token,tls,mcp,cli}.test.ts` and new `test/dbms-transports.test.ts`.
 
 ### T10. Review and fix
 
-- [/] Complexity: medium. Review fixes pass the full suite and build. No remaining
-  blocker/high code finding; local commit and performance verdict remain.
-  Depends on T09. Radioactive phases 8 and 9.
+- [x] Complexity: medium. Two review/fix cycles pass the full suite and build.
+      No remaining blocker/high code finding. Implementation commit: `6c3a94b`.
+      Performance acceptance remains inconclusive under T09.
+      Depends on T09. Radioactive phases 8 and 9.
 - Targets: all changed files, this plan, and `walkthrough.md`.
 - Run the strict code-quality review, recording severity, evidence, and fixes.
   Resolve all blocker/high findings and reverify affected behavior, at most
@@ -602,9 +604,11 @@ token,tls,mcp,cli}.test.ts` and new `test/dbms-transports.test.ts`.
 
 ### T11. Update contracts, manuals, and release notes
 
-- [/] Complexity: medium. Operations, migration/rollback, architecture, packaging,
-  and performance method are documented. Final result tables, manuals, and
-  commit-derived release notes remain. Depends on T10. Radioactive phases 10 and 11.
+- [x] Complexity: medium. Operations, migration/rollback, architecture, packaging,
+      final result tables, manuals, and commit-derived release notes are complete.
+      See the [performance report](../benchmarks/dbms.md) and
+      [release notes](../../walkthrough.md#release-notes).
+      Depends on T10. Radioactive phases 10 and 11.
 - Targets: `README.md`, `DESIGN.md`, `docs/dbms.md`, `docs/benchmarks/dbms.md`,
   `skills/langonrock/reference/{architecture,verification}.md`,
   the DBMS workflow, matching blueprint HTML companions, `walkthrough.md`,
@@ -631,7 +635,7 @@ token,tls,mcp,cli}.test.ts` and new `test/dbms-transports.test.ts`.
   agreed performance gate remains unresolved.
 - [/] Local tests, coverage, build, and code review pass without weakened
   thresholds; five performance confidence gates and platform execution remain open.
-- [ ] Updated feature contract, manuals, review record, and changelog.
+- [x] Updated feature contract, manuals, review record, and changelog.
 
 ## References
 
