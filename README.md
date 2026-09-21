@@ -8,7 +8,7 @@
 
 OKF is a good authoring format: a directory of Markdown with YAML frontmatter, no SDK, no runtime, readable in Obsidian and diffable in git. It is an expensive _reading_ format. The agent pays for full frontmatter on every read, the prose is written for people, and the reference consumption pattern walks the graph one file at a time, spending an inference turn per hop.
 
-langonrock keeps your Markdown as the source of truth and compiles it into a dense read model: a manifest the agent keeps in its cached prompt prefix, and section-addressable concepts it fetches in batches. Your bundles stay conformant, so `okflint`, the visualizer and Obsidian keep working on the same folder.
+langonrock stores Markdown documents in its own native engine and compiles them into a dense read model: a manifest the agent keeps in its cached prompt prefix, and section-addressable concepts it fetches in batches. Atomic commits, history, and restore share that read model. Import and export preserve original Markdown; existing legacy tenants keep their source-folder workflow until explicitly migrated. See the [database guide](docs/dbms.md).
 
 ## Why
 
@@ -26,7 +26,7 @@ That corpus is a warehouse catalogue, and the saving is a property of the docume
 
 ## Features
 
-- **Compiles any Markdown, keeps OKF as the bar.** Every file compiles, frontmatter or not, with its id, summary, title and links derived from the text; `--strict` is the OKF conformance gate. Your directory stays the source of truth.
+- **Compiles any Markdown, keeps OKF as the bar.** Every file compiles, frontmatter or not, with its id, summary, title and links derived from the text; `--strict` is the OKF conformance gate. Import/export preserves the authoring format.
 - **A manifest that fits in the prompt.** One dense TSV row per concept: id, bundle, kind, status, grain, summary, outgoing links.
 - **Byte-deterministic output.** Identical input compiles to identical bytes, so the manifest stays in the prompt cache across rebuilds.
 - **Section addressing.** `get(id, { section: "schema" })` returns one slice instead of the whole document, using the concept's own Markdown headings.
@@ -35,14 +35,14 @@ That corpus is a warehouse catalogue, and the saving is a property of the docume
 - **Deterministic retrieval.** BM25 plus a capped one-hop expansion over the link graph, with no model call anywhere in the path.
 - **Search that points inside the document.** Every direct hit carries `pos`, the offset of the passage densest in the query's words, so the next `get` can be a 2,000-character window instead of the document — no quote required.
 - **Knowledge that expires visibly.** A concept past its `stale_after` date shows `stale` in the manifest's status cell, computed at read time so the snapshot bytes never depend on the clock.
-- **Immutable, content-addressed snapshots.** A backup is a file copy, a restore is a file copy back, and a rollback is a side effect of naming files by their own hash.
+- **Atomic document transactions.** Commit related edits together, retain revision history, and restore a complete source revision as a new commit. Back up the complete tenant while writers and collection are stopped.
 - **Multi-tenant.** A tenant is a directory boundary with its own snapshots and its own index.
 - **Three connection modes, one interface.** Embedded, local daemon, or HTTP server, selected by a connection string.
 - **Refuses to leak its own credentials.** TCP needs a token, and any address past loopback needs TLS, or the server declines to start.
 - **MCP server.** Six verbs for Claude Code, Cursor, or anything else that speaks MCP — four to read and two to write, with tool descriptions that carry the tenant's own numbers: the server measures the manifest at startup and advises manifest-first or search-first.
 - **A model can persist knowledge, safely.** The MCP `write` and `delete` tools change a concept and recompile, and a tenant that does not exist yet is created by the first write. Both still need the hash they replace, and the refusal names that hash, so a model satisfies the precondition without a lost update.
 - **Editable over the network.** Create, change and delete concepts through the API, with a mandatory precondition so two editors cannot silently overwrite each other.
-- **No database.** Two runtime dependencies, both for MCP.
+- **Own database engine.** No SQLite, external database service, or Python. Two runtime packages support MCP; a small C adapter supplies OS locks and durable file replacement.
 
 ## Quickstart
 
@@ -54,8 +54,11 @@ Or run it from source with [Bun](https://bun.com):
 
 ```sh
 bun install
+bun run build:native
 bun src/cli.ts --help
 ```
+
+Source installation needs a C compiler for the native adapter, or an MSVC developer environment on Windows. Standalone binaries embed their adapter. Local validation of this conversion covers macOS arm64; Linux and Windows execution remains a release gate. See [installation and platform verification](docs/dbms.md#install-and-platform-verification).
 
 Point it at a folder of bundles, where every immediate subdirectory is one bundle:
 
@@ -134,7 +137,7 @@ claude mcp add langonrock -s project -- langonrock mcp "okf+unix:///tmp/okf.sock
 > [!TIP]
 > MCP is not the only way in. A client that can run shell commands can call the CLI directly, with a line in its instructions saying the command exists. The six tool definitions cost tokens in every session whether or not anyone asks about knowledge, and a line of prose costs almost nothing but relies on the model remembering. Register the server when knowledge is consulted constantly, and reach for the CLI when it is occasional.
 
-Six tools, and no more, because every tool definition costs tokens in the client's system prompt:
+Six tools are enabled by default because every tool definition costs tokens in the client's system prompt. Add `--database-tools` to expose `transact`, `history`, and `restore` explicitly:
 
 | Tool       | What it does                                                                                                                                                                                                                                                       |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -162,7 +165,7 @@ Creating costs one call, because omitting `replaces` is what asserts the concept
 
 `delete` works the same way, minus the create case: the hash is not optional there, so a deletion is always two calls, and omitting the hash against a concept that is not there is answered with `concept does not exist` rather than a hash to retry with.
 
-> A write creates its tenant only when that tenant has no knowledge at all. A tenant that already has snapshots but no `sources.json` entry — which is what `langonrock sync` on the command line leaves behind — is refused instead, because pointing it at a fresh empty directory would replace its whole manifest with one file. Register that directory before writing to it.
+> New native tenants can be created by their first write. Existing native tenants do not need a source-folder registration. Unmigrated legacy tenants still require their original source mapping for source edits; use [explicit migration](docs/dbms.md#migrate-a-legacy-tenant) before database transactions.
 
 ## Connection modes
 
@@ -179,14 +182,14 @@ The daemon is usually what you want locally. Several clients share one process w
 
 ## Running a server
 
-This needs two directories. Your Markdown lives wherever you already keep it, and the store is a separate folder the server owns.
+The daemon serves native tenants directly from its data directory. To also import and watch Markdown folders, register them in `sources.json`:
 
 ```sh
 mkdir -p ~/okf/sources/acme/sales ~/okf/data
 echo '{ "acme": "/home/me/okf/sources/acme" }' > ~/okf/data/sources.json
 ```
 
-`sources.json` maps each tenant to its folder. Write that path in full, because nothing expands `~` inside a JSON string. The file does two things at once: it makes the tenant writable over the API, and it tells `serve` to compile the folder at startup and keep watching it.
+`sources.json` maps each tenant to a folder for startup import and watching. Write that path in full, because nothing expands `~` inside a JSON string. Native API writes commit to the database. A later folder import reports a conflict if both versions changed differently; it does not silently overwrite database edits.
 
 ```sh
 langonrock serve --data ~/okf/data --socket /tmp/okf.sock
@@ -293,9 +296,9 @@ Send `If-None-Match` with the ETag you hold and an unchanged manifest answers `3
 
 ## Editing over the network
 
-An editor needs to create, change and delete concepts remotely. It does that by writing the **source Markdown**, never a snapshot. The watcher recompiles from source, so it would overwrite a snapshot written directly within seconds. Writing source is the path the design endorses, and it leaves the read API above untouched. No HTTP request ever writes a snapshot.
+An editor creates, changes, and deletes complete Markdown documents through the source routes. Native tenants commit each write atomically and make it immediately visible to manifest, search, and get. Use the transaction route to publish several edits together. The compiled read routes keep their existing response shapes.
 
-The two files from [Running a server](#running-a-server) are what turn this on. `sources.json` says where a tenant's Markdown is, and `tokens.json` says which tokens may change it. A tenant with no entry in `sources.json` stays readable and refuses writes, which is the right default and needs no flag. Folders are never moved into the store; source usually lives in a git repository of its own.
+`tokens.json` controls which tokens may write. The CLI daemon enables native writes; callers of the `serve()` library must explicitly set `writable: true` or configure their source authorization callback. `sources.json` remains optional for native tenants and selects folders to import/watch. Unmigrated legacy tenants still use their registered original Markdown sources.
 
 ```
 GET    /v1/{tenant}/source                 list files with sizes and hashes
@@ -303,7 +306,10 @@ GET    /v1/{tenant}/source/{bundle}/{path} read one, ETag is its content hash
 PUT    /v1/{tenant}/source/{bundle}/{path} write
 DELETE /v1/{tenant}/source/{bundle}/{path} delete
 DELETE /v1/{tenant}/bundles/{bundle}       delete a whole bundle
-POST   /v1/{tenant}/sync                   recompile now, return the new digest
+POST   /v1/{tenant}/sync                   return the current native commit; recompile legacy sources
+POST   /v1/{tenant}/transact               atomic document batch
+GET    /v1/{tenant}/history                retained revisions, with limit and before cursor
+POST   /v1/{tenant}/restore                restore a revision as a new commit
 ```
 
 Writing the first file into a folder creates the bundle, and deleting the folder removes it, exactly as it works on disk.
@@ -334,9 +340,9 @@ The listing tells you which concept each file becomes, so a client never has to 
 }
 ```
 
-A file with no `id` is not a concept. It has no frontmatter, so the compiler skips it. That is how a cloned repository's `README.md` shows up as what it is instead of vanishing without explanation.
+A file with no `id` is a navigation document that the compiler excludes from concept reads. Its exact source still appears in source access and export. Ordinary Markdown can compile without frontmatter.
 
-`sync` returns what the compiler noticed on the way: a missing `type`, a link resolving to nothing, a file skipped. That is the lint an editor should put in front of whoever is writing.
+`sync` returns the current commit's compiler diagnostics: a missing `type`, a link resolving to nothing, or a skipped file. Native writes already committed those results; `sync` does not create another revision.
 
 ```ts
 const { snapshot, diagnostics } = await knowledge.sync()
@@ -345,7 +351,7 @@ const { snapshot, diagnostics } = await knowledge.sync()
 > [!WARNING]
 > Concept ids are the shortest unambiguous form of their path, so **creating** a file can rename a concept nobody touched: adding `staging/orders.md` turns an existing `orders` into `tables/orders`. Re-read the listing or the manifest after a sync rather than assuming ids are stable.
 
-`PUT` returns as soon as the file is on disk, so saving is fast; the snapshot follows on the watcher's debounce. Call `sync` when you need the new digest immediately. On a large tenant a compile is a few hundred milliseconds, so an aggressively autosaving editor should raise `--debounce` rather than sync on every keystroke.
+For native tenants, `PUT` returns after durable publication and the new snapshot is immediately readable. Batch related changes with `transact()` to avoid publishing one snapshot per document. Legacy source writes retain their edit-then-sync behavior until migration. The watcher's `--debounce` only coalesces external folder changes.
 
 The same verbs are on the command line against any connection string, so you can edit a local store and a remote one the same way:
 
@@ -420,23 +426,28 @@ For a desktop app the shape that works is one HTTP client with two configuration
 ```
 data/
   tenants/acme/
-    current              # one line: the active snapshot id
-    snapshots/
-      d735c5d3….tnt      # immutable, named by sha256 of its own bytes
-      78de7c5c….tnt      # the previous version
-    log.jsonl            # append-only audit
+    HEAD                           # committed revision and artifact checksums
+    snapshots/<sha256>.tnt         # compiled read model
+    sources/<sha256>.src           # exact source prefixes and navigation files
+    revisions/<sha256>.rev         # transaction history
+    imports/<sha256>.imp           # tracked folder hashes
+    staging/                       # unpublished writes
+    writer.lock
+    retention.lock
 ```
 
-A snapshot is one self-contained file: the manifest uncompressed and contiguous, a directory of concept offsets and their section ranges, then zstd-compressed bodies. Writes go to a temp file, fsync, rename to the digest name, then an atomic rename of `current`. Readers take no lock, ever, because snapshots are immutable and a reader either sees the old one or the new one.
+A TNT1 snapshot contains the contiguous manifest, concept offsets and section ranges, and zstd-compressed bodies. Source archives reuse those bodies while preserving the rest of the original Markdown. The engine synchronizes immutable artifacts before replacing and durably flushing `HEAD`. Kernel locks serialize publishers; readers briefly take a retention lock while pinning a snapshot and keep that revision through each operation.
 
-Because a snapshot is named by its own content, storing an unchanged tree is a no-op and deleting a bundle then restoring it returns to the original snapshot. Rollback is a side effect of the naming scheme rather than a feature.
+Snapshot digests identify compiled bytes; revision digests identify commits. Source-only edits can share a snapshot. Restore publishes an older complete source state as a new revision, guarded by the expected current revision.
 
-Backup is `cp -r tenants/`. Restore is copying it back; the search index rebuilds itself in memory on first use. Incremental backup is copying the snapshots you do not have, correct by construction since names are hashes. `langonrock gc` keeps `current` plus the newest N and sweeps partial writes.
+Back up complete tenant directories with writers and collection stopped, or take a consistent filesystem snapshot. `langonrock gc` retains ten committed native revisions by default and removes unreferenced artifacts and abandoned staging. `verify` checks stored data independently of ordinary caches. See the [maintenance and recovery contract](docs/dbms.md#collection-verification-and-repair).
 
 > [!IMPORTANT]
-> The snapshot holds the compiled read model, not your bundle. Frontmatter is compiled away, so a store is not a backup of your Markdown. Keep the source folder in git.
+> A `.tnt` alone holds only compiled data. A complete native tenant also preserves original source documents. Legacy `current`/snapshot stores still need their original Markdown for lossless migration.
 
 ## Benchmarks
+
+The tables below document the earlier OKF/read-model benchmarks. They are not the DBMS before/after comparison. The conversion uses a pinned original commit, fresh paired processes, and separate performance limits at 500, 5,000, and 20,000 concepts. See the [DBMS performance report](docs/benchmarks/dbms.md), [measurement protocol](bench/dbms/README.md), and [current verification record](walkthrough.md). Final performance approval is still pending.
 
 A corpus generated to match the shape of Google's OKF samples: v0.2 frontmatter, prose written for people, `# Schema` and `# Joins` headings, links between concepts, about 2 KB each. Twenty fixed questions with a stated ground truth, and both paths charged for delivering the same concepts. The baseline is the OKF reference consumption pattern: read `index.md`, read a concept, follow its links. It runs the same BM25 this project uses over the raw Markdown, with perfect navigation and never a wrong turn.
 
@@ -724,21 +735,29 @@ A deployment that only ever reads pays all 619 for nothing. That is the argument
 
 ## CLI
 
-| Command         |                                            |
-| --------------- | ------------------------------------------ |
-| `compile <dir>` | Compile one bundle to a manifest on stdout |
-| `put <dir>`     | Store one directory as one bundle          |
-| `sync <dir>`    | Store every subdirectory as its own bundle |
-| `watch <dir>`   | Keep a tenant in sync with a folder        |
-| `manifest`      | Print the stored manifest                  |
-| `get <id…>`     | Fetch concepts by id                       |
-| `serve`         | Run the daemon                             |
-| `token`         | Mint a token and record its grant          |
-| `query <dsn> …` | Any read or write verb over any dsn        |
-| `mcp <dsn>`     | Serve MCP over stdio                       |
-| `gc`            | Collect old and partial snapshots          |
+| Command         |                                                           |
+| --------------- | --------------------------------------------------------- |
+| `compile <dir>` | Compile one bundle to a manifest on stdout                |
+| `put <dir>`     | Store one directory as one bundle                         |
+| `sync <dir>`    | Store every subdirectory as its own bundle                |
+| `import <dir>`  | Import a folder of bundles with conflict detection        |
+| `migrate <dir>` | Explicitly migrate a legacy tenant using original sources |
+| `export <dir>`  | Export exact current Markdown to a new directory          |
+| `transact`      | Commit an atomic JSON batch from stdin or `--from`        |
+| `history`       | Read retained committed revisions                         |
+| `restore <rev>` | Restore source state with `--expected-revision`           |
+| `verify [rev]`  | Verify stored data or a named candidate                   |
+| `repair <rev>`  | Select a verified root with `--expected-head`             |
+| `watch <dir>`   | Keep a tenant in sync with a folder                       |
+| `manifest`      | Print the stored manifest                                 |
+| `get <id…>`     | Fetch concepts by id                                      |
+| `serve`         | Run the daemon                                            |
+| `token`         | Mint a token and record its grant                         |
+| `query <dsn> …` | Any read or write verb over any dsn                       |
+| `mcp <dsn>`     | Serve MCP over stdio                                      |
+| `gc`            | Collect old and partial snapshots                         |
 
-`query` takes `manifest`, `snapshot`, `search` and `get` on the read side, and `source`, `read`, `write`, `delete`, `delete-bundle` and `sync` on the write side.
+`query` takes `manifest`, `snapshot`, `search`, `get`, `source`, `read`, `write`, `delete`, `delete-bundle`, `sync`, `transact`, `history`, and `restore`. Migration, export, verification, and repair are local maintenance commands. [Database examples](docs/dbms.md#cli-http-and-mcp) show the additional flags.
 
 Useful options: `--data` (store root), `--tenant`, `--section`, `--offset`, `--limit`, `--find`, `--k`, `--summary-width`, `--strict` to exit non-zero on any diagnostic, `--dry-run` for `gc`. For `serve`: `--socket`, or `--host` and `--port` for TCP, `--tls-cert` and `--tls-key` for TLS, and `--debounce` to coalesce filesystem events. For `token`: `--tenant` and `--write`. Run `langonrock --help` for the rest.
 

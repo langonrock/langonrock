@@ -13,6 +13,7 @@ The [project manual](skills/langonrock/README.html) provides a browsable version
 
 | Request                      | Contract                                                    | Manual                                                    |
 | ---------------------------- | ----------------------------------------------------------- | --------------------------------------------------------- |
+| Native document DBMS         | [dbms](skills/langonrock/workflows/dbms/SKILL.md)           | [HTML](skills/langonrock/workflows/dbms/README.html)      |
 | Implement or fix behavior    | [implement](skills/langonrock/workflows/implement/SKILL.md) | [HTML](skills/langonrock/workflows/implement/README.html) |
 | Review a change              | [review](skills/langonrock/workflows/review/SKILL.md)       | [HTML](skills/langonrock/workflows/review/README.html)    |
 | Update project documentation | [document](skills/langonrock/workflows/document/SKILL.md)   | [HTML](skills/langonrock/workflows/document/README.html)  |

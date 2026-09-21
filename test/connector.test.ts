@@ -166,13 +166,18 @@ describe('query write', () => {
 })
 
 describe('query sync and delete', () => {
-  test('sync compiles the writes into a new snapshot', async () => {
+  test('sync reports immediately committed writes without creating another revision', async () => {
     const before = await query(['snapshot'])
+    const history = await query(['history'])
+
+    expect((await query(['manifest'])).stdout).toContain('created')
+
     const result = await query(['sync'])
 
     expect(result.code).toBe(0)
     expect(result.stderr).toContain('concepts')
-    expect((await query(['snapshot'])).stdout).not.toBe(before.stdout)
+    expect((await query(['snapshot'])).stdout).toBe(before.stdout)
+    expect((await query(['history'])).stdout).toBe(history.stdout)
     expect((await query(['manifest'])).stdout).toContain('created')
   })
 

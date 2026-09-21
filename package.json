@@ -15,7 +15,11 @@
     "./client": "./src/client/client.ts"
   },
   "files": [
-    "src"
+    "src",
+    "native/*.c",
+    "native/*.h",
+    "native/README.md",
+    "scripts/build-native.ts"
   ],
   "scripts": {
     "lint": "eslint .",
@@ -25,6 +29,9 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "build": "bun scripts/build.ts",
+    "build:native": "bun scripts/build-native.ts",
+    "check:dependencies": "bun scripts/check-runtime-dependencies.ts",
+    "bench:dbms": "bun bench/dbms/run.ts",
     "prepare": "husky"
   },
   "lint-staged": {

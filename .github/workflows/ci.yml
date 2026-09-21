@@ -18,9 +18,18 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: 1.3.12
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
 
       - run: bun install --frozen-lockfile
+
+      - run: bun run build:native
+
+      - run: bun scripts/native-smoke.ts
+
+      - run: bun run check:dependencies
 
       - run: bun run lint
 
@@ -29,3 +38,9 @@ jobs:
       - run: bun run typecheck
 
       - run: bun test
+
+      - run: bun run build
+
+      - run: bun scripts/package-smoke.ts
+
+      - run: bun scripts/source-smoke.ts

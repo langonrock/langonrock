@@ -5,6 +5,7 @@ authorize edits or trigger unrelated workflows.
 
 | Intent                                                                   | Typical files                                                                 | Command                 | Contract                                     |
 | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------- | ----------------------- | -------------------------------------------- |
+| Implement native database ownership and performance gates                | `src/db/`, `native/`, `bench/dbms/`                                           | `/langonrock dbms`      | [DBMS](../workflows/dbms/SKILL.md)           |
 | Add or fix compiler, storage, retrieval, API, CLI, or packaging behavior | `src/`, `test/`, `scripts/`, `.github/workflows/`                             | `/langonrock implement` | [Implement](../workflows/implement/SKILL.md) |
 | Review a branch, commit, or local change                                 | The supplied diff and its callers/tests                                       | `/langonrock review`    | [Review](../workflows/review/SKILL.md)       |
 | Explain or update documented behavior, navigation, or workflow contracts | `README.md`, `DESIGN.md`, `AGENTS.md`, `skills/langonrock/`, `docs/runbooks/` | `/langonrock document`  | [Document](../workflows/document/SKILL.md)   |

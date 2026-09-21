@@ -1,6 +1,9 @@
 import { watch } from 'node:fs'
 
-import { putTenantRoot } from './writer.ts'
+import { putTenantRoot as putLegacy } from './writer.ts'
+import { putTenantRoot as putNative } from '../db/writer.ts'
+import { readHead } from '../db/head.ts'
+import { currentFile } from './paths.ts'
 
 import type { PutResult } from './writer.ts'
 
@@ -57,7 +60,13 @@ export function watchTenant(options: WatchOptions): Watcher {
     try {
       // Bound to a local first: `onSync?.(await put(...))` short-circuits the
       // whole call when onSync is absent, so the sync itself never happens.
-      const result = await putTenantRoot(options.source, options)
+      const native =
+        (await readHead(options)) !== undefined ||
+        !(await Bun.file(currentFile(options.root, options.tenant)).exists())
+      const result = await (native ? putNative : putLegacy)(
+        options.source,
+        options
+      )
 
       options.onSync?.(result)
     } catch (cause) {

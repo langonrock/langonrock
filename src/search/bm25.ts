@@ -1,3 +1,5 @@
+import { releaseBuffer } from '../buffers.ts'
+
 const ASCII_TOKEN = /[a-z0-9]+/g
 const TOKEN = /[\p{L}\p{N}]+/gu
 const NON_ASCII = /[^\x00-\x7f]/
@@ -109,6 +111,13 @@ function createList(): PostingList {
   }
 }
 
+function discard(list: PostingList): void {
+  if (list.documents.byteLength >= 4096) {
+    releaseBuffer(list.documents)
+    releaseBuffer(list.frequencies)
+  }
+}
+
 function push(list: PostingList, document: number, frequency: number): void {
   if (list.length === list.documents.length) {
     const documents = new Uint32Array(list.length * 2)
@@ -116,6 +125,7 @@ function push(list: PostingList, document: number, frequency: number): void {
 
     documents.set(list.documents)
     frequencies.set(list.frequencies)
+    discard(list)
     list.documents = documents
     list.frequencies = frequencies
   }
@@ -130,11 +140,12 @@ function trim(list: PostingList): PostingList {
     return list
   }
 
-  return {
-    documents: list.documents.slice(0, list.length),
-    frequencies: list.frequencies.slice(0, list.length),
-    length: list.length
-  }
+  const documents = list.documents.slice(0, list.length)
+  const frequencies = list.frequencies.slice(0, list.length)
+
+  discard(list)
+
+  return { documents, frequencies, length: list.length }
 }
 
 export interface IndexBuilder {

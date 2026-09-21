@@ -5,10 +5,11 @@ description: Route implementation, review, and documentation tasks in the langon
 
 # langonrock
 
-langonrock compiles Markdown bundles into deterministic, content-addressed tenant
-snapshots. Its CLI, HTTP server, and MCP server share a read model and source
-editing contract. Start with [architecture](reference/architecture.md) when
-locating the code for a change.
+langonrock stores Markdown documents in its own native engine and compiles
+deterministic tenant read models. Its CLI, HTTP server, and MCP server share
+source preconditions, atomic commits, history, and restore. Legacy stores remain
+readable and require explicit migration. Start with
+[architecture](reference/architecture.md) when locating code for a change.
 
 ## Orchestrator
 
@@ -29,11 +30,12 @@ read the command from the user's message. These are repository conventions;
 this blueprint does not register commands in any particular agent client.
 There are no flat alias skills.
 
-| Command                 | Load                                                         | Intent                                               |
-| ----------------------- | ------------------------------------------------------------ | ---------------------------------------------------- |
-| `/langonrock implement` | [workflows/implement/SKILL.md](workflows/implement/SKILL.md) | Add, fix, or refactor requested behavior             |
-| `/langonrock review`    | [workflows/review/SKILL.md](workflows/review/SKILL.md)       | Inspect a diff and report concrete findings          |
-| `/langonrock document`  | [workflows/document/SKILL.md](workflows/document/SKILL.md)   | Update docs and blueprint manuals from code evidence |
+| Command                 | Load                                                         | Intent                                                      |
+| ----------------------- | ------------------------------------------------------------ | ----------------------------------------------------------- |
+| `/langonrock dbms`      | [workflows/dbms/SKILL.md](workflows/dbms/SKILL.md)           | Implement the approved native DBMS and performance contract |
+| `/langonrock implement` | [workflows/implement/SKILL.md](workflows/implement/SKILL.md) | Add, fix, or refactor requested behavior                    |
+| `/langonrock review`    | [workflows/review/SKILL.md](workflows/review/SKILL.md)       | Inspect a diff and report concrete findings                 |
+| `/langonrock document`  | [workflows/document/SKILL.md](workflows/document/SKILL.md)   | Update docs and blueprint manuals from code evidence        |
 
 When no command is given, classify the requested outcome using the
 [routing matrix](reference/routing-matrix.md). An unknown command is not a new
@@ -47,8 +49,9 @@ it is clear.
   without Bun runtime APIs.
 - Preserve snapshot determinism, tenant boundaries, source preconditions, and
   transport parity as specified in the [architecture invariants](reference/architecture.md#invariants).
-- Keep Markdown source authoritative. A `.tnt` file contains the compiled read
-  model and cannot recover the original frontmatter.
+- Markdown remains authoritative for legacy stores. New and migrated stores follow
+  the [native DBMS contract](workflows/dbms/SKILL.md). A legacy `.tnt` alone
+  cannot recover original frontmatter.
 - Keep MCP stdout reserved for JSON-RPC. Retain the six existing tools unless
   the requested API change calls for a different contract.
 - Follow the [verification map](reference/verification.md) for affected layers.

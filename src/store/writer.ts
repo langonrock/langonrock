@@ -1,6 +1,7 @@
 import { appendFile, mkdir, rename } from 'node:fs/promises'
 
 import { splitSections } from '../compile/sections.ts'
+import { lock } from '../db/platform.ts'
 import { compileTenant, discoverBundles } from '../compile/tenant.ts'
 import { syncDir, writeSynced } from './atomic.ts'
 import { encodeTnt } from './format.ts'
@@ -46,7 +47,7 @@ function sectionMap(body: string): Record<string, SectionRange> {
   return map
 }
 
-function toTntConcepts(compiled: TenantCompileResult): TntConcept[] {
+export function toTntConcepts(compiled: TenantCompileResult): TntConcept[] {
   return compiled.concepts.map(concept => {
     const content = compiled.bodies.get(concept.id) ?? ''
     const tnt: TntConcept = {
@@ -128,33 +129,45 @@ async function commit(
   const release = await acquireWriteLock(lockFile(root, tenant))
 
   try {
-    const reused = await Bun.file(target).exists()
+    const releaseNative = await lock(`${tenantDir(root, tenant)}/writer.lock`)
 
-    if (!reused) {
-      // Never write straight to the digest name. A crash halfway through would
-      // leave a truncated file whose name still claims to be that content, and
-      // the next put would see it, report "reused", and point `current` at a
-      // snapshot that cannot be parsed. Writing to a temp and renaming means a
-      // digest-named file only ever exists complete.
-      await writeSynced(`${target}.tmp`, bytes)
-      await rename(`${target}.tmp`, target)
-      await syncDir(snapshotsDir(root, tenant))
+    try {
+      if (await Bun.file(`${tenantDir(root, tenant)}/HEAD`).exists()) {
+        throw new Error(
+          'tenant uses database ownership; import sources through the native database API'
+        )
+      }
+
+      const reused = await Bun.file(target).exists()
+
+      if (!reused) {
+        // Never write straight to the digest name. A crash halfway through would
+        // leave a truncated file whose name still claims to be that content, and
+        // the next put would see it, report "reused", and point `current` at a
+        // snapshot that cannot be parsed. Writing to a temp and renaming means a
+        // digest-named file only ever exists complete.
+        await writeSynced(`${target}.tmp`, bytes)
+        await rename(`${target}.tmp`, target)
+        await syncDir(snapshotsDir(root, tenant))
+      }
+
+      await setCurrent(root, tenant, snapshot)
+
+      const result: PutResult = {
+        snapshot,
+        bundles: compiled.bundles,
+        concepts: compiled.concepts.length,
+        bytes: bytes.byteLength,
+        reused,
+        diagnostics: compiled.diagnostics
+      }
+
+      await logSync(options, source, result)
+
+      return result
+    } finally {
+      releaseNative()
     }
-
-    await setCurrent(root, tenant, snapshot)
-
-    const result: PutResult = {
-      snapshot,
-      bundles: compiled.bundles,
-      concepts: compiled.concepts.length,
-      bytes: bytes.byteLength,
-      reused,
-      diagnostics: compiled.diagnostics
-    }
-
-    await logSync(options, source, result)
-
-    return result
   } finally {
     await release()
   }

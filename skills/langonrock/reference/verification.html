@@ -400,12 +400,15 @@
             <summary><h2>Setup</h2></summary>
             <pre><code class="language-sh">bun --version
 bun install --frozen-lockfile
+bun run build:native
 bun src/cli.ts --help
 </code></pre>
             <p>
               The declared runtime is Bun 1.3 or newer. Install dependencies
               when needed; an existing compatible installation can be used for
-              local checks.
+              local checks. Native source builds require a C compiler, or an
+              MSVC developer environment on Windows. No Python or node-gyp
+              participates in the build.
             </p>
           </details>
           <details class="card" id="choose-the-diff">
@@ -433,6 +436,7 @@ git branch --show-current
             <pre><code class="language-sh">bun run lint
 bun run format:check
 bun run typecheck
+bun run check:dependencies
 bun test
 </code></pre>
             <p>
@@ -544,6 +548,53 @@ bun test
                     </td>
                   </tr>
                   <tr>
+                    <td>Native formats and source reconstruction</td>
+                    <td>
+                      <code
+                        >bun test test/database-format.test.ts
+                        test/sourcearchive.test.ts test/writeall.test.ts
+                        test/db-compression.test.ts</code
+                      >
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Native transactions, OS locks, and crash recovery</td>
+                    <td>
+                      <code
+                        >bun test test/database.test.ts test/recovery.test.ts
+                        test/platform.test.ts</code
+                      >
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Native history, retention, verify, and repair</td>
+                    <td>
+                      <code
+                        >bun test test/history.test.ts test/database-gc.test.ts
+                        test/database-verify.test.ts</code
+                      >
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Native transport parity and interchange</td>
+                    <td>
+                      <code
+                        >bun test test/dbms-transports.test.ts
+                        test/interchange.test.ts test/migration.test.ts
+                        test/watch.test.ts</code
+                      >
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Performance comparator and dependency restrictions</td>
+                    <td>
+                      <code
+                        >bun test test/benchmark.test.ts
+                        test/runtime-dependencies.test.ts</code
+                      >
+                    </td>
+                  </tr>
+                  <tr>
                     <td>Docs and generated manuals</td>
                     <td>
                       <code
@@ -584,6 +635,9 @@ bun src/cli.ts query &quot;okf://$blueprint_store?tenant=smoke&quot; search chur
             <summary><h2>Packaging and release</h2></summary>
             <pre><code class="language-sh">bun run build
 ./dist/langonrock --version
+bun scripts/native-smoke.ts
+bun scripts/package-smoke.ts
+bun scripts/source-smoke.ts
 </code></pre>
             <p>
               Use a build check for packaging changes.
@@ -596,7 +650,36 @@ bun src/cli.ts query &quot;okf://$blueprint_store?tenant=smoke&quot; search chur
               checks tag/package version agreement, builds six targets,
               smoke-tests native targets, and publishes checksums and binaries
               on a <code>v*</code> tag push. Documenting or building a release
-              does not itself authorize pushing a tag or publishing.
+              does not itself authorize pushing a tag or publishing. Each
+              executable must be built on the matching OS/architecture so its
+              embedded addon matches Bun. The package smoke check imports,
+              commits through compiled MCP, reopens, and verifies from outside
+              the repository. The source-package check audits the tarball,
+              installs it in a temporary consumer, compiles the C adapter, and
+              verifies persistence. Package manager network access may be
+              needed.
+            </p>
+          </details>
+          <details class="card" id="native-performance-protocol">
+            <summary><h2>Native performance protocol</h2></summary>
+            <pre><code class="language-sh">bun bench/dbms/run.ts --pairs 10 --output bench/results/dbms/candidate.json
+bun bench/dbms/compare.ts bench/results/dbms/candidate.json
+bun bench/operations/run.ts --repetitions 10 --output bench/results/dbms/operations.json
+bun bench/operations/report.ts bench/results/dbms/operations.json
+</code></pre>
+            <p>
+              See the
+              <a href="../../../bench/dbms/README.md">paired protocol</a> and
+              <a href="../../../bench/operations/README.md"
+                >additional workloads</a
+              >. Run sequentially without competing tests or benchmarks. Do not
+              modify fingerprinted inputs during capture. All required
+              correctness checks and the final fingerprint check must pass
+              before <code>verified</code> becomes true. Extend inconclusive
+              sizes from 10 to 30 pairs, retaining their original samples. A
+              result that remains inconclusive is not a pass. Preserve raw JSON
+              bytes, including failed captures; formatting them breaks
+              combined-capture provenance hashes.
             </p>
           </details>
           <details class="card" id="blueprint-maintenance-checks">

@@ -1,5 +1,7 @@
 import { open, rename } from 'node:fs/promises'
 
+import { writeAll } from './writeall.ts'
+
 export async function writeSynced(
   path: string,
   bytes: Uint8Array,
@@ -15,7 +17,7 @@ export async function writeSynced(
       await handle.chmod(mode)
     }
 
-    await handle.write(bytes)
+    await writeAll(handle, bytes)
     await handle.sync()
   } finally {
     await handle.close()

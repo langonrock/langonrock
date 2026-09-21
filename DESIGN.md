@@ -2,7 +2,9 @@
 
 A purpose-built, multi-tenant store for Open Knowledge Format bundles, optimized for low token cost and low latency when AI agents read it.
 
-Status: build order steps 1 through 5 are implemented, plus the Part 7 connection layer. The compiler, multi-bundle tenant merge, the `.tnt` snapshot format, the copy-on-write writer, the batched reader, `open(dsn)`, the daemon, the filesystem watcher and the MCP server all work and are exercised against real bundles. Steps 6 and 7, meaning BM25 and GC, are still design only.
+Status: this document preserves the original source-folder design and its rationale. The current implementation also includes BM25, collection, and the native document database described in [docs/dbms.md](docs/dbms.md). The historical sections below about Markdown authority, `current`, source-write debounce, lock-free open, and Windows directory-sync fallback apply to the legacy design and must not be used as the native engine's contract.
+
+New and migrated stores have an authoritative checksummed `HEAD`, exact source archives, immutable revision history, atomic document batches, verified restore, and tracked folder imports. The native engine uses project-owned TypeScript and a small C OS adapter, with no database engine or Python dependency. Process-level tests pass locally on macOS arm64; final performance approval and other platform execution remain recorded in [walkthrough.md](walkthrough.md).
 
 Everything up to here has zero runtime dependencies. The MCP server adds two, `@modelcontextprotocol/sdk` and `zod`, because MCP is a moving specification and hand-rolling its framing would be a maintenance liability rather than a saving.
 
@@ -92,7 +94,7 @@ Quality signals are thin. Stars, a conformance badge, and a Draft marker. There 
 
 ### Community tooling
 
-- `okflint`, deterministic conformance checker, Python, MIT, `uv tool install okflint`
+- `okflint`, deterministic conformance checker, Python, MIT
 - Kiso, validator and static-site builder, Java, Apache-2.0
 - OpenWiki, wires codebases into OKF, Python, MIT
 - `superops-team/okf`, Go CLI that generates bundles from git repositories with incremental sync
@@ -103,13 +105,9 @@ Quality signals are thin. Stars, a conformance badge, and a Draft marker. There 
 
 ### LangGraph and LangChain
 
-[`okf-agents`](https://github.com/RonCodes88/okf-agents), `pip install okf-agents`, MIT, Python 3.11 to 3.13.
-
-```python
-from okf_agents import OKFBundle, create_okf_tools
-bundle = OKFBundle.load("./my_markdown_docs")
-tools = create_okf_tools(bundle)
-```
+[`okf-agents`](https://github.com/RonCodes88/okf-agents) is an external Python
+integration under the MIT license. Langonrock does not install, execute, or
+depend on it. Its implementation and benchmark workflow use no Python.
 
 It exposes `read_concept`, `search_concepts`, `list_links`, `read_index`, two retrievers (`OKFRetriever` for keyword, `OKFGraphRetriever` for semantic plus link expansion), a router, and a navigator subgraph with hop and token budgets.
 

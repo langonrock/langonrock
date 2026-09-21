@@ -1,7 +1,7 @@
 import { parseDsn } from './dsn.ts'
 import { remoteConnection } from './remote.ts'
 
-import type { Connection } from '../types.ts'
+import type { DatabaseConnection } from '../types.ts'
 
 export { parseDsn } from './dsn.ts'
 export { remoteConnection } from './remote.ts'
@@ -20,6 +20,14 @@ export type { Target, Transport } from './dsn.ts'
 export type {
   ConceptSlice,
   Connection,
+  DatabaseConnection,
+  DocumentChange,
+  HistoryOptions,
+  RestoreRequest,
+  RevisionInfo,
+  RevisionPage,
+  RevisionResult,
+  TransactionRequest,
   GetOptions,
   SearchOptions,
   SourceEntry,
@@ -44,7 +52,7 @@ const NPIPE_UNSUPPORTED =
  * or requiring Bun, and still develop against a local daemon and deploy against
  * a remote server by changing one string.
  */
-export function connect(dsn: string): Connection {
+export function connect(dsn: string): DatabaseConnection {
   const target = parseDsn(dsn)
 
   if (target.transport === 'embedded') {

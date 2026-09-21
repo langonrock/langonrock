@@ -1,4 +1,4 @@
-import { hasFrontmatter, parseFrontmatter } from '../okf/frontmatter.ts'
+import { parseFrontmatter } from '../okf/frontmatter.ts'
 import { deriveIds } from '../okf/ids.ts'
 import { resolveLinks } from '../okf/links.ts'
 import { basename, scanBundle, toPosix } from '../okf/scan.ts'
@@ -38,18 +38,20 @@ export interface CompileResult {
   bodies: Map<string, string>
 }
 
+export type CompileData = Omit<CompileResult, 'tsv'>
+
 interface ConceptContext {
   pathToId: Map<string, string>
   summaryWidth: number
 }
 
-interface ConceptResult {
+export interface ConceptResult {
   concept: Concept
   diagnostics: Diagnostic[]
   body: string
 }
 
-interface SourceFile {
+export interface SourceFile {
   path: string
   source: string
 }
@@ -77,10 +79,13 @@ function toConcept(
   id: string,
   context: ConceptContext
 ): ConceptResult {
-  const { path, source } = file
+  const { path } = file
+  const source = file.source.startsWith('\uFEFF')
+    ? file.source.slice(1)
+    : file.source
   const { data, body, error } = parseFrontmatter(source)
   const diagnostics: Diagnostic[] = []
-  const conformant = hasFrontmatter(source)
+  const conformant = body.length !== source.length
 
   if (error !== undefined) {
     diagnostics.push({ level: 'warn', path, message: error })
@@ -213,17 +218,52 @@ export async function compileBundle(
   const summaryWidth = options.summaryWidth ?? DEFAULT_SUMMARY_WIDTH
   const bundle = options.bundle ?? defaultBundleName(root)
   const files = await readSources(root, await scanBundle(root))
-  const pathToId = deriveIds(files.map(file => file.path))
+
+  return compileFiles(files, { bundle, summaryWidth })
+}
+
+export function compileFiles(
+  files: SourceFile[],
+  options: CompileOptions
+): CompileResult {
+  const bundle = options.bundle ?? ''
+  const data = compileContents(files, options)
+
+  return { ...data, tsv: serialize(data.concepts, bundle) }
+}
+
+export function compileContents(
+  files: SourceFile[],
+  options: CompileOptions,
+  knownIds?: Map<string, string>
+): CompileData {
+  const summaryWidth = options.summaryWidth ?? DEFAULT_SUMMARY_WIDTH
+  const pathToId = knownIds ?? deriveIds(files.map(file => file.path))
   const context: ConceptContext = { pathToId, summaryWidth }
   const results = files.map(file =>
     toConcept(file, pathToId.get(file.path) ?? file.path, context)
   )
 
+  return collectConcepts(results)
+}
+
+export function compileSource(
+  file: SourceFile,
+  pathToId: Map<string, string>,
+  summaryWidth: number
+): ConceptResult {
+  return toConcept(file, pathToId.get(file.path) ?? file.path, {
+    pathToId,
+    summaryWidth
+  })
+}
+
+export function collectConcepts(results: ConceptResult[]): CompileData {
   const concepts = results.map(result => result.concept).sort(byId)
   const diagnostics = results.flatMap(result => result.diagnostics)
   const bodies = new Map(
     results.map(result => [result.concept.id, result.body])
   )
 
-  return { concepts, diagnostics, tsv: serialize(concepts, bundle), bodies }
+  return { concepts, diagnostics, bodies }
 }

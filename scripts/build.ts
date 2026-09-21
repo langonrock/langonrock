@@ -13,6 +13,16 @@ const { values } = parseArgs({
 const outfile = values.outfile ?? 'dist/langonrock'
 const target = values.target
 
+const platform = process.platform === 'win32' ? 'windows' : process.platform
+
+if (target !== undefined && target !== `bun-${platform}-${process.arch}`) {
+  throw new Error(
+    `native adapter requires a ${target} runner; cross-compilation is unsupported`
+  )
+}
+
+await $`bun scripts/build-native.ts`
+
 if (target === undefined) {
   await $`bun build --compile src/cli.ts --outfile ${outfile}`
 } else {

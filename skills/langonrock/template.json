@@ -18,6 +18,11 @@
       "name": "document",
       "description": "Update langonrock documentation and matching HTML manuals from code evidence",
       "skill": "workflows/document/SKILL.md"
+    },
+    {
+      "name": "dbms",
+      "description": "Implement and verify the native document engine",
+      "skill": "workflows/dbms/SKILL.md"
     }
   ]
 }

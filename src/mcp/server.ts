@@ -5,22 +5,17 @@ import { z } from 'zod'
 import { open } from '../client/connection.ts'
 import { adviceFor } from '../search/advice.ts'
 import { renderConcepts } from '../store/slice.ts'
+import { GET_LIMIT, MANIFEST_URI } from './constants.ts'
+import { registerDatabase } from './dbms.ts'
+
+import type { McpOptions } from './dbms.ts'
 
 import type { Connection } from '../client/connection.ts'
 import type { SearchOptions } from '../search/tenant.ts'
 import type { GetOptions, SyncResult } from '../types.ts'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 
-export const MANIFEST_URI = 'okf://manifest'
-
-/**
- * The MCP boundary is where an unbounded read becomes a context blowup, so it
- * is the one layer that caps by default. 15,000 characters is roughly 4,000
- * tokens: every ordinary concept passes through whole, and only a document
- * that genuinely needs paging gets framed as a partial slice. The library and
- * the HTTP API stay uncapped, because their callers are programs, not prompts.
- */
-export const GET_LIMIT = 15_000
+export { GET_LIMIT, MANIFEST_URI } from './constants.ts'
 
 const MANIFEST_DESCRIPTION = `Read the tenant's knowledge manifest: one dense TSV row per concept with its id, bundle, kind, status, grain, a one-line summary, and outgoing links.
 
@@ -261,6 +256,14 @@ async function refused(
   path: string,
   cause: unknown
 ): Promise<CallToolResult> {
+  if (
+    cause instanceof Error &&
+    'code' in cause &&
+    cause.code === 'INDETERMINATE_COMMIT'
+  ) {
+    return failure(cause)
+  }
+
   const current = await connection
     .readSource(bundle, path)
     .catch(() => undefined)
@@ -440,7 +443,8 @@ function registerSnapshot(server: McpServer, connection: Connection): void {
  */
 export function createMcpServer(
   connection: Connection,
-  advice?: string
+  advice?: string,
+  options: McpOptions = {}
 ): McpServer {
   const server = new McpServer({ name: 'langonrock', version: '0.0.0' })
 
@@ -450,6 +454,10 @@ export function createMcpServer(
   registerSnapshot(server, connection)
   registerWrite(server, connection)
   registerDelete(server, connection)
+
+  if (options.databaseTools === true) {
+    registerDatabase(server, connection)
+  }
 
   return server
 }
@@ -463,17 +471,21 @@ export function createMcpServer(
  * shape underneath a running server keeps the old advice until the next
  * session. It is a hint about corpus shape, and shape moves slowly.
  */
-export async function serveMcp(dsn: string): Promise<void> {
+export async function serveMcp(
+  dsn: string,
+  options: McpOptions = {}
+): Promise<void> {
   const connection = open(dsn)
   const advice = await connection
     .manifest()
     .then(adviceFor)
     .catch(() => undefined)
-  const server = createMcpServer(connection, advice)
+  const server = createMcpServer(connection, advice, options)
   const transport = new StdioServerTransport()
 
   await server.connect(transport)
   await new Promise<void>(resolve => {
     transport.onclose = () => resolve()
   })
+  await connection.close()
 }

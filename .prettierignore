@@ -4,3 +4,5 @@ node_modules/
 bun.lock
 test/fixtures/
 CLAUDE.md
+# Raw captures are immutable; combined runs reference their exact file hashes.
+bench/results/dbms/*.json

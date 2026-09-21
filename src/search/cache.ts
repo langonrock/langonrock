@@ -1,5 +1,4 @@
-import { createReaderCache } from '../store/cache.ts'
-import { buildTenantIndex } from './tenant.ts'
+import { createReadCache, withReader } from '../db/readcache.ts'
 
 import type { TenantIndex } from './tenant.ts'
 
@@ -9,23 +8,10 @@ import type { TenantIndex } from './tenant.ts'
  * fresh index automatically, with no invalidation logic to get wrong.
  */
 export function createSearchCache(root: string) {
-  const readers = createReaderCache(root)
-  const indexes = new Map<string, TenantIndex>()
+  const readers = createReadCache(root)
 
-  return async (tenant: string): Promise<TenantIndex> => {
-    const reader = await readers(tenant)
-    const cached = indexes.get(tenant)
-
-    if (cached?.snapshot === reader.snapshot) {
-      return cached
-    }
-
-    const built = await buildTenantIndex(reader)
-
-    indexes.set(tenant, built)
-
-    return built
-  }
+  return (tenant: string): Promise<TenantIndex> =>
+    withReader(readers, tenant, lease => lease.index())
 }
 
 export type SearchCache = ReturnType<typeof createSearchCache>

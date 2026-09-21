@@ -16,41 +16,49 @@ jobs:
         include:
           # darwin must build on macOS: Bun writes a broken code signature for
           # every darwin target, and only codesign can repair it.
-          # `smoke: true` marks the targets the runner can execute natively.
-          # It is an explicit flag rather than a condition over the target name
-          # because the first version of that condition excluded every arm64
-          # target, which silently skipped the one binary that most needs
-          # checking: darwin-arm64 is what the codesign repair applies to, and
-          # macos-latest is itself arm64.
+          # Each runner builds and tests its own native adapter architecture.
           - runner: macos-latest
             target: bun-darwin-arm64
             artifact: langonrock-darwin-arm64
             smoke: true
-          - runner: macos-latest
+          - runner: macos-15-intel
             target: bun-darwin-x64
             artifact: langonrock-darwin-x64
+            smoke: true
           - runner: ubuntu-latest
             target: bun-linux-x64
             artifact: langonrock-linux-x64
             smoke: true
-          - runner: ubuntu-latest
+          - runner: ubuntu-24.04-arm
             target: bun-linux-arm64
             artifact: langonrock-linux-arm64
-          - runner: ubuntu-latest
+            smoke: true
+          - runner: windows-latest
             target: bun-windows-x64
             artifact: langonrock-windows-x64.exe
-          - runner: ubuntu-latest
+            smoke: true
+          - runner: windows-11-arm
             target: bun-windows-arm64
             artifact: langonrock-windows-arm64.exe
+            smoke: true
 
     steps:
       - uses: actions/checkout@v5
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: 1.3.12
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
+        with:
+          arch: ${{ runner.arch == 'ARM64' && 'arm64' || 'x64' }}
 
       - run: bun install --frozen-lockfile
+
+      - run: bun run build:native
+
+      - run: bun scripts/native-smoke.ts
 
       - name: Refuse to release a tag that disagrees with package.json
         shell: bash

@@ -659,7 +659,7 @@ describe('bootstrapping a tenant from nothing', () => {
           { method: 'PUT', headers: { 'if-none-match': '*' }, body: CONCEPT },
           '/source/inbox/notes.txt'
         )
-      ).resolves.toBe(404)
+      ).resolves.toBe(400)
     })
 
     test('a body past the concept limit', async () => {
@@ -672,17 +672,15 @@ describe('bootstrapping a tenant from nothing', () => {
       ).resolves.toBe(413)
     })
 
-    // Only `If-None-Match: *` asserts a new concept, so any other write shape
-    // is answered at the tenant level rather than at the header.
     test('a write with no precondition at all', async () => {
-      await expect(refuse({ method: 'PUT', body: CONCEPT })).resolves.toBe(409)
+      await expect(refuse({ method: 'PUT', body: CONCEPT })).resolves.toBe(428)
     })
 
     test('a replacement of a concept that cannot exist', async () => {
       await expect(
         refuse({
           method: 'PUT',
-          headers: { 'if-match': '"deadbeef"' },
+          headers: { 'if-match': `"${'0'.repeat(64)}"` },
           body: CONCEPT
         })
       ).resolves.toBe(409)

@@ -8,3 +8,7 @@ bench/.mutate/
 *.tnt
 .DS_Store
 .agents/
+native/bin/
+native/*.obj
+native/*.lib
+native/*.exp

@@ -1,29 +1,46 @@
-import { readFile } from 'node:fs/promises'
+import { createReadCache } from '../db/readcache.ts'
 
-import { currentFile } from './paths.ts'
-import { openTenant } from './reader.ts'
-
+import type { ReadLease } from '../db/readcache.ts'
 import type { TenantReader } from './reader.ts'
 
-/**
- * A daemon should not re-parse the directory on every request, but it must not
- * serve a stale snapshot either. Reading the tiny `current` pointer costs one
- * syscall and tells us whether the cached reader is still the right one.
- */
+const finalizer = new FinalizationRegistry<ReadLease>(lease => lease.release())
+
 export function createReaderCache(root: string) {
-  const readers = new Map<string, TenantReader>()
+  const cache = createReadCache(root)
 
-  return async (tenant: string): Promise<TenantReader> => {
-    const snapshot = (await readFile(currentFile(root, tenant), 'utf8')).trim()
-    const cached = readers.get(tenant)
+  return async (
+    tenant: string
+  ): Promise<TenantReader & { close: () => void }> => {
+    const lease = await cache.acquire(tenant)
+    let closed = false
 
-    if (cached?.snapshot === snapshot) {
-      return cached
+    const active = (): TenantReader => {
+      if (closed) {
+        throw new Error('database reader is closed')
+      }
+
+      return lease.reader
     }
 
-    const reader = await openTenant(root, tenant)
+    const reader = {
+      snapshot: lease.reader.snapshot,
+      get ids() {
+        return active().ids
+      },
+      get titles() {
+        return active().titles
+      },
+      manifest: (bundle?: string) => active().manifest(bundle),
+      get: (...args: Parameters<TenantReader['get']>) => active().get(...args),
+      bodies: () => active().bodies(),
+      close: () => {
+        closed = true
+        finalizer.unregister(reader)
+        lease.release()
+      }
+    }
 
-    readers.set(tenant, reader)
+    finalizer.register(reader, lease, reader)
 
     return reader
   }

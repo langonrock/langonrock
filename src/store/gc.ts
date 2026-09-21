@@ -2,7 +2,7 @@ import { readFile, readdir, stat, unlink } from 'node:fs/promises'
 
 import { HEADER_BYTES, parseHeader } from './format.ts'
 import { acquireWriteLock } from './lock.ts'
-import { currentFile, lockFile, snapshotsDir } from './paths.ts'
+import { currentFile, lockFile, snapshotsDir, tenantDir } from './paths.ts'
 
 export const DEFAULT_KEEP = 10
 export const DEFAULT_GRACE_MS = 3_600_000
@@ -158,6 +158,13 @@ async function readCurrent(root: string, tenant: string): Promise<string> {
  */
 export async function collect(options: GcOptions): Promise<GcResult> {
   const { root, tenant } = options
+
+  if (await Bun.file(`${tenantDir(root, tenant)}/HEAD`).exists()) {
+    throw new Error(
+      'tenant uses database ownership; run native collection through the public API'
+    )
+  }
+
   const keep = options.keep ?? DEFAULT_KEEP
   const cutoff = Date.now() - (options.graceMs ?? DEFAULT_GRACE_MS)
   const dryRun = options.dryRun === true

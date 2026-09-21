@@ -358,6 +358,7 @@
           </details>
           <details open>
             <summary>Workflows</summary>
+            <a href="workflows/dbms/README.html">DBMS</a>
             <a href="workflows/implement/README.html">Implement</a>
             <a href="workflows/review/README.html">Review</a>
             <a href="workflows/document/README.html">Document</a>
@@ -390,11 +391,13 @@
         <div class="document">
           <section class="card intro">
             <p>
-              langonrock compiles Markdown bundles into deterministic,
-              content-addressed tenant snapshots. Its CLI, HTTP server, and MCP
-              server share a read model and source editing contract. Start with
+              langonrock stores Markdown documents in its own native engine and
+              compiles deterministic tenant read models. Its CLI, HTTP server,
+              and MCP server share source preconditions, atomic commits,
+              history, and restore. Legacy stores remain readable and require
+              explicit migration. Start with
               <a href="reference/architecture.html">architecture</a> when
-              locating the code for a change.
+              locating code for a change.
             </p>
           </section>
           <details class="card" id="orchestrator" open>
@@ -420,7 +423,7 @@
               </li>
             </ol>
           </details>
-          <details class="card" id="command-routing" open>
+          <details class="card" id="command-routing">
             <summary><h2>Command routing</h2></summary>
             <p>
               This is a router-only project skill. Interpret
@@ -445,6 +448,18 @@
                   </tr>
                 </thead>
                 <tbody>
+                  <tr>
+                    <td><code>/langonrock dbms</code></td>
+                    <td>
+                      <a href="workflows/dbms/README.html"
+                        >workflows/dbms/SKILL.md</a
+                      >
+                    </td>
+                    <td>
+                      Implement the approved native DBMS and performance
+                      contract
+                    </td>
+                  </tr>
                   <tr>
                     <td><code>/langonrock implement</code></td>
                     <td>
@@ -501,8 +516,10 @@
                 >.
               </li>
               <li>
-                Keep Markdown source authoritative. A <code>.tnt</code> file
-                contains the compiled read model and cannot recover the original
+                Markdown remains authoritative for legacy stores. New and
+                migrated stores follow the
+                <a href="workflows/dbms/README.html">native DBMS contract</a>. A
+                legacy <code>.tnt</code> alone cannot recover original
                 frontmatter.
               </li>
               <li>

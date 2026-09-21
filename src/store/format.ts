@@ -1,3 +1,5 @@
+import { releaseBuffer, Utf8Buffer } from '../buffers.ts'
+
 export const MAGIC = 'TNT1'
 export const VERSION = 1
 export const HEADER_BYTES = 32
@@ -8,6 +10,7 @@ export interface SectionRange {
 }
 
 export interface DirEntry {
+  checksum?: number
   id: string
   offset: number
   length: number
@@ -40,10 +43,11 @@ export interface TntConcept {
   sections: Record<string, SectionRange>
   title?: string
   staleAfter?: string
+  encoded?: { bytes: Uint8Array; checksum: number }
 }
 
 const encoder = new TextEncoder()
-const decoder = new TextDecoder()
+const decoder = new TextDecoder('utf-8', { ignoreBOM: true })
 
 function encodeHeader(header: TntHeader): Uint8Array {
   const bytes = new Uint8Array(HEADER_BYTES)
@@ -92,8 +96,18 @@ export function parseDir(bytes: Uint8Array): DirEntry[] {
   return JSON.parse(decoder.decode(bytes)) as DirEntry[]
 }
 
-export function decodeBlob(bytes: Uint8Array): string {
-  return decoder.decode(Bun.zstdDecompressSync(bytes))
+export function decodeBlob(bytes: Uint8Array, checksum?: number): string {
+  const content = Bun.zstdDecompressSync(bytes)
+
+  try {
+    if (checksum !== undefined && Bun.hash.crc32(content) !== checksum) {
+      throw new Error('database corruption: body checksum mismatch')
+    }
+
+    return decoder.decode(content)
+  } finally {
+    releaseBuffer(content)
+  }
 }
 
 function concat(chunks: Uint8Array[], total: number): Uint8Array {
@@ -114,31 +128,85 @@ interface PackedBlobs {
   length: number
 }
 
-function packBlobs(concepts: TntConcept[]): PackedBlobs {
+export interface CompressedBody {
+  content: string
+  bytes: Uint8Array
+  checksum: number
+}
+
+export interface EncodingOptions {
+  checksums?: boolean
+  reusable?: Map<string, CompressedBody>
+  compressionLevel?: number
+}
+
+function compressedBody(
+  concept: TntConcept,
+  options: EncodingOptions,
+  buffer: Utf8Buffer
+): CompressedBody {
+  if (concept.encoded !== undefined) {
+    return { content: '', ...concept.encoded }
+  }
+
+  const previous = options.reusable?.get(concept.id)
+
+  if (previous?.content === concept.content) {
+    return previous
+  }
+
+  const bytes = buffer.encode(concept.content)
+
+  const compressed =
+    options.compressionLevel === undefined
+      ? Bun.zstdCompressSync(bytes)
+      : Bun.zstdCompressSync(bytes, { level: options.compressionLevel })
+
+  return {
+    content: concept.content,
+    bytes: compressed,
+    checksum: Bun.hash.crc32(bytes)
+  }
+}
+
+function packBlobs(
+  concepts: TntConcept[],
+  options: EncodingOptions
+): PackedBlobs {
   const entries: DirEntry[] = []
   const chunks: Uint8Array[] = []
   let cursor = 0
+  const buffer = new Utf8Buffer()
 
-  for (const concept of concepts) {
-    const blob = Bun.zstdCompressSync(encoder.encode(concept.content))
-    const entry: DirEntry = {
-      id: concept.id,
-      offset: cursor,
-      length: blob.byteLength,
-      sections: concept.sections
+  try {
+    for (const concept of concepts) {
+      const body = compressedBody(concept, options, buffer)
+      const blob = body.bytes
+      const entry: DirEntry = {
+        id: concept.id,
+        offset: cursor,
+        length: blob.byteLength,
+        sections: concept.sections
+      }
+
+      if (concept.title !== undefined) {
+        entry.title = concept.title
+      }
+
+      if (options.checksums) {
+        entry.checksum = body.checksum
+      }
+
+      if (concept.staleAfter !== undefined) {
+        entry.staleAfter = concept.staleAfter
+      }
+
+      entries.push(entry)
+      chunks.push(blob)
+      cursor += blob.byteLength
     }
-
-    if (concept.title !== undefined) {
-      entry.title = concept.title
-    }
-
-    if (concept.staleAfter !== undefined) {
-      entry.staleAfter = concept.staleAfter
-    }
-
-    entries.push(entry)
-    chunks.push(blob)
-    cursor += blob.byteLength
+  } finally {
+    buffer.close()
   }
 
   return { entries, chunks, length: cursor }
@@ -151,15 +219,34 @@ function packBlobs(concepts: TntConcept[]): PackedBlobs {
  */
 export function encodeTnt(
   manifest: string,
-  concepts: TntConcept[]
+  concepts: TntConcept[],
+  options: EncodingOptions = {}
 ): Uint8Array {
+  return encodeTntParts(manifest, concepts, options).bytes
+}
+
+export interface EncodedSnapshot {
+  bytes: Uint8Array
+  entries: DirEntry[]
+  blobsOffset: number
+}
+
+export function encodeTntParts(
+  manifest: string,
+  concepts: TntConcept[],
+  options: EncodingOptions = {}
+): EncodedSnapshot {
   const manifestBytes = encoder.encode(manifest)
-  const packed = packBlobs(concepts)
+  const packed = packBlobs(concepts, options)
   const dirBytes = encoder.encode(JSON.stringify(packed.entries))
 
   const manifestOffset = HEADER_BYTES
   const dirOffset = manifestOffset + manifestBytes.byteLength
   const blobsOffset = dirOffset + dirBytes.byteLength
+
+  if (blobsOffset + packed.length > 0xffffffff) {
+    throw new Error('tnt: snapshot exceeds the 32-bit format size limit')
+  }
 
   const header = encodeHeader({
     version: VERSION,
@@ -171,8 +258,12 @@ export function encodeTnt(
     blobsLength: packed.length
   })
 
-  return concat(
-    [header, manifestBytes, dirBytes, ...packed.chunks],
-    blobsOffset + packed.length
-  )
+  return {
+    bytes: concat(
+      [header, manifestBytes, dirBytes, ...packed.chunks],
+      blobsOffset + packed.length
+    ),
+    entries: packed.entries,
+    blobsOffset
+  }
 }

@@ -5,7 +5,9 @@ const MD_EXTENSION = /\.md$/i
 export function extractLinkTargets(body: string): string[] {
   const targets: string[] = []
 
-  for (const match of body.matchAll(LINK)) {
+  LINK.lastIndex = 0
+
+  for (let match = LINK.exec(body); match !== null; match = LINK.exec(body)) {
     const target = match[1]
 
     if (target !== undefined) {

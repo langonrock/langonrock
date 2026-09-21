@@ -9,11 +9,14 @@ Run commands from the repository root. [package.json](../../../package.json),
 ```sh
 bun --version
 bun install --frozen-lockfile
+bun run build:native
 bun src/cli.ts --help
 ```
 
 The declared runtime is Bun 1.3 or newer. Install dependencies when needed;
-an existing compatible installation can be used for local checks.
+an existing compatible installation can be used for local checks. Native source
+builds require a C compiler, or an MSVC developer environment on Windows. No
+Python or node-gyp participates in the build.
 
 ## Choose the diff
 
@@ -39,6 +42,7 @@ missing base instead of inventing a comparison.
 bun run lint
 bun run format:check
 bun run typecheck
+bun run check:dependencies
 bun test
 ```
 
@@ -68,6 +72,11 @@ checks; a product test run is not required just to move prose.
 | Search ranking, passage windows, slices                          | `bun test test/search.test.ts test/window.test.ts test/slice.test.ts`                                                                                |
 | Connections, remote-only client, auth, TLS                       | `bun test test/connection.test.ts test/client.test.ts test/connector.test.ts test/token.test.ts test/tls.test.ts`                                    |
 | CLI, default data roots, MCP tools                               | `bun test test/cli.test.ts test/datadir.test.ts test/mcp.test.ts`                                                                                    |
+| Native formats and source reconstruction                         | `bun test test/database-format.test.ts test/sourcearchive.test.ts test/writeall.test.ts test/db-compression.test.ts`                                 |
+| Native transactions, OS locks, and crash recovery                | `bun test test/database.test.ts test/recovery.test.ts test/platform.test.ts`                                                                         |
+| Native history, retention, verify, and repair                    | `bun test test/history.test.ts test/database-gc.test.ts test/database-verify.test.ts`                                                                |
+| Native transport parity and interchange                          | `bun test test/dbms-transports.test.ts test/interchange.test.ts test/migration.test.ts test/watch.test.ts`                                           |
+| Performance comparator and dependency restrictions               | `bun test test/benchmark.test.ts test/runtime-dependencies.test.ts`                                                                                  |
 | Docs and generated manuals                                       | `bunx --no-install prettier --check AGENTS.md AGENTS.html skills/langonrock docs/runbooks/agent-role-system.md docs/runbooks/agent-role-system.html` |
 
 Select tests across rows for changes that cross boundaries. Relevant assertions
@@ -94,6 +103,9 @@ bun src/cli.ts query "okf://$blueprint_store?tenant=smoke" search churned
 ```sh
 bun run build
 ./dist/langonrock --version
+bun scripts/native-smoke.ts
+bun scripts/package-smoke.ts
+bun scripts/source-smoke.ts
 ```
 
 Use a build check for packaging changes. [scripts/build.ts](../../../scripts/build.ts)
@@ -102,6 +114,29 @@ code-signing repair. [.github/workflows/release.yml](../../../.github/workflows/
 checks tag/package version agreement, builds six targets, smoke-tests native
 targets, and publishes checksums and binaries on a `v*` tag push. Documenting or
 building a release does not itself authorize pushing a tag or publishing.
+Each executable must be built on the matching OS/architecture so its embedded
+addon matches Bun. The package smoke check imports, commits through compiled
+MCP, reopens, and verifies from outside the repository. The source-package check
+audits the tarball, installs it in a temporary consumer, compiles the C adapter,
+and verifies persistence. Package manager network access may be needed.
+
+## Native performance protocol
+
+```sh
+bun bench/dbms/run.ts --pairs 10 --output bench/results/dbms/candidate.json
+bun bench/dbms/compare.ts bench/results/dbms/candidate.json
+bun bench/operations/run.ts --repetitions 10 --output bench/results/dbms/operations.json
+bun bench/operations/report.ts bench/results/dbms/operations.json
+```
+
+See the [paired protocol](../../../bench/dbms/README.md) and
+[additional workloads](../../../bench/operations/README.md). Run sequentially
+without competing tests or benchmarks. Do not modify fingerprinted inputs during
+capture. All required correctness checks and the final fingerprint check must
+pass before `verified` becomes true. Extend inconclusive sizes from 10 to 30
+pairs, retaining their original samples. A result that remains inconclusive is
+not a pass. Preserve raw JSON bytes, including failed captures; formatting them
+breaks combined-capture provenance hashes.
 
 ## Blueprint maintenance checks
 

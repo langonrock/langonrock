@@ -1,11 +1,16 @@
 import { readFile } from 'node:fs/promises'
 
+import { checkBytes, checkHeader } from './integrity.ts'
+
 import { HEADER_BYTES, decodeBlob, parseDir, parseHeader } from './format.ts'
 import { currentFile, snapshotFile } from './paths.ts'
 import { sliceConcept } from './slice.ts'
+import { readBytes as slice } from './readbytes.ts'
+import { releaseBuffer } from '../buffers.ts'
 
 import type { ConceptSlice, GetOptions } from '../types.ts'
 import type { DirEntry, TntHeader } from './format.ts'
+import type { SnapshotAccess } from './integrity.ts'
 
 const decoder = new TextDecoder()
 
@@ -78,18 +83,6 @@ function splitByBundle(manifest: string): Map<string, string> {
   )
 }
 
-async function slice(
-  path: string,
-  offset: number,
-  length: number
-): Promise<Uint8Array> {
-  const bytes = await Bun.file(path)
-    .slice(offset, offset + length)
-    .arrayBuffer()
-
-  return new Uint8Array(bytes)
-}
-
 async function readCurrent(root: string, tenant: string): Promise<string> {
   const raw = await readFile(currentFile(root, tenant), 'utf8')
   const snapshot = raw.trim()
@@ -116,44 +109,49 @@ function sliceSection(
 }
 
 async function readBodies(
-  path: string,
+  path: string | number,
   header: TntHeader,
   entries: DirEntry[]
 ): Promise<Iterable<[string, string]>> {
   const region = await slice(path, header.blobsOffset, header.blobsLength)
 
   return (function* (): Generator<[string, string]> {
-    for (const entry of entries) {
-      yield [
-        entry.id,
-        decodeBlob(region.subarray(entry.offset, entry.offset + entry.length))
-      ]
+    try {
+      for (const entry of entries) {
+        yield [
+          entry.id,
+          decodeBlob(
+            region.subarray(entry.offset, entry.offset + entry.length),
+            entry.checksum
+          )
+        ]
+      }
+    } finally {
+      releaseBuffer(region)
     }
   })()
 }
 
-function titlesOf(entries: DirEntry[]): Map<string, string> {
+function indexEntries(entries: DirEntry[]) {
+  const byId = new Map<string, DirEntry>()
+  const ids: string[] = []
   const titles = new Map<string, string>()
+  const stale = new Map<string, string>()
 
   for (const entry of entries) {
+    byId.set(entry.id, entry)
+    ids.push(entry.id)
+
     if (entry.title !== undefined) {
       titles.set(entry.id, entry.title)
     }
-  }
 
-  return titles
-}
-
-function staleAfterOf(entries: DirEntry[]): Map<string, string> {
-  const dates = new Map<string, string>()
-
-  for (const entry of entries) {
     if (entry.staleAfter !== undefined) {
-      dates.set(entry.id, entry.staleAfter)
+      stale.set(entry.id, entry.staleAfter)
     }
   }
 
-  return dates
+  return { byId, ids, titles, stale }
 }
 
 /** ISO dates order as strings, so the clock touches nothing but `today`. */
@@ -205,7 +203,7 @@ function demote(manifest: string, expired: Set<string>): string {
 }
 
 async function readEntry(
-  path: string,
+  path: string | number,
   header: TntHeader,
   entry: DirEntry
 ): Promise<string> {
@@ -215,7 +213,7 @@ async function readEntry(
     entry.length
   )
 
-  return decodeBlob(bytes)
+  return decodeBlob(bytes, entry.checksum)
 }
 
 /**
@@ -228,24 +226,82 @@ export async function openTenant(
   tenant: string
 ): Promise<TenantReader> {
   const snapshot = await readCurrent(root, tenant)
-  const path = snapshotFile(root, tenant, snapshot)
-  const header = parseHeader(await slice(path, 0, HEADER_BYTES))
-  const entries = parseDir(
-    await slice(path, header.dirOffset, header.dirLength)
+
+  return openSnapshot(root, tenant, snapshot)
+}
+
+async function metadata(
+  root: string,
+  tenant: string,
+  snapshot: string,
+  access?: SnapshotAccess
+): Promise<{ path: string | number; header: TntHeader; entries: DirEntry[] }> {
+  const path = access?.descriptor ?? snapshotFile(root, tenant, snapshot)
+
+  if (access?.cached !== undefined) {
+    return {
+      path,
+      header: access.cached.header,
+      entries: access.cached.entries
+    }
+  }
+
+  const headerBytes = await slice(path, 0, HEADER_BYTES)
+
+  if (access !== undefined) {
+    checkBytes(headerBytes, access.checksums.header)
+  }
+
+  const header = parseHeader(headerBytes)
+
+  if (access !== undefined) {
+    checkHeader(header, access.size)
+  }
+
+  const dirBytes = await slice(path, header.dirOffset, header.dirLength)
+
+  if (access !== undefined) {
+    checkBytes(dirBytes, access.checksums.directory)
+  }
+
+  const entries = parseDir(dirBytes)
+
+  return { path, header, entries }
+}
+
+export async function openSnapshot(
+  root: string,
+  tenant: string,
+  snapshot: string,
+  access?: SnapshotAccess
+): Promise<TenantReader> {
+  const { path, header, entries } = await metadata(
+    root,
+    tenant,
+    snapshot,
+    access
   )
-  const byId = new Map(entries.map(entry => [entry.id, entry]))
+  const { byId, ids, titles, stale } = indexEntries(entries)
 
   // A snapshot never changes, so the manifest it holds is worth keeping once it
   // has been read: it is the one region asked for on every turn.
-  let text: string | undefined
+  let text: string | undefined = access?.cached?.manifest
   let byBundle: Map<string, string> | undefined
 
-  const stale = staleAfterOf(entries)
-
   const manifest = async (bundle?: string): Promise<string> => {
-    text ??= decoder.decode(
-      await slice(path, header.manifestOffset, header.manifestLength)
-    )
+    if (text === undefined) {
+      const bytes = await slice(
+        path,
+        header.manifestOffset,
+        header.manifestLength
+      )
+
+      if (access !== undefined) {
+        checkBytes(bytes, access.checksums.manifest)
+      }
+
+      text = decoder.decode(bytes)
+    }
 
     let base = text
 
@@ -295,8 +351,8 @@ export async function openTenant(
 
   return {
     snapshot,
-    ids: entries.map(entry => entry.id),
-    titles: titlesOf(entries),
+    ids,
+    titles,
     manifest,
     get,
     bodies: () => readBodies(path, header, entries)

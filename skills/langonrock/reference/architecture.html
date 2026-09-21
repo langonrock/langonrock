@@ -445,7 +445,10 @@
                   </tr>
                   <tr>
                     <td>Shared connection</td>
-                    <td>Reads, source edits, sync, and close</td>
+                    <td>
+                      Reads, immediate native writes, atomic batches, history,
+                      restore, and close
+                    </td>
                     <td><a href="../../../src/types.ts">src/types.ts</a></td>
                   </tr>
                   <tr>
@@ -464,11 +467,11 @@
                   <tr>
                     <td>MCP stdio server</td>
                     <td>
-                      <code>manifest</code>, <code>search</code>,
-                      <code>get</code>, <code>snapshot</code>,
-                      <code>write</code>, <code>delete</code>
+                      Six default tools, with opt-in <code>transact</code>,
+                      <code>history</code>, and <code>restore</code>
                     </td>
                     <td>
+                      <a href="../../../src/mcp/lazy.ts">mcp/lazy.ts</a>,
                       <a href="../../../src/mcp/server.ts">mcp/server.ts</a>
                     </td>
                   </tr>
@@ -478,13 +481,18 @@
           </details>
           <details class="card" id="data-flow">
             <summary><h2>Data flow</h2></summary>
-            <pre><code class="language-text">Markdown source directories
-  -&gt; okf/scan, frontmatter, ids, links
-  -&gt; compile/manifest and compile/tenant
-  -&gt; store/writer -&gt; store/format -&gt; immutable .tnt snapshot + current pointer
-  -&gt; store/reader and store/cache -&gt; manifest and sliced concept reads
-  -&gt; search/bm25, search/tenant and search/cache -&gt; ranked manifest rows
-  -&gt; client/connection or server/http -&gt; CLI, remote client, MCP
+            <pre><code class="language-text">Document transactions or explicit Markdown imports
+  -&gt; shared frontmatter, ids, links, and compilation
+  -&gt; db/transaction, documents, publish
+  -&gt; immutable TNT1 + source archive + revision + optional import map
+  -&gt; durable authoritative HEAD
+  -&gt; db/reader and readcache -&gt; pinned manifest and sliced reads
+  -&gt; search/bm25 and search/tenant -&gt; ranked rows using the same pinned reader
+  -&gt; connection, HTTP, CLI, MCP
+
+Unmigrated legacy sources
+  -&gt; store/writer -&gt; immutable TNT1 + current
+  -&gt; legacy reader through the common read cache
 </code></pre>
             <p>
               This is a data-flow outline, not an import graph. The shared
@@ -609,6 +617,82 @@
                       <a href="../../../bench/real/">bench/real/</a>
                     </td>
                   </tr>
+                  <tr>
+                    <td>Native transactions</td>
+                    <td>
+                      Prepare source changes, validate preconditions, publish
+                      complete commits
+                    </td>
+                    <td>
+                      <a href="../../../src/db/api.ts">api.ts</a>,
+                      <a href="../../../src/db/transaction.ts">transaction.ts</a
+                      >, <a href="../../../src/db/publish.ts">publish.ts</a>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Native reading</td>
+                    <td>
+                      Pin immutable descriptors, retain request leases, bound
+                      caches
+                    </td>
+                    <td>
+                      <a href="../../../src/db/reader.ts">reader.ts</a>,
+                      <a href="../../../src/db/readcache.ts">readcache.ts</a>,
+                      <a href="../../../src/db/writecache.ts">writecache.ts</a>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Native history</td>
+                    <td>
+                      Committed ancestry, verified restore, retention,
+                      corruption diagnosis
+                    </td>
+                    <td>
+                      <a href="../../../src/db/history.ts">history.ts</a>,
+                      <a href="../../../src/db/restore.ts">restore.ts</a>,
+                      <a href="../../../src/db/gc.ts">gc.ts</a>,
+                      <a href="../../../src/db/verify.ts">verify.ts</a>,
+                      <a href="../../../src/db/repair.ts">repair.ts</a>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Interchange</td>
+                    <td>
+                      Explicit migration, exact source export, three-way folder
+                      import
+                    </td>
+                    <td>
+                      <a href="../../../src/db/migration.ts">migration.ts</a>,
+                      <a href="../../../src/db/export.ts">export.ts</a>,
+                      <a href="../../../src/db/import.ts">import.ts</a>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>OS adapter</td>
+                    <td>
+                      Kernel locks, file synchronization, atomic replacement
+                    </td>
+                    <td>
+                      <a href="../../../src/db/platform.ts">platform.ts</a>,
+                      <a href="../../../native/README.md">native</a>,
+                      <a href="../../../scripts/build-native.ts"
+                        >build-native.ts</a
+                      >
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>DBMS evidence</td>
+                    <td>
+                      Frozen paired performance and separate new-operation costs
+                    </td>
+                    <td>
+                      <a href="../../../bench/dbms/README.md">paired protocol</a
+                      >,
+                      <a href="../../../bench/operations/README.md"
+                        >operations</a
+                      >
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -616,31 +700,40 @@
           <details class="card" id="storage-boundaries">
             <summary><h2>Storage boundaries</h2></summary>
             <p>
-              Each immediate non-hidden directory under a tenant's source root
-              is a bundle. The store's <code>sources.json</code> maps tenant
-              names to those source roots. A first source creation can register
-              a new tenant automatically. Existing snapshots without a source
-              mapping must be registered with the original source directory
-              before editing; an empty replacement root would discard knowledge
-              on sync.
+              New and explicitly migrated tenants own their documents. Each
+              immediate non-hidden directory under an imported source root is a
+              bundle. Optional <code>sources.json</code> entries select folders
+              to import and watch. Native writes need no source registration.
+              Unmigrated legacy edits still require original sources;
+              database-only transactions require explicit migration.
             </p>
             <pre><code class="language-text">&lt;data root&gt;/
   sources.json
   tokens.json
-  sources/&lt;tenant&gt;/                 default root for a newly created tenant
   tenants/&lt;tenant&gt;/
-    current                        active SHA-256 digest
-    snapshots/&lt;digest&gt;.tnt         compiled snapshot
-    log.jsonl                      sync log
-    lock                           writer lock while held
+    HEAD                           authoritative native root
+    snapshots/&lt;digest&gt;.tnt         compiled snapshot and compressed bodies
+    sources/&lt;digest&gt;.src           exact prefixes, source metadata, navigation
+    revisions/&lt;digest&gt;.rev         immutable committed ancestry
+    imports/&lt;digest&gt;.imp           last-imported folder hashes
+    staging/                       unpublished artifacts
+    writer.lock                    persistent file, kernel-owned lock
+    retention.lock                 coordinates opening and collection
+    current                        preserved only for legacy/migrated stores
 </code></pre>
             <p>
               The snapshot contains a 32-byte TNT1 header, an uncompressed
               manifest, a JSON directory of offsets and section ranges, and a
               zstd-compressed body per concept. File byte offsets differ from
-              the character offsets used by <code>ConceptSlice</code>. Reader
-              and search caches refresh when the current snapshot digest
-              changes.
+              the character offsets used by <code>ConceptSlice</code>. The
+              native reader pins its file descriptor under a brief retention
+              lock. The shared read cache holds at most 16 tenants and keeps
+              request leases alive through ranking and body retrieval. Eviction
+              or close releases the cache's ownership without closing active
+              requests. Search indexes also refresh at the evaluation date
+              boundary so staleness remains current. Writer metadata retains at
+              most one tenant and has size/count limits; it does not retain
+              decompressed body text.
             </p>
           </details>
           <details class="card" id="invariants">
@@ -649,14 +742,27 @@
               <li>
                 Identical ordered input produces identical compiled snapshot
                 bytes. Do not put wall-clock values in the compiled read model.
-                Staleness is computed when reading a manifest; the sync log may
-                contain timestamps.
+                Staleness is computed when reading a manifest; revision records
+                may contain timestamps.
               </li>
               <li>
-                Publish complete snapshot files through temporary files, sync,
-                and rename. Replace the <code>current</code> pointer atomically
-                under the tenant writer lock. Readers use immutable snapshots
-                without taking that lock.
+                Native commits publish complete immutable artifacts before one
+                durable HEAD replacement. Validate the expected revision under
+                an OS writer lock. Report failures after replacement as
+                indeterminate with the revision identity. Never use an age-based
+                takeover of a live native lock.
+              </li>
+              <li>
+                Keep history and source archives out of ordinary read
+                initialization. Preserve one pinned reader for each whole
+                operation. Collection publishes retained ancestry durably before
+                deleting artifacts; live pinned reads remain valid.
+              </li>
+              <li>
+                Corrupt committed roots fail closed. Full verification bypasses
+                ordinary read caches. Repair requires a deliberate candidate and
+                an exact expected HEAD hash, preserves the old head, and never
+                runs automatically.
               </li>
               <li>
                 Preserve existing TNT1 compatibility when changing the encoder
@@ -693,11 +799,19 @@
                 replacement hash.
               </li>
               <li>
-                <code>writeSource</code> changes source;
-                <code>sync</code> publishes the compiled model. MCP
-                <code>write</code> and <code>delete</code> perform the mutation
-                and sync together. Keep that distinction when documenting
-                callers of the lower-level connection interface.
+                Native <code>writeSource</code> and delete operations commit
+                immediately. Native <code>sync</code> returns the current state
+                without a second revision. Use <code>transact</code> to group
+                changes. Legacy source editing retains edit-then-sync behavior.
+                Low-level Markdown file helpers remain file utilities, not
+                native transactions.
+              </li>
+              <li>
+                Import compares the last imported hash, folder hash, and
+                database hash. Refuse conflicting changes atomically; retain
+                database-only edits and documents. Migration requires originals
+                and quiescent legacy writers, revalidates sources before
+                publication, and preserves the legacy checkpoint.
               </li>
               <li>
                 Keep embedded and remote <code>Connection</code> results
@@ -715,6 +829,26 @@
                 MCP owns stdout. Send diagnostics to stderr to preserve stdio
                 framing.
               </li>
+              <li>
+                Keep six default MCP tools. Database tools are explicit opt-in.
+                Defer loading the MCP SDK until the MCP factory/server is
+                actually used.
+              </li>
+              <li>
+                No Python, SQLite, or other database engine in runtime, build,
+                tests, or benchmarks. Build the OS adapter directly with the
+                host C compiler. Local platform tests do not establish Linux or
+                Windows behavior.
+              </li>
+              <li>
+                Preserve the
+                <a
+                  href="../../../docs/tasks/task.dbms-performance.md#workloads-and-limits"
+                  >approved performance limits</a
+                >. Freeze capture inputs; retain every sample and inconclusive
+                result. Raw JSON captures are immutable because combined
+                evidence hashes their exact bytes.
+              </li>
             </ul>
           </details>
           <details class="card" id="references">
@@ -729,6 +863,9 @@
               </li>
               <li>
                 <a href="../../../DESIGN.md">Historical design rationale</a>
+              </li>
+              <li>
+                <a href="../../../docs/dbms.md">Native database operations</a>
               </li>
               <li><a href="architecture.html">Visual HTML version</a></li>
             </ul>

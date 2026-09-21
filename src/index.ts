@@ -17,6 +17,15 @@ export { deriveIds } from './okf/ids.ts'
 export { resolveLinks, resolveTarget } from './okf/links.ts'
 export { scanBundle } from './okf/scan.ts'
 export { open } from './client/connection.ts'
+export { transact, importInitial } from './db/api.ts'
+export { history } from './db/history.ts'
+export { restore } from './db/restore.ts'
+export { verify } from './db/verify.ts'
+export { repair } from './db/repair.ts'
+export { migrate } from './db/migration.ts'
+export { importFolder, importFolders } from './db/import.ts'
+export { exportFolder } from './db/export.ts'
+export { ConflictError, IndeterminateCommitError } from './db/errors.ts'
 export { connect, remoteConnection } from './client/client.ts'
 export { parseDsn } from './client/dsn.ts'
 export {
@@ -24,7 +33,7 @@ export {
   MANIFEST_URI,
   createMcpServer,
   serveMcp
-} from './mcp/server.ts'
+} from './mcp/lazy.ts'
 export { ADVICE_RATIO, adviceFor } from './search/advice.ts'
 export { buildIndex, search, tokenize } from './search/bm25.ts'
 export { bestWindowStart } from './search/window.ts'
@@ -51,13 +60,8 @@ export {
   platformDataDir,
   resolveDataDir
 } from './store/datadir.ts'
-export {
-  DEFAULT_GRACE_MS,
-  DEFAULT_KEEP,
-  collect,
-  collectAll,
-  listTenants
-} from './store/gc.ts'
+export { DEFAULT_GRACE_MS, DEFAULT_KEEP, listTenants } from './store/gc.ts'
+export { collect, collectAll } from './db/collect.ts'
 export { assertTenantId } from './store/paths.ts'
 export {
   deleteBundle,
@@ -74,7 +78,7 @@ export {
   bundleDir,
   sourceFile
 } from './store/sourcepaths.ts'
-export { openTenant } from './store/reader.ts'
+export { openTenant } from './db/open.ts'
 export {
   FIND_WINDOW,
   MATCH_CAP,
@@ -83,17 +87,31 @@ export {
   sliceConcept
 } from './store/slice.ts'
 export { watchTenant } from './store/watch.ts'
-export { putBundle, putTenant, putTenantRoot } from './store/writer.ts'
+export { putBundle, putTenant, putTenantRoot } from './db/writer.ts'
 
 export type {
   ConceptSlice,
   Connection,
+  DatabaseConnection,
+  DocumentChange,
+  HistoryOptions,
+  RestoreRequest,
+  RevisionInfo,
+  RevisionPage,
+  RevisionResult,
+  TransactionRequest,
   GetOptions,
   SearchOptions,
   SourceEntry,
   SourceFile,
   SyncResult
 } from './types.ts'
+export type { DatabaseTarget } from './db/types.ts'
+export type { VerifyResult } from './db/verify.ts'
+export type { RepairRequest } from './db/repair.ts'
+export type { MigrationOptions, MigrationResult } from './db/migration.ts'
+export type { ExportResult } from './db/export.ts'
+export type { McpOptions } from './mcp/dbms.ts'
 export type { Target, Transport } from './client/dsn.ts'
 export type { Bm25Index, Document, Hit } from './search/bm25.ts'
 export type { Manifest, TenantIndex } from './search/tenant.ts'
