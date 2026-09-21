@@ -14,6 +14,7 @@ import { HttpError } from './errors.ts'
 import { bundlesResponse, sourceResponse } from './sourceroutes.ts'
 
 import type { SearchCache } from '../search/cache.ts'
+import type { ReadCache } from '../db/readcache.ts'
 import type { SearchOptions, TenantIndex } from '../search/tenant.ts'
 import type { GetOptions } from '../types.ts'
 import type { TenantReader } from '../store/reader.ts'
@@ -75,6 +76,8 @@ export interface ServeOptions {
    * right after a sync instead of leaving the cost on the first search.
    */
   indexes?: SearchCache
+  /** Shared with warm-up callers; stopping the server closes this cache. */
+  readers?: ReadCache
   unix?: string
   hostname?: string
   port?: number
@@ -520,7 +523,7 @@ export function serve(options: ServeOptions): LangonrockServer {
 
   assertSafeToBind(options, tokens)
 
-  const cache = createReadCache(options.root)
+  const cache = options.readers ?? createReadCache(options.root)
 
   const server = Bun.serve({
     ...listenerFor(options),

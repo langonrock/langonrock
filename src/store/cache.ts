@@ -8,7 +8,7 @@ const finalizer = new FinalizationRegistry<ReadLease>(lease => lease.release())
 export function createReaderCache(root: string) {
   const cache = createReadCache(root)
 
-  return async (
+  const acquire = async (
     tenant: string
   ): Promise<TenantReader & { close: () => void }> => {
     const lease = await cache.acquire(tenant)
@@ -44,4 +44,6 @@ export function createReaderCache(root: string) {
 
     return reader
   }
+
+  return Object.assign(acquire, { close: cache.close })
 }

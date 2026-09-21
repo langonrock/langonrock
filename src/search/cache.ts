@@ -10,8 +10,10 @@ import type { TenantIndex } from './tenant.ts'
 export function createSearchCache(root: string) {
   const readers = createReadCache(root)
 
-  return (tenant: string): Promise<TenantIndex> =>
+  const index = (tenant: string): Promise<TenantIndex> =>
     withReader(readers, tenant, lease => lease.index())
+
+  return Object.assign(index, { close: readers.close })
 }
 
-export type SearchCache = ReturnType<typeof createSearchCache>
+export type SearchCache = (tenant: string) => Promise<TenantIndex>

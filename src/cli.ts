@@ -14,7 +14,7 @@ import {
 import { DEFAULT_SUMMARY_WIDTH, compileBundle } from './compile/manifest.ts'
 import { estimateTokens } from './compile/tokens.ts'
 import { serveMcp } from './mcp/lazy.ts'
-import { createSearchCache } from './search/cache.ts'
+import { createReadCache, withReader } from './db/readcache.ts'
 import { serve } from './server/http.ts'
 import { ensureSource, loadSources } from './server/sources.ts'
 import { TOKENS_FILE, addToken, loadTokens } from './server/tokens.ts'
@@ -545,13 +545,15 @@ const runServe: Command = async (_positionals, flags) => {
 
   // Rebuilding right after a sync moves the index build off the query path:
   // the first search after a save finds the index already warm.
-  const indexes = createSearchCache(root)
+  const readers = createReadCache(root)
 
   const warm = (tenant: string): void => {
-    void indexes(tenant).catch(() => undefined)
+    void withReader(readers, tenant, lease => lease.index()).catch(
+      () => undefined
+    )
   }
 
-  options.indexes = indexes
+  options.readers = readers
 
   // Started even with nothing configured: a store whose first tenant has not
   // been created yet is exactly the case that needs to be able to create one.

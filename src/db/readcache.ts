@@ -100,6 +100,10 @@ export function createReadCache(root: string, capacity = 16) {
   let closed = false
 
   const acquire = async (tenant: string): Promise<ReadLease> => {
+    if (closed) {
+      throw new Error('database connection is closed')
+    }
+
     const target = { root, tenant }
     const head = await readHead(target)
     const native = head !== undefined
@@ -150,8 +154,10 @@ export function createReadCache(root: string, capacity = 16) {
   }
 }
 
+export type ReadCache = ReturnType<typeof createReadCache>
+
 export async function withReader<T>(
-  cache: ReturnType<typeof createReadCache>,
+  cache: ReadCache,
   tenant: string,
   action: (lease: ReadLease) => Promise<T>
 ): Promise<T> {
