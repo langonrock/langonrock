@@ -769,9 +769,18 @@ Without `--data`, the store lives in the platform data directory: `$XDG_DATA_HOM
 bun install
 bun test
 bun run lint
+bun run format:check
 bun run typecheck
+bun run check:dependencies
+bun run check:deps
+bun run check:deadcode
 bun run build --target=bun-darwin-arm64
 ```
+
+ESLint uses type-aware rules, including checks for unhandled promises. Knip
+checks unused files, dependencies, and exports. Unused exports and types are
+warnings; unused files, dependency errors, and unresolved imports fail the
+check. CI and the pre-push hook run these checks alongside the test suite.
 
 CI runs the suite on Linux, macOS and Windows. Pushing a `v*` tag cross-compiles six binaries, checksums them, and publishes a release.
 

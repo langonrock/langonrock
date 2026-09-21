@@ -1,0 +1,20 @@
+{
+  "$schema": "./node_modules/knip/schema.json",
+  "entry": [
+    "scripts/*.ts",
+    "test/helpers/*.ts",
+    "bench/run.ts",
+    "bench/ops.ts",
+    "bench/dbms/{run,worker,compare,combine}.ts",
+    "bench/operations/{run,worker,retention-worker,report}.ts"
+  ],
+  "project": ["{src,test,scripts,bench}/**/*.{ts,js,mjs}", "*.mjs"],
+  "ignoreUnresolved": ["scripts/build.ts", "scripts/build-native.ts"],
+  "rules": {
+    "exports": "warn",
+    "types": "warn",
+    "nsExports": "warn",
+    "nsTypes": "warn",
+    "enumMembers": "warn"
+  }
+}

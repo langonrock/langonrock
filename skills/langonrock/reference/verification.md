@@ -1,8 +1,9 @@
 # Verification
 
 Run commands from the repository root. [package.json](../../../package.json),
-[CI](../../../.github/workflows/ci.yml), [bunfig.toml](../../../bunfig.toml), and
-[ESLint configuration](../../../eslint.config.mjs) are the sources of truth.
+[CI](../../../.github/workflows/ci.yml), [bunfig.toml](../../../bunfig.toml),
+[ESLint configuration](../../../eslint.config.mjs), and
+[Knip configuration](../../../knip.json), are the sources of truth.
 
 ## Setup
 
@@ -43,6 +44,8 @@ bun run lint
 bun run format:check
 bun run typecheck
 bun run check:dependencies
+bun run check:deps
+bun run check:deadcode
 bun test
 ```
 
@@ -55,6 +58,24 @@ ESLint caps complexity at 12, nesting depth and nested callbacks at 3, parameter
 at 4, and function length at 70 nonblank, noncomment lines. Tests have explicit
 function-length and callback exceptions in the existing config. Keep those
 thresholds; fix the affected code instead of adding exceptions.
+
+ESLint applies type-aware recommended rules to all TypeScript files, including
+benchmarks, using the root TypeScript project. Tests permit unsafe assignments
+for Bun matchers and disable `await-thenable` because Bun types asynchronous
+`expect` matchers as `void`. Keep asynchronous assertions awaited.
+
+`check:deadcode` runs Knip. Unused exports, exported types, namespace members,
+and enum members are warnings. Unused files, dependency problems, and unresolved
+imports are errors. Package exports and the CLI are discovered from
+`package.json`; the config adds scripts, test workers, and benchmark entry points.
+The two unresolved build-script exclusions account for Knip interpreting Bun
+shell commands relative to their containing file and expanding `bun build` as
+the package's `build` script. Both scripts remain analyzed as entry points.
+
+`check:deps` runs Knip's undeclared dependency, unresolved import, and binary
+checks. `check:dependencies` separately enforces the native engine's ban on
+database-engine and Python dependencies. The pre-push hook runs all CI checks
+listed above. Pre-commit continues to run ESLint and Prettier on staged files.
 
 ## Focused checks
 

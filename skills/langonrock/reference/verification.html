@@ -391,9 +391,10 @@
               Run commands from the repository root.
               <a href="../../../package.json">package.json</a>,
               <a href="../../../.github/workflows/ci.yml">CI</a>,
-              <a href="../../../bunfig.toml">bunfig.toml</a>, and
-              <a href="../../../eslint.config.mjs">ESLint configuration</a> are
-              the sources of truth.
+              <a href="../../../bunfig.toml">bunfig.toml</a>,
+              <a href="../../../eslint.config.mjs">ESLint configuration</a>, and
+              <a href="../../../knip.json">Knip configuration</a> are the
+              sources of truth.
             </p>
           </section>
           <details class="card" id="setup" open>
@@ -437,6 +438,8 @@ git branch --show-current
 bun run format:check
 bun run typecheck
 bun run check:dependencies
+bun run check:deps
+bun run check:deadcode
 bun test
 </code></pre>
             <p>
@@ -451,6 +454,34 @@ bun test
               noncomment lines. Tests have explicit function-length and callback
               exceptions in the existing config. Keep those thresholds; fix the
               affected code instead of adding exceptions.
+            </p>
+            <p>
+              ESLint applies type-aware recommended rules to all TypeScript
+              files, including benchmarks, using the root TypeScript project.
+              Tests permit unsafe assignments for Bun matchers and disable
+              <code>await-thenable</code> because Bun types asynchronous
+              <code>expect</code> matchers as <code>void</code>. Keep
+              asynchronous assertions awaited.
+            </p>
+            <p>
+              <code>check:deadcode</code> runs Knip. Unused exports, exported
+              types, namespace members, and enum members are warnings. Unused
+              files, dependency problems, and unresolved imports are errors.
+              Package exports and the CLI are discovered from
+              <code>package.json</code>; the config adds scripts, test workers,
+              and benchmark entry points. The two unresolved build-script
+              exclusions account for Knip interpreting Bun shell commands
+              relative to their containing file and expanding
+              <code>bun build</code> as the package's <code>build</code> script.
+              Both scripts remain analyzed as entry points.
+            </p>
+            <p>
+              <code>check:deps</code> runs Knip's undeclared dependency,
+              unresolved import, and binary checks.
+              <code>check:dependencies</code> separately enforces the native
+              engine's ban on database-engine and Python dependencies. The
+              pre-push hook runs all CI checks listed above. Pre-commit
+              continues to run ESLint and Prettier on staged files.
             </p>
           </details>
           <details class="card" id="focused-checks">

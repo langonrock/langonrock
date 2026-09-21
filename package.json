@@ -31,6 +31,8 @@
     "build": "bun scripts/build.ts",
     "build:native": "bun scripts/build-native.ts",
     "check:dependencies": "bun scripts/check-runtime-dependencies.ts",
+    "check:deadcode": "knip",
+    "check:deps": "knip --include unlisted,unresolved,binaries",
     "bench:dbms": "bun bench/dbms/run.ts",
     "prepare": "husky"
   },
@@ -56,6 +58,7 @@
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^9.1.0",
     "husky": "^9.1.7",
+    "knip": "6.34.0",
     "lint-staged": "^15.3.0",
     "prettier": "^3.4.2",
     "typescript": "^5.7.3",
