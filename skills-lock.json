@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "workflow-blueprint": {
+      "source": "devton/agentic-workflow-blueprint",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "74724681b98e6226065ec2dc0d3c2c010607a8292a0877eb4c7e35c8da7abede"
+    }
+  }
+}
