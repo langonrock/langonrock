@@ -1,7 +1,2 @@
-bun run lint
-bun run format:check
-bun run check:dependencies
-bun run check:deps
-bun run check:deadcode
-bun run typecheck
-bun test
+bun run --parallel lint format:check check:dependencies check:deps check:deadcode typecheck
+bun run test

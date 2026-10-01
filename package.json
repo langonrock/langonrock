@@ -27,7 +27,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
-    "test": "bun test",
+    "test": "bun test --parallel",
     "build": "bun scripts/build.ts",
     "build:native": "bun scripts/build-native.ts",
     "check:dependencies": "bun scripts/check-runtime-dependencies.ts",

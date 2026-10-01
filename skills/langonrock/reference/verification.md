@@ -46,7 +46,7 @@ bun run typecheck
 bun run check:dependencies
 bun run check:deps
 bun run check:deadcode
-bun test
+bun run test
 ```
 
 CI runs these on Linux, macOS, and Windows. A local pass only covers the local
