@@ -23,8 +23,11 @@ if (target !== undefined && target !== `bun-${platform}-${process.arch}`) {
 
 await $`bun scripts/build-native.ts`
 
+// ESM bytecode keeps the CLI's top-level await and skips parsing at startup.
+const compile = ['--compile', '--bytecode', '--format=esm']
+
 if (target === undefined) {
-  await $`bun build --compile src/cli.ts --outfile ${outfile}`
+  await $`bun build ${compile} src/cli.ts --outfile ${outfile}`
 } else {
-  await $`bun build --compile --target=${target} src/cli.ts --outfile ${outfile}`
+  await $`bun build ${compile} --target=${target} src/cli.ts --outfile ${outfile}`
 }
