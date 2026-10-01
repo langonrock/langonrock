@@ -18,6 +18,17 @@ export function percentile(values: number[], fraction: number): number {
   )
 }
 
+export function peakRssBytes(steadyRssBytes: number): number {
+  // Bun 1.4 reports maxRSS in KiB, as Node does; Bun 1.3 used bytes on macOS.
+  const peak = process.resourceUsage().maxRSS * 1024
+
+  if (peak < steadyRssBytes * 0.9) {
+    throw new Error('peak RSS units need validation on this runtime/platform')
+  }
+
+  return peak
+}
+
 export async function measure(run: () => Promise<unknown>): Promise<number> {
   const started = Bun.nanoseconds()
 

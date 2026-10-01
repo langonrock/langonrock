@@ -22,7 +22,8 @@ export function sample(): Sample {
 
 export function memory() {
   const rssBytes = process.memoryUsage().rss
-  const peakRssBytes = process.resourceUsage().maxRSS
+  // Bun 1.4 reports maxRSS in KiB, as Node does; Bun 1.3 used bytes on macOS.
+  const peakRssBytes = process.resourceUsage().maxRSS * 1024
 
   if (peakRssBytes < rssBytes * 0.9) {
     throw new Error('peak RSS units are not bytes on this runtime')

@@ -3,13 +3,19 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { compare, compareGrouped, percentile } from '../bench/dbms/metrics.ts'
+import {
+  compare,
+  compareGrouped,
+  peakRssBytes,
+  percentile
+} from '../bench/dbms/metrics.ts'
 import { assertEquivalent, report } from '../bench/dbms/compare.ts'
 import { reciprocalRank } from '../bench/dbms/retrieval.ts'
 import { validateSamples } from '../bench/dbms/validation.ts'
 import { fixEvaluationDate } from '../bench/dbms/clock.ts'
 import { EVALUATION_DATE } from '../bench/dbms/protocol.ts'
 import { tree } from '../bench/dbms/evidence.ts'
+import { memory } from '../bench/operations/types.ts'
 
 import type { Run } from '../bench/dbms/compare.ts'
 import type { Sample } from '../bench/dbms/protocol.ts'
@@ -257,6 +263,16 @@ describe('benchmark verdicts', () => {
     expect(reciprocalRank(response, 1)).toBe(0.5)
     expect(reciprocalRank(response, 4)).toBe(0)
     expect(() => reciprocalRank('invalid', 0)).toThrow('hit count')
+  })
+
+  test('both harnesses record peak RSS in bytes on this runtime', () => {
+    const steady = process.memoryUsage().rss
+    const operations = memory()
+
+    for (const peak of [peakRssBytes(steady), operations.peakRssBytes]) {
+      expect(peak).toBeGreaterThanOrEqual(steady * 0.9)
+      expect(peak).toBeLessThan(steady * 64)
+    }
   })
 
   test('fixes the evaluation date without changing explicit date parsing', () => {

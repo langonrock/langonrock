@@ -1,6 +1,6 @@
 import { adapter } from './adapters.ts'
 import { fixEvaluationDate } from './clock.ts'
-import { measure } from './metrics.ts'
+import { measure, peakRssBytes } from './metrics.ts'
 import { TENANT } from './protocol.ts'
 import { edits, reads, tenants } from './workloads.ts'
 
@@ -42,10 +42,6 @@ switch (request.phase) {
 }
 
 sample.steadyRssBytes ||= process.memoryUsage().rss
-sample.peakRssBytes = process.resourceUsage().maxRSS
-
-if (sample.peakRssBytes < sample.steadyRssBytes * 0.9) {
-  throw new Error('peak RSS units need validation on this runtime/platform')
-}
+sample.peakRssBytes = peakRssBytes(sample.steadyRssBytes)
 
 process.stdout.write(`${JSON.stringify(sample)}\n`)

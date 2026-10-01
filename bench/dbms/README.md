@@ -38,10 +38,10 @@ in the JSON result. The evaluation clock is fixed at 2026-09-21, including calls
 that determine staleness; elapsed timings use the monotonic runtime clock.
 
 The runner records whole-process peak and steady RSS, without forced garbage
-collection. Peak units are bytes on the verified local Bun/macOS runtime. It
-refuses implausible units on other platforms rather than silently converting
-them. Disk includes source files and all snapshots after ten edits; no historical
-versions are pruned for that row.
+collection. Bun 1.4 reports peak RSS in KiB, as Node does; the runner records
+bytes and still refuses a peak below the steady reading rather than recording
+implausible units. Disk includes source files and all snapshots after ten edits;
+no historical versions are pruned for that row.
 
 The comparator checks fixture hashes and exact whole/bundle manifest, get, and
 search output signatures before computing regressions. Topic labels from the
