@@ -14,7 +14,7 @@ bun run build:native
 bun src/cli.ts --help
 ```
 
-The declared runtime is Bun 1.3 or newer. Install dependencies when needed;
+The declared runtime is Bun 1.4.2 or newer. Install dependencies when needed;
 an existing compatible installation can be used for local checks. Native source
 builds require a C compiler, or an MSVC developer environment on Windows. No
 Python or node-gyp participates in the build.

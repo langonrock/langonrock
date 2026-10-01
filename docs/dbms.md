@@ -11,7 +11,7 @@ original source workflow until explicit migration.
 
 ## Install and platform verification
 
-Source installation requires Bun 1.3 or newer and a C compiler. Windows builds
+Source installation requires Bun 1.4.2 or newer and a C compiler. Windows builds
 require an MSVC developer environment. Run `bun run build:native` in a source
 checkout, or `bun node_modules/langonrock/scripts/build-native.ts` in an installed
 consumer. The adapter builds directly, without node-gyp or downloaded headers.

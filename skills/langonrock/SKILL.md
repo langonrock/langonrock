@@ -44,9 +44,9 @@ it is clear.
 
 ## Project constraints
 
-- Use Bun 1.3 or newer and TypeScript with explicit `.ts` imports. The store and
-  server require Bun; the `langonrock/client` dependency graph must remain usable
-  without Bun runtime APIs.
+- Use Bun 1.4.2 or newer and TypeScript with explicit `.ts` imports. The store
+  and server require Bun; the `langonrock/client` dependency graph must remain
+  usable without Bun runtime APIs.
 - Preserve snapshot determinism, tenant boundaries, source preconditions, and
   transport parity as specified in the [architecture invariants](reference/architecture.md#invariants).
 - Markdown remains authoritative for legacy stores. New and migrated stores follow

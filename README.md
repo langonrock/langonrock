@@ -2,7 +2,7 @@
 
 [![ci](https://github.com/langonrock/langonrock/actions/workflows/ci.yml/badge.svg)](https://github.com/langonrock/langonrock/actions/workflows/ci.yml)
 ![license](https://img.shields.io/badge/license-MIT-blue.svg)
-![runtime](https://img.shields.io/badge/bun-%E2%89%A5%201.3-black.svg)
+![runtime](https://img.shields.io/badge/bun-%E2%89%A5%201.4.2-black.svg)
 
 **A multi-tenant store for [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-catalog) bundles, built so an agent spends as few tokens and as few round trips as possible reading them.**
 
