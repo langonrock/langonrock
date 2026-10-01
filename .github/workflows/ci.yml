@@ -31,6 +31,13 @@ jobs:
 
       - run: bun scripts/native-smoke.ts
 
+      # The suite hangs on Windows once it reaches the native engine. The last
+      # line this prints names the blocking step.
+      - run: bun scripts/native-trace.ts
+        if: runner.os == 'Windows'
+        timeout-minutes: 3
+        continue-on-error: true
+
       # Static checks give the same answer on every OS, so they run once.
       - run: bun run check:dependencies
         if: runner.os == 'Linux'
