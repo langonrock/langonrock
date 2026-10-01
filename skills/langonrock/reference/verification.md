@@ -49,7 +49,9 @@ bun run check:deadcode
 bun run test
 ```
 
-CI runs these on Linux, macOS, and Windows. A local pass only covers the local
+CI runs the static checks on Linux only, because they give the same answer on
+every OS. The native build, smoke tests, and suite run on Linux, macOS, and
+Windows, and a job fails after 15 minutes. A local pass only covers the local
 platform. Full-suite coverage requires at least 85 percent for both lines and
 functions. Focused tests are diagnostic checks, not evidence of full-suite
 coverage.

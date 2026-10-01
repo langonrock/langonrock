@@ -8,6 +8,8 @@ on:
 jobs:
   check:
     runs-on: ${{ matrix.os }}
+    # A hung suite fails here instead of holding a runner for hours.
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -29,17 +31,24 @@ jobs:
 
       - run: bun scripts/native-smoke.ts
 
+      # Static checks give the same answer on every OS, so they run once.
       - run: bun run check:dependencies
+        if: runner.os == 'Linux'
 
       - run: bun run check:deps
+        if: runner.os == 'Linux'
 
       - run: bun run check:deadcode
+        if: runner.os == 'Linux'
 
       - run: bun run lint
+        if: runner.os == 'Linux'
 
       - run: bun run format:check
+        if: runner.os == 'Linux'
 
       - run: bun run typecheck
+        if: runner.os == 'Linux'
 
       - run: bun run test
 
