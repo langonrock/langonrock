@@ -12,3 +12,7 @@ native/bin/
 native/*.obj
 native/*.lib
 native/*.exp
+bench/results/dbms/*.json
+!bench/results/dbms/baseline.json
+!bench/results/dbms/final-acceptance-combined.json
+!bench/results/dbms/operations-acceptance-v1.json

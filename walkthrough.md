@@ -56,6 +56,8 @@ get p50 57.49% faster, and edit-to-search p50 46.13% faster. Import peak RSS is
 3.64% higher; open/read/edit/five-tenant RSS are lower. Open p95 is 8.39% slower
 at its point estimate, with a 1.0111–1.3460 ratio interval. Those gains do not
 close the unresolved gate. The following captures document earlier code versions.
+Their Markdown reports are in `bench/results/dbms`; only the baseline and final
+acceptance raw captures are committed.
 
 `final-integrated-v2.json` contains ten paired runs at every size after transport,
 history, and tracked-import integration. Four timing rows were inconclusive,
@@ -317,17 +319,17 @@ At plan approval, this design was a proposal without performance evidence.
   [Apple's storage ordering explanation](https://developer.apple.com/videos/play/wwdc2019/419/)
 - The provenance audit caught an unsupported brace glob in the source-tree
   fingerprint. It matched no files and produced an empty-tree digest. The
-  interrupted capture is retained as
-  `bench/results/dbms/diagnostic-invalid-provenance.json`, explicitly unverified
-  with its invalidation reason. It is not acceptance evidence. Fingerprinting
+  interrupted capture is retained outside the repository as
+  `diagnostic-invalid-provenance.json`, explicitly unverified with its
+  invalidation reason. It is not acceptance evidence. Fingerprinting
   now scans each required pattern separately, rejects unmatched patterns, and
   has regression coverage for empty and changed inputs.
 - Source prefixes now remain strings during initial compilation and are encoded
   directly into the final archive buffer. This removes per-document prefix
   buffers and an intermediate concatenation without changing persisted bytes.
   A new frozen ten-pair matrix is measuring this candidate at all three sizes.
-- The verified protocol-2 matrix is complete in
-  `bench/results/dbms/early-native-v2.{json,md}`. Import RSS changes are +4.45%,
+- The verified protocol-2 matrix is complete; its report is
+  `bench/results/dbms/early-native-v2.md`. Import RSS changes are +4.45%,
   +2.55%, and +4.20%; edit-to-search p50 changes are -23.58%, -42.36%, and -44.26%
   at the three sizes. Checked outputs are equivalent. The gate still fails:
   500-concept import is +18.60% at p50 and +24.75% at p95; some process-startup
@@ -364,8 +366,8 @@ At plan approval, this design was a proposal without performance evidence.
   30 pairs retained the original ten pairs: import p95 remained inconclusive
   at +10.63%, with ratio interval 1.0432–1.1674. At 20,000 concepts, import RSS
   (+9.20%) and opening also remained inconclusive in the ten-pair matrix.
-  Raw captures and the combined report are under
-  `bench/results/dbms/early-streaming-*`; the gate did not pass.
+  The reports are `bench/results/dbms/early-streaming-*.md`; the gate did not
+  pass.
 - The current import experiment bounds outstanding source reads to 32 per bundle
   and uses Bun's direct text reads. Compression shares the bounded worker helper.
   Reader initialization now builds its ID, title, and staleness maps in one pass,

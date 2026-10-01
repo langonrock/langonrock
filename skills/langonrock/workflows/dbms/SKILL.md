@@ -57,6 +57,8 @@ distributed storage, database dependency, Python, deployment, or release push.
   must install and run without loading or building the native adapter.
 - Preserve raw benchmark files. Refuse output reuse and require an explicit
   verified completion marker. Combine captures only when their provenance agrees.
+  Commit only the baseline and final acceptance raw captures; keep intermediate
+  raw JSON out of Git and commit its Markdown report instead.
 
 ## Procedure
 

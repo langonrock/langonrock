@@ -129,8 +129,10 @@ No benchmark, build, runtime, or validation step invokes Python.
 ## Capture history
 
 The [original baseline](../../bench/results/dbms/baseline.json) was captured at
-all three sizes before product edits. Earlier failed and inconclusive captures
-remain in `bench/results/dbms`; they have not been overwritten or filtered.
+all three sizes before product edits. Reports for earlier failed and inconclusive
+captures remain in `bench/results/dbms`; they have not been overwritten or filtered.
+Only the baseline and final acceptance raw captures are committed; earlier raw
+JSON stays outside the repository.
 The interrupted `final-reviewed-v2.json` file is unverified and excluded. It was
 stopped before the final empty-bundle deletion/import correction.
 Names containing `final` describe when a capture was taken, not an acceptance

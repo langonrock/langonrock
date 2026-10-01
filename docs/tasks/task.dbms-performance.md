@@ -60,11 +60,11 @@ sizes and preserves every checked whole/bundle manifest, get, section, slice,
 find, and search result. Median import changes are -5.56%, -11.59%, and -2.09%;
 median edit-to-search changes are -25.81%, -43.99%, and -45.54% at 500, 5,000,
 and 20,000 concepts respectively. Import RSS changes are -23.33%, -11.37%, and
-+6.30%. The early gate passes for this internal-engine candidate. Raw samples,
-source/harness/build fingerprints, and every confidence interval are in
-`bench/results/dbms/early-bounded-v2.{json,md}`. The completed DBMS still requires
-the final comparison after history and public integration. Earlier failed and
-inconclusive captures remain preserved separately.
++6.30%. The early gate passes for this internal-engine candidate. Every confidence
+interval is in `bench/results/dbms/early-bounded-v2.md`; its raw samples and
+source/harness/build fingerprints stay outside the repository. The completed
+DBMS still requires the final comparison after history and public integration.
+Earlier failed and inconclusive captures remain preserved separately.
 
 ## Lifecycle position
 
