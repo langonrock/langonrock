@@ -14,8 +14,6 @@ jobs:
       fail-fast: true
       matrix:
         include:
-          # darwin must build on macOS: Bun writes a broken code signature for
-          # every darwin target, and only codesign can repair it.
           # Each runner builds and tests its own native adapter architecture.
           - runner: macos-latest
             target: bun-darwin-arm64

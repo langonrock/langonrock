@@ -28,25 +28,3 @@ if (target === undefined) {
 } else {
   await $`bun build --compile --target=${target} src/cli.ts --outfile ${outfile}`
 }
-
-/**
- * Bun 1.3.12 writes a truncated LC_CODE_SIGNATURE for every macOS target, and
- * the kernel SIGKILLs the process before any code runs. Every darwin artifact
- * must be re-signed with `codesign` on its matching macOS runner.
- * See https://github.com/oven-sh/bun/issues/29361
- */
-const darwin =
-  target === undefined
-    ? process.platform === 'darwin'
-    : target.includes('darwin')
-
-if (darwin) {
-  if (process.platform !== 'darwin') {
-    throw new Error(
-      `cannot produce a working ${target} binary off macOS: it needs codesign`
-    )
-  }
-
-  await $`codesign --remove-signature ${outfile}`.nothrow().quiet()
-  await $`codesign -s - -f ${outfile}`.quiet()
-}

@@ -9,8 +9,7 @@ try {
   await $`bun build --compile test/helpers/platform-smoke.ts --outfile ${outfile}`
 
   if (process.platform === 'darwin') {
-    await $`codesign --remove-signature ${outfile}`.nothrow().quiet()
-    await $`codesign -s - -f ${outfile}`.quiet()
+    await $`codesign --verify --strict ${outfile}`
   }
 
   const child = Bun.spawn([outfile, root], {
