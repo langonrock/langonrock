@@ -5,7 +5,7 @@ import { join } from 'node:path'
 
 import { openTenant } from '../src/db/open.ts'
 import { open } from '../src/client/connection.ts'
-import { watchTenant } from '../src/store/watch.ts'
+import { isIgnored, watchTenant } from '../src/store/watch.ts'
 
 import type { PutResult } from '../src/store/writer.ts'
 import type { Watcher } from '../src/store/watch.ts'
@@ -221,6 +221,15 @@ describe('watchTenant', () => {
     expect(syncs.length).toBe(before)
 
     local.close()
+  })
+
+  test('treats an event without a file name as a change', () => {
+    // Bun 1.4 on Linux reports deleting the watched folder with no file name.
+    expect(isIgnored(undefined)).toBe(false)
+    expect(isIgnored(null)).toBe(false)
+    expect(isIgnored('sales/orders.md')).toBe(false)
+    expect(isIgnored('.git/HEAD')).toBe(true)
+    expect(isIgnored('sales\\.obsidian\\workspace')).toBe(true)
   })
 
   test('reports errors instead of throwing out of the watcher', async () => {

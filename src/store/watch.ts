@@ -31,9 +31,9 @@ export interface Watcher {
  * Editors and version control write inside dot directories constantly.
  * Rebuilding on `.git` or `.obsidian` churn would never stop.
  */
-function isIgnored(file: string | null): boolean {
+export function isIgnored(file: string | null | undefined): boolean {
   return (
-    file !== null &&
+    typeof file === 'string' &&
     file.split(/[\\/]/).some(segment => segment.startsWith('.'))
   )
 }
