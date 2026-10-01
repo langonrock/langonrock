@@ -39,12 +39,15 @@ export function packageViolations(packages: Record<string, unknown>): string[] {
 export async function checkRuntimeDependencies(
   root: string
 ): Promise<string[]> {
-  const paths = await Array.fromAsync(
-    new Bun.Glob('{src,scripts,bench,native}/**/*').scan({
-      cwd: root,
-      onlyFiles: true
-    })
-  )
+  // The scan uses backslashes on Windows; reports and skips use slashes.
+  const paths = (
+    await Array.fromAsync(
+      new Bun.Glob('{src,scripts,bench,native}/**/*').scan({
+        cwd: root,
+        onlyFiles: true
+      })
+    )
+  ).map(path => path.replaceAll('\\', '/'))
   const violations: string[] = []
 
   for (const path of paths) {

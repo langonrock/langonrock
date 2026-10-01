@@ -56,6 +56,12 @@ describe('runtime dependency constraints', () => {
         await Bun.write(`${root}/${folder}/forbidden.ts`, 'import "bun:sqlite"')
       }
 
+      // Build output and raw captures are skipped on every OS, including
+      // Windows, where the scan reports backslash separators.
+      for (const skipped of ['native/bin', 'bench/results']) {
+        await Bun.write(`${root}/${skipped}/ignored.ts`, 'import "bun:sqlite"')
+      }
+
       const violations = await checkRuntimeDependencies(root)
 
       expect(violations.sort()).toEqual(
