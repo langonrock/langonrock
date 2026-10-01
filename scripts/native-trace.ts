@@ -1,7 +1,7 @@
-import { writeSync } from 'node:fs'
+import { mkdirSync, writeSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 
 /**
  * Walks the native engine one step at a time. Every line is written
@@ -79,6 +79,14 @@ async function platformSteps(root: string): Promise<void> {
   await step('order writes', () => platform.orderWrites(probe))
 }
 
+// ensureLayout once walked up to the path mkdirSync reported creating.
+function layoutSpelling(root: string): void {
+  const expected = resolve(root, 'spelling')
+  const reported = mkdirSync(resolve(expected, 'probe'), { recursive: true })
+
+  trace(`mkdirSync reported ${String(reported)}, expected ${expected}`)
+}
+
 async function engineSteps(root: string): Promise<void> {
   const { transact } = await step(
     'load the engine',
@@ -149,6 +157,7 @@ const root = await mkdtemp(join(tmpdir(), 'langonrock-native-trace-'))
 
 try {
   await platformSteps(root)
+  layoutSpelling(root)
   await engineSteps(root)
   await cacheSteps(root)
   await serverSteps(root)
