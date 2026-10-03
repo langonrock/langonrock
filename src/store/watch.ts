@@ -1,11 +1,14 @@
 import { watch } from 'node:fs'
 
-import { putTenantRoot } from './writer.ts'
+import { putTenantRoot as putLegacy } from './writer.ts'
+import { putTenantRoot as putNative } from '../db/writer.ts'
+import { readHead } from '../db/head.ts'
+import { currentFile } from './paths.ts'
 
 import type { PutResult } from './writer.ts'
 
-export const DEFAULT_DEBOUNCE_MS = 200
-export const DEFAULT_RESCAN_MS = 30_000
+const DEFAULT_DEBOUNCE_MS = 200
+const DEFAULT_RESCAN_MS = 30_000
 
 export interface WatchOptions {
   source: string
@@ -28,9 +31,9 @@ export interface Watcher {
  * Editors and version control write inside dot directories constantly.
  * Rebuilding on `.git` or `.obsidian` churn would never stop.
  */
-function isIgnored(file: string | null): boolean {
+export function isIgnored(file: string | null | undefined): boolean {
   return (
-    file !== null &&
+    typeof file === 'string' &&
     file.split(/[\\/]/).some(segment => segment.startsWith('.'))
   )
 }
@@ -57,7 +60,13 @@ export function watchTenant(options: WatchOptions): Watcher {
     try {
       // Bound to a local first: `onSync?.(await put(...))` short-circuits the
       // whole call when onSync is absent, so the sync itself never happens.
-      const result = await putTenantRoot(options.source, options)
+      const native =
+        (await readHead(options)) !== undefined ||
+        !(await Bun.file(currentFile(options.root, options.tenant)).exists())
+      const result = await (native ? putNative : putLegacy)(
+        options.source,
+        options
+      )
 
       options.onSync?.(result)
     } catch (cause) {

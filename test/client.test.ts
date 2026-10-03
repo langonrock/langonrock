@@ -58,7 +58,7 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
-  server?.stop(true)
+  await server?.stop(true)
   await rm(scratch, { recursive: true, force: true })
 })
 
@@ -98,6 +98,34 @@ describe('the client bundles for other runtimes', () => {
 })
 
 describe('connect', () => {
+  test('malformed JSON error details retain the HTTP failure context', async () => {
+    let body = '{'
+    const failing = Bun.serve({
+      hostname: '127.0.0.1',
+      port: 0,
+      fetch: () =>
+        new Response(body, {
+          status: 503,
+          headers: { 'content-type': 'application/json' }
+        })
+    })
+    const connection = connect(
+      `okf+http://127.0.0.1:${failing.port}?token=test`
+    )
+
+    try {
+      for (const malformed of ['{', 'null']) {
+        body = malformed
+        await expect(connection.history()).rejects.toThrow(
+          'server returned 503'
+        )
+      }
+    } finally {
+      await connection.close()
+      await failing.stop(true)
+    }
+  })
+
   test('reads a tenant over http', async () => {
     const knowledge = connect(dsn())
 

@@ -1,0 +1,28 @@
+{
+  "name": "langonrock",
+  "version": "1.0.0",
+  "entry": "SKILL.md",
+  "routing": "router-only",
+  "commands": [
+    {
+      "name": "implement",
+      "description": "Implement or fix requested langonrock behavior and verify affected layers",
+      "skill": "workflows/implement/SKILL.md"
+    },
+    {
+      "name": "review",
+      "description": "Review a langonrock diff for correctness and maintainability",
+      "skill": "workflows/review/SKILL.md"
+    },
+    {
+      "name": "document",
+      "description": "Update langonrock documentation and matching HTML manuals from code evidence",
+      "skill": "workflows/document/SKILL.md"
+    },
+    {
+      "name": "dbms",
+      "description": "Implement and verify the native document engine",
+      "skill": "workflows/dbms/SKILL.md"
+    }
+  ]
+}

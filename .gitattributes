@@ -1,1 +1,2 @@
 * -text
+bench/results/**/*.json linguist-generated=true -diff

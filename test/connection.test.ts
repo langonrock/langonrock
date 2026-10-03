@@ -46,8 +46,8 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
-  socketServer?.stop(true)
-  tcpServer?.stop(true)
+  await socketServer?.stop(true)
+  await tcpServer?.stop(true)
   await rm(scratch, { recursive: true, force: true })
   await rm(socket, { force: true })
 })
@@ -257,7 +257,7 @@ describe('transport parity', () => {
 
     const remote = open(`okf+unix://${socket}?tenant=acme`)
 
-    expect(remote.manifest('nope')).rejects.toThrow(/no bundle "nope"/)
+    await expect(remote.manifest('nope')).rejects.toThrow(/no bundle "nope"/)
   })
 })
 
@@ -494,7 +494,7 @@ describe('injected search cache', () => {
       expect(hits).toContain('customers')
       expect(warmed).toEqual(['acme'])
     } finally {
-      server.stop(true)
+      await server.stop(true)
     }
   })
 })

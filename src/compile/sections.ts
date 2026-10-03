@@ -26,7 +26,9 @@ function fencedRanges(body: string): [number, number][] {
   const ranges: [number, number][] = []
   let open: number | undefined
 
-  for (const match of body.matchAll(FENCE)) {
+  FENCE.lastIndex = 0
+
+  for (let match = FENCE.exec(body); match !== null; match = FENCE.exec(body)) {
     if (open === undefined) {
       open = match.index
     } else {
@@ -74,7 +76,13 @@ function headingMarks(body: string): HeadingMark[] {
   const taken = new Set([DEFAULT_SECTION])
   const marks: HeadingMark[] = []
 
-  for (const match of body.matchAll(HEADING)) {
+  HEADING.lastIndex = 0
+
+  for (
+    let match = HEADING.exec(body);
+    match !== null;
+    match = HEADING.exec(body)
+  ) {
     if (isFenced(match.index, fenced)) {
       continue
     }

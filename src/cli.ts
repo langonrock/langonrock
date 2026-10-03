@@ -2,30 +2,38 @@
 import { parseArgs } from 'node:util'
 
 import pkg from '../package.json'
+import { interchangeCommand } from './commands/interchange.ts'
+import { readText } from './db/text.ts'
 import { open } from './client/connection.ts'
+import {
+  DATABASE_FLAGS,
+  databaseCommand,
+  databaseVerb,
+  queryDatabase
+} from './commands/dbms.ts'
 import { DEFAULT_SUMMARY_WIDTH, compileBundle } from './compile/manifest.ts'
 import { estimateTokens } from './compile/tokens.ts'
-import { serveMcp } from './mcp/server.ts'
-import { createSearchCache } from './search/cache.ts'
+import { serveMcp } from './mcp/lazy.ts'
+import { createReadCache, withReader } from './db/readcache.ts'
 import { serve } from './server/http.ts'
 import { ensureSource, loadSources } from './server/sources.ts'
 import { TOKENS_FILE, addToken, loadTokens } from './server/tokens.ts'
 import { resolveDataDir } from './store/datadir.ts'
-import { collect, collectAll } from './store/gc.ts'
+import { collect, collectAll } from './db/collect.ts'
 import { assertTenantId } from './store/paths.ts'
-import { openTenant } from './store/reader.ts'
+import { openTenant } from './db/open.ts'
 import { renderConcepts } from './store/slice.ts'
 import { watchTenant } from './store/watch.ts'
-import { putBundle, putTenantRoot } from './store/writer.ts'
+import { putBundle, putTenantRoot } from './db/writer.ts'
 
 import type { CompileOptions } from './compile/manifest.ts'
 import type { Diagnostic } from './okf/types.ts'
 import type { Connection, GetOptions } from './client/connection.ts'
 import type { SearchOptions } from './search/tenant.ts'
 import type { ServeOptions, Tls } from './server/http.ts'
-import type { GcOptions, GcResult } from './store/gc.ts'
+import type { GcOptions, GcResult } from './store/contracts.ts'
 import type { WatchOptions, Watcher } from './store/watch.ts'
-import type { PutOptions, PutResult } from './store/writer.ts'
+import type { PutOptions, PutResult } from './store/contracts.ts'
 
 const USAGE = `langonrock - a token-efficient store for OKF knowledge bundles
 
@@ -46,8 +54,15 @@ usage:
   langonrock query <dsn> write <bundle> <path>  write one, from stdin or --from
   langonrock query <dsn> delete <bundle> <path> remove one source file
   langonrock query <dsn> delete-bundle <bundle> remove a whole bundle
-  langonrock query <dsn> sync               recompile and report the snapshot
+  langonrock query <dsn> sync               report native state or compile legacy sources
   langonrock mcp <dsn>                      serve MCP over stdio
+  langonrock transact --data D --tenant T [--from JSON] commit an atomic batch
+  langonrock history --data D --tenant T [--limit N]    list retained revisions
+  langonrock restore REV --data D --tenant T --expected-revision REV
+  langonrock verify [REV] --data D --tenant T          verify retained data
+  langonrock repair REV --data D --tenant T --expected-head HASH
+  langonrock migrate <originals> --data D --tenant T [--dry-run]
+  langonrock export <new-directory> --data D --tenant T
   langonrock gc --data D [--tenant T]       collect old and partial snapshots
 
 dsn forms:
@@ -79,8 +94,12 @@ options:
   --create            write only: the concept must not exist yet
   --force             write/delete: use whatever hash is there right now
   --keep <n>          snapshots to retain per tenant on gc (default 10)
-  --grace <ms>        never collect anything newer than this (default 3600000)
-  --dry-run           gc only: report what would be removed
+  --before <cursor>   continue a history page
+  --expected-revision <revision>  restore only if this revision is current
+  --expected-head <hash|missing>  repair precondition from verify
+  --database-tools    mcp only: expose transact, history, and restore tools
+  --grace <ms>        legacy gc age grace (default 3600000)
+  --dry-run           preview gc or validate migration without publication
   --out <file>        write to a file instead of stdout
   --bundle <name>     bundle name recorded in the header (default: dir name)
   --summary-width <n> max characters per summary cell (default: ${DEFAULT_SUMMARY_WIDTH})
@@ -90,6 +109,10 @@ options:
 `
 
 interface Flags {
+  before?: string | undefined
+  'expected-revision'?: string | undefined
+  'expected-head'?: string | undefined
+  'database-tools'?: boolean | undefined
   out?: string | undefined
   bundle?: string | undefined
   strict?: boolean | undefined
@@ -518,16 +541,19 @@ const runServe: Command = async (_positionals, flags) => {
   const sources = await loadSources(root)
 
   options.tokens = await loadTokens(root)
+  options.writable = true
 
   // Rebuilding right after a sync moves the index build off the query path:
   // the first search after a save finds the index already warm.
-  const indexes = createSearchCache(root)
+  const readers = createReadCache(root)
 
   const warm = (tenant: string): void => {
-    void indexes(tenant).catch(() => undefined)
+    void withReader(readers, tenant, lease => lease.index()).catch(
+      () => undefined
+    )
   }
 
-  options.indexes = indexes
+  options.readers = readers
 
   // Started even with nothing configured: a store whose first tenant has not
   // been created yet is exactly the case that needs to be able to create one.
@@ -581,9 +607,7 @@ type QueryVerb = (
 ) => Promise<number>
 
 async function readContent(flags: Flags): Promise<string> {
-  return flags.from === undefined
-    ? Bun.stdin.text()
-    : Bun.file(flags.from).text()
+  return readText(flags.from === undefined ? Bun.stdin : Bun.file(flags.from))
 }
 
 /**
@@ -754,13 +778,29 @@ const runQuery: Command = async (positionals, flags) => {
   const verb = positionalAt(positionals, 2, 'verb')
   const run = QUERY_VERBS[verb]
 
+  if (databaseVerb(verb)) {
+    const connection = open(dsn)
+
+    try {
+      return await queryDatabase(connection, verb, positionals.slice(3), flags)
+    } finally {
+      await connection.close()
+    }
+  }
+
   if (run === undefined) {
     throw new Error(
       `unknown verb "${verb}": expected one of ${Object.keys(QUERY_VERBS).sort().join(', ')}`
     )
   }
 
-  return run(open(dsn), positionals, flags)
+  const connection = open(dsn)
+
+  try {
+    return await run(connection, positionals, flags)
+  } finally {
+    await connection.close()
+  }
 }
 
 function reportGc(result: GcResult, dryRun: boolean): void {
@@ -814,16 +854,24 @@ const runGc: Command = async (_positionals, flags) => {
   return results.some(result => result.currentCorrupt) ? 1 : 0
 }
 
-const runMcp: Command = async positionals => {
+const runMcp: Command = async (positionals, flags) => {
   const dsn = positionalAt(positionals, 1, 'dsn')
 
   console.error(`langonrock mcp serving ${dsn} over stdio`)
-  await serveMcp(dsn)
+  await serveMcp(dsn, { databaseTools: flags['database-tools'] === true })
 
   return 0
 }
 
 const COMMANDS: Record<string, Command> = {
+  migrate: interchangeCommand,
+  export: interchangeCommand,
+  import: runSync,
+  transact: databaseCommand,
+  history: databaseCommand,
+  restore: databaseCommand,
+  verify: databaseCommand,
+  repair: databaseCommand,
   compile: runCompile,
   put: runPut,
   sync: runSync,
@@ -841,6 +889,7 @@ async function main(): Promise<number> {
   const { values, positionals } = parseArgs({
     args: Bun.argv.slice(2),
     options: {
+      ...DATABASE_FLAGS,
       out: { type: 'string' },
       bundle: { type: 'string' },
       strict: { type: 'boolean' },

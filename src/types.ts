@@ -1,7 +1,7 @@
 import type { Transport } from './client/dsn.ts'
 import type { Diagnostic } from './okf/types.ts'
 
-export type { Diagnostic, DiagnosticLevel } from './okf/types.ts'
+export type { Diagnostic } from './okf/types.ts'
 
 /**
  * The contract shared by every transport, kept free of any runtime import so a
@@ -110,4 +110,53 @@ export interface Connection {
   deleteBundle: (bundle: string) => Promise<void>
   sync: () => Promise<SyncResult>
   close: () => Promise<void>
+}
+
+export type DocumentChange =
+  | {
+      operation: 'write'
+      bundle: string
+      path: string
+      content: string
+      replaces?: string
+    }
+  | { operation: 'delete'; bundle: string; path: string; replaces: string }
+
+export interface TransactionRequest {
+  changes: DocumentChange[]
+  expectedRevision?: string
+}
+
+export interface RevisionResult extends SyncResult {
+  revision: string
+}
+
+export interface RevisionInfo {
+  revision: string
+  parent: string | null
+  snapshot: string
+  created: string
+  concepts: number
+  bundles: string[]
+}
+
+export interface HistoryOptions {
+  before?: string
+  limit?: number
+}
+
+export interface RevisionPage {
+  revisions: RevisionInfo[]
+  next?: string
+}
+
+export interface RestoreRequest {
+  revision: string
+  expectedRevision: string
+}
+
+export interface DatabaseConnection extends Connection {
+  transact: (request: TransactionRequest) => Promise<RevisionResult>
+  history: (options?: HistoryOptions) => Promise<RevisionPage>
+  restore: (request: RestoreRequest) => Promise<RevisionResult>
 }

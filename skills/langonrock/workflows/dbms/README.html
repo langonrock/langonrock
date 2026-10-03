@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>langonrock.workflow.dbms</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #09090b;
+        --fg: #f4f4f5;
+        --card: rgba(24, 24, 27, 0.65);
+        --line: #52525b;
+        --link: #a7f3d0;
+      }
+      html.light {
+        color-scheme: light;
+        --bg: #fafafa;
+        --fg: #18181b;
+        --card: rgba(255, 255, 255, 0.85);
+        --line: #d4d4d8;
+        --link: #065f46;
+      }
+      body {
+        background: var(--bg) !important;
+        color: var(--fg) !important;
+        font: 16px/1.7 system-ui;
+        margin: 0;
+      }
+      main {
+        max-width: 1100px;
+        margin: auto;
+        padding: 32px 20px;
+      }
+      a {
+        color: var(--link);
+        text-decoration: underline;
+      }
+      h1 {
+        font-size: 2rem;
+        font-weight: 650;
+        overflow-wrap: anywhere;
+      }
+      h2 {
+        display: inline;
+        font-size: 1.25rem;
+        font-weight: 600;
+      }
+      p,
+      ul,
+      ol {
+        margin: 1em 0;
+      }
+      ul,
+      ol {
+        padding-left: 1.5em;
+        list-style: revert;
+      }
+      details {
+        background: var(--card);
+        backdrop-filter: blur(12px);
+        border: 1px solid var(--line);
+        padding: 20px;
+        margin: 20px 0;
+        border-radius: 12px;
+      }
+      summary,
+      button {
+        cursor: pointer;
+      }
+      button {
+        background: var(--card);
+        color: var(--fg);
+        padding: 8px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+      }
+      table {
+        display: block;
+        overflow: auto;
+        border-collapse: collapse;
+      }
+      td,
+      th {
+        padding: 10px;
+        border: 1px solid var(--line);
+        text-align: left;
+      }
+      pre {
+        overflow: auto;
+        padding: 16px;
+        border: 1px solid var(--line);
+      }
+      code {
+        overflow-wrap: anywhere;
+      }
+      :focus-visible {
+        outline: 2px solid var(--link);
+        outline-offset: 4px;
+      }
+      .badge {
+        border: 1px solid var(--line);
+        padding: 4px 8px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+      }
+      nav {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+    </style>
+  </head>
+  <body class="bg-zinc-950 text-zinc-100">
+    <main>
+      <nav>
+        <a href="../../README.html">Project manual</a
+        ><a href="SKILL.md">Markdown source</a
+        ><span class="badge">Workflow contract</span
+        ><button type="button" aria-pressed="false" id="theme">
+          Light theme
+        </button>
+        <button type="button" data-expand="true">Expand sections</button>
+        <button type="button" data-expand="false">Collapse sections</button>
+      </nav>
+      <h1 id="langonrockworkflowdbms">langonrock.workflow.dbms</h1>
+      <details open>
+        <summary><h2 id="goal">Goal</h2></summary>
+        <p>
+          Deliver authoritative document transactions, recovery, history, and
+          restore within the approved performance budgets.
+        </p>
+      </details>
+      <details open>
+        <summary><h2 id="scope">Scope</h2></summary>
+        <p>
+          Native file storage, compiler integration, clients, transports,
+          migration, Markdown interchange, packaging, and before/after
+          measurement. No SQL interface, distributed storage, database
+          dependency, Python, deployment, or release push.
+        </p>
+      </details>
+      <details open>
+        <summary><h2 id="triggers">Triggers</h2></summary>
+        <ul>
+          <li><code>/langonrock dbms</code></li>
+          <li>
+            Implement or modify authoritative native storage or its benchmark
+            contract.
+          </li>
+        </ul>
+      </details>
+      <details open>
+        <summary><h2 id="inputs">Inputs</h2></summary>
+        <ul>
+          <li>
+            <a href="../../../../docs/tasks/task.dbms-performance.md"
+              >Approved plan</a
+            >.
+          </li>
+          <li>
+            Baseline commit
+            <code>1cbcc009bd93814d56410ed3473d65c101f97d8d</code>.
+          </li>
+          <li>
+            Existing
+            <a href="../../reference/engineering-guidelines.html"
+              >engineering rules</a
+            >
+            and
+            <a href="../../reference/verification.html">verification commands</a
+            >.
+          </li>
+        </ul>
+      </details>
+      <details open>
+        <summary><h2 id="invariants">Invariants</h2></summary>
+        <ul>
+          <li>
+            The native committed root is authoritative for new and migrated
+            stores. Original Markdown remains authoritative only in unmigrated
+            legacy stores.
+          </li>
+          <li>
+            Preserve deterministic compiled reads, compact manifests, tenant
+            boundaries, hash preconditions, and the remote client's runtime
+            independence.
+          </li>
+          <li>
+            Publish complete immutable artifacts before one durable head
+            replacement. Validate preconditions while holding the kernel-owned
+            tenant writer lock.
+          </li>
+          <li>
+            Acknowledged commits survive reopen. Report ambiguous publication
+            outcomes; never silently discard a corrupt committed head or replay
+            a conflicted write.
+          </li>
+          <li>
+            Pin a single revision through each read, including ranking and body
+            fetch. History and source archives stay out of ordinary read
+            initialization.
+          </li>
+          <li>
+            No Python execution, Python-dependent builds, SQLite, or other
+            database engine.
+          </li>
+          <li>
+            Freeze the benchmark protocol and capture all three baseline sizes
+            before product edits. Do not weaken thresholds or classify uncertain
+            results as passes.
+          </li>
+          <li>
+            Manifest token growth is zero. Search/get regression is at most 5%;
+            memory, startup, import, and edit-to-search regression is at most
+            10%.
+          </li>
+          <li>
+            Migrate explicitly and preserve original files. TNT1 alone cannot
+            recover frontmatter; refuse claims of lossless source migration
+            without originals.
+          </li>
+          <li>
+            Decode source bytes with fatal UTF-8 validation and preserve
+            byte-order marks. Runtime <code>.text()</code> decoding is
+            unsuitable for exact source interchange.
+          </li>
+          <li>
+            Validate compile settings before publishing revision metadata,
+            including for empty tenants. Cleanup failures must preserve
+            ambiguous commit identities.
+          </li>
+          <li>
+            Cache identity includes committed artifact digests and checksums.
+            Bound retained bytes and hold leases until in-flight readers release
+            them.
+          </li>
+          <li>
+            Keep native compilation explicit for source consumers. The
+            remote-only entry must install and run without loading or building
+            the native adapter.
+          </li>
+          <li>
+            Preserve raw benchmark files. Refuse output reuse and require an
+            explicit verified completion marker. Combine captures only when
+            their provenance agrees. Commit only the baseline and final
+            acceptance raw captures; keep intermediate raw JSON out of Git and
+            commit its Markdown report instead.
+          </li>
+        </ul>
+      </details>
+      <details open>
+        <summary><h2 id="procedure">Procedure</h2></summary>
+        <ol>
+          <li>
+            Follow tasks in the approved plan, updating their status and
+            evidence.
+          </li>
+          <li>
+            Capture isolated Bun benchmarks at 500, 5,000, and 20,000 concepts.
+          </li>
+          <li>
+            Verify platform locks and durable publication, including interrupted
+            writers.
+          </li>
+          <li>
+            Implement native formats and transactions, then run the early
+            performance gate.
+          </li>
+          <li>
+            Complete history, restore, collection, transport parity, and
+            interchange.
+          </li>
+          <li>
+            Run required tests, build, coverage, quality review, and the full
+            comparison.
+          </li>
+          <li>
+            Fix blocker/high findings, update contracts and manuals, and record
+            release notes.
+          </li>
+        </ol>
+      </details>
+      <details open>
+        <summary><h2 id="outputs">Outputs</h2></summary>
+        <ul>
+          <li>Native engine and regression coverage.</li>
+          <li>Reproducible raw benchmark samples and per-metric verdicts.</li>
+          <li>
+            Updated
+            <a href="../../../../docs/tasks/task.dbms-performance.md"
+              >task record</a
+            >
+            and <a href="../../../../walkthrough.md">walkthrough</a>.
+          </li>
+        </ul>
+      </details>
+      <details open>
+        <summary><h2 id="review-gate">Review gate</h2></summary>
+        <ul>
+          <li class="task-list-item">
+            <input
+              type="checkbox"
+              class="task-list-item-checkbox"
+              disabled
+            />Every approved requirement is implemented or explicitly reported
+            incomplete.
+          </li>
+          <li class="task-list-item">
+            <input
+              type="checkbox"
+              class="task-list-item-checkbox"
+              disabled
+            />Crash, corruption, concurrency, retention, and migration tests
+            pass.
+          </li>
+          <li class="task-list-item">
+            <input
+              type="checkbox"
+              class="task-list-item-checkbox"
+              disabled
+            />Existing public usage and intentional semantic changes are
+            documented.
+          </li>
+          <li class="task-list-item">
+            <input
+              type="checkbox"
+              class="task-list-item-checkbox"
+              disabled
+            />All performance gates pass at every required size.
+          </li>
+          <li class="task-list-item">
+            <input type="checkbox" class="task-list-item-checkbox" disabled />No
+            forbidden runtime/build dependency or weakened quality threshold.
+          </li>
+          <li class="task-list-item">
+            <input
+              type="checkbox"
+              class="task-list-item-checkbox"
+              disabled
+            />Blueprint sources and manuals agree.
+          </li>
+        </ul>
+      </details>
+      <details open>
+        <summary><h2 id="references">References</h2></summary>
+        <ul>
+          <li><a href="../../README.html">Project entry</a></li>
+          <li>
+            <a href="../../../../docs/tasks/task.dbms-performance.md"
+              >Approved plan</a
+            >
+          </li>
+          <li><a href="README.html">Interactive HTML view</a></li>
+          <li>
+            <a href="../../../../docs/dbms.md">Operations and migration</a>
+          </li>
+          <li>
+            <a href="../../../../docs/benchmarks/dbms.md"
+              >Performance evidence</a
+            >
+          </li>
+        </ul>
+      </details>
+    </main>
+    <script>
+      for (const button of document.querySelectorAll('[data-expand]')) {
+        button.addEventListener('click', () => {
+          for (const section of document.querySelectorAll('main details')) {
+            section.open = button.dataset.expand === 'true'
+          }
+        })
+      }
+
+      document.getElementById('theme').addEventListener('click', function () {
+        const light = document.documentElement.classList.toggle('light')
+        this.setAttribute('aria-pressed', String(light))
+        this.textContent = light ? 'Dark theme' : 'Light theme'
+      })
+    </script>
+  </body>
+</html>

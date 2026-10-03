@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { open } from '../src/client/connection.ts'
-import { GET_LIMIT, MANIFEST_URI, createMcpServer } from '../src/mcp/server.ts'
+import { GET_LIMIT, MANIFEST_URI, createMcpServer } from '../src/mcp/lazy.ts'
 import { adviceFor } from '../src/search/advice.ts'
 import { putBundle } from '../src/store/writer.ts'
 
@@ -125,10 +125,18 @@ describe('write', () => {
     expect(firstText(result)).toContain('1 concepts')
   })
 
-  test('registers the new tenant so the store finds it again', async () => {
-    const registered = await Bun.file(`${fresh}/sources.json`).json()
+  test('persists the native tenant so a new connection finds it again', async () => {
+    const reopened = open(`okf://${fresh}?tenant=notes`)
 
-    expect(registered).toEqual({ notes: `${fresh}/sources/notes` })
+    try {
+      expect((await reopened.history()).revisions).toHaveLength(1)
+      expect((await reopened.get(['idea'])).get('idea')?.text).toContain(
+        'Ship the thing.'
+      )
+      expect(await Bun.file(`${fresh}/sources.json`).exists()).toBe(false)
+    } finally {
+      await reopened.close()
+    }
   })
 
   test('makes the concept immediately readable', async () => {
@@ -254,8 +262,9 @@ describe('write', () => {
     beforeAll(async () => {
       const [clientSide, serverSide] = InMemoryTransport.createLinkedPair()
       const underneath = open(`okf://${join(scratch, 'nosync')}?tenant=notes`)
+      const { transact: _transact, ...legacy } = underneath
       const broken: Connection = {
-        ...underneath,
+        ...legacy,
         sync: () => Promise.reject(new Error('another writer holds the lock'))
       }
 
@@ -592,7 +601,7 @@ describe('stdio transport', () => {
       stderr: 'pipe'
     })
 
-    proc.stdin.write(
+    await proc.stdin.write(
       `${JSON.stringify({
         jsonrpc: '2.0',
         id: 1,

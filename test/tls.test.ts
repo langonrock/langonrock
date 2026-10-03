@@ -92,19 +92,19 @@ describe('binding refuses the shapes that leak a token', () => {
 
   test.each(['127.0.0.1', '::1', 'localhost'])(
     'allows cleartext on %p',
-    hostname => {
+    async hostname => {
       const local = serve({ root, hostname, port: 0, tokens })
 
       expect(local.port).toBeGreaterThan(0)
-      local.stop(true)
+      await local.stop(true)
     }
   )
 
-  test('allows any address once tls is on', () => {
+  test('allows any address once tls is on', async () => {
     const exposed = serve({ root, hostname: '0.0.0.0', port: 0, tokens, tls })
 
     expect(exposed.port).toBeGreaterThan(0)
-    exposed.stop(true)
+    await exposed.stop(true)
   })
 
   /**
@@ -130,7 +130,7 @@ describe('binding refuses the shapes that leak a token', () => {
       ).text()
     ).toContain('# tenant: acme')
 
-    local.stop(true)
+    await local.stop(true)
     await rm(socket, { force: true })
   })
 })

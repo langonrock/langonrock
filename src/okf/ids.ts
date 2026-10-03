@@ -1,47 +1,19 @@
 const MD_EXTENSION = /\.md$/i
 
-export function stripExtension(path: string): string {
+function stripExtension(path: string): string {
   return path.replace(MD_EXTENSION, '')
 }
 
-function candidateAt(path: string, tier: number): string {
+function candidates(path: string): [string, string, string] {
   const noExt = stripExtension(path)
   const segments = noExt.split('/')
   const base = segments[segments.length - 1] ?? noExt
 
-  if (tier === 0) {
-    return base
-  }
-
-  if (tier === 1 && segments.length > 1) {
-    return `${segments[segments.length - 2]}/${base}`
-  }
-
-  return tier === 1 ? base : noExt
-}
-
-function countAt(paths: string[], tier: number): Map<string, number> {
-  const counts = new Map<string, number>()
-
-  for (const path of paths) {
-    const candidate = candidateAt(path, tier)
-
-    counts.set(candidate, (counts.get(candidate) ?? 0) + 1)
-  }
-
-  return counts
-}
-
-function pickId(path: string, tiers: Map<string, number>[]): string {
-  for (let tier = 0; tier < tiers.length; tier++) {
-    const candidate = candidateAt(path, tier)
-
-    if (tiers[tier]?.get(candidate) === 1) {
-      return candidate
-    }
-  }
-
-  return candidateAt(path, tiers.length)
+  return [
+    base,
+    segments.length > 1 ? `${segments[segments.length - 2]}/${base}` : base,
+    noExt
+  ]
 }
 
 function assertUnique(ids: Map<string, string>): void {
@@ -64,11 +36,25 @@ function assertUnique(ids: Map<string, string>): void {
  * for every id on every read.
  */
 export function deriveIds(paths: string[]): Map<string, string> {
-  const tiers = [countAt(paths, 0), countAt(paths, 1)]
+  const files = paths.map(path => ({ path, names: candidates(path) }))
+  const short = new Map<string, number>()
+  const qualified = new Map<string, number>()
   const ids = new Map<string, string>()
 
-  for (const path of paths) {
-    ids.set(path, pickId(path, tiers))
+  for (const { names } of files) {
+    short.set(names[0], (short.get(names[0]) ?? 0) + 1)
+    qualified.set(names[1], (qualified.get(names[1]) ?? 0) + 1)
+  }
+
+  for (const { path, names } of files) {
+    const id =
+      short.get(names[0]) === 1
+        ? names[0]
+        : qualified.get(names[1]) === 1
+          ? names[1]
+          : names[2]
+
+    ids.set(path, id)
   }
 
   assertUnique(ids)

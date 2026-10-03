@@ -1,10 +1,17 @@
+import { assertSourceText, decodeText } from '../text.ts'
+
 import type {
   ConceptSlice,
-  Connection,
+  DatabaseConnection,
   GetOptions,
   SearchOptions,
   SourceEntry,
-  SyncResult
+  SyncResult,
+  TransactionRequest,
+  HistoryOptions,
+  RestoreRequest,
+  RevisionResult,
+  RevisionPage
 } from '../types.ts'
 import type { Target } from './dsn.ts'
 
@@ -38,14 +45,39 @@ function makeCall(target: Target): Call {
     } as RequestInit)
 }
 
+function errorDetails(body: string): { code?: unknown; revision?: unknown } {
+  try {
+    const value = JSON.parse(body) as unknown
+
+    return typeof value === 'object' && value !== null ? value : {}
+  } catch {
+    return {}
+  }
+}
+
 async function assertOk(response: Response): Promise<Response> {
   if (response.ok) {
     return response
   }
 
-  throw new Error(
-    `langonrock server returned ${response.status}: ${(await response.text()).trim()}`
+  const body = (await response.text()).trim()
+  const failure = new Error(
+    `langonrock server returned ${response.status}: ${body}`
   )
+
+  if (response.headers.get('content-type')?.includes('application/json')) {
+    const details = errorDetails(body)
+
+    if (typeof details.code === 'string') {
+      Object.assign(failure, { code: details.code })
+    }
+
+    if (typeof details.revision === 'string') {
+      Object.assign(failure, { revision: details.revision })
+    }
+  }
+
+  throw failure
 }
 
 function segments(bundle: string, path: string): string {
@@ -154,7 +186,7 @@ function writingOf(call: Call, prefix: string) {
       await assertOk(response)
 
       return {
-        content: await response.text(),
+        content: decodeText(await response.arrayBuffer()),
         hash: unquote(response.headers.get('etag'))
       }
     },
@@ -164,6 +196,8 @@ function writingOf(call: Call, prefix: string) {
       content: string,
       replaces?: string
     ): Promise<string> => {
+      assertSourceText(content)
+
       const response = await assertOk(
         await call(`${prefix}/source/${segments(bundle, path)}`, {
           method: 'PUT',
@@ -206,7 +240,43 @@ function writingOf(call: Call, prefix: string) {
   }
 }
 
-export function remoteConnection(target: Target): Connection {
+function databaseOf(call: Call, prefix: string) {
+  const post = async (verb: string, body: unknown): Promise<RevisionResult> => {
+    const response = await assertOk(
+      await call(`${prefix}/${verb}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body)
+      })
+    )
+
+    return (await response.json()) as RevisionResult
+  }
+
+  return {
+    transact: (request: TransactionRequest) => post('transact', request),
+    restore: (request: RestoreRequest) => post('restore', request),
+    history: async (options: HistoryOptions = {}): Promise<RevisionPage> => {
+      const query = new URLSearchParams()
+
+      if (options.before !== undefined) {
+        query.set('before', options.before)
+      }
+
+      if (options.limit !== undefined) {
+        query.set('limit', String(options.limit))
+      }
+
+      const response = await assertOk(
+        await call(`${prefix}/history?${query.toString()}`)
+      )
+
+      return (await response.json()) as RevisionPage
+    }
+  }
+}
+
+export function remoteConnection(target: Target): DatabaseConnection {
   const call = makeCall(target)
   const prefix = target.tenant === undefined ? '/v1' : `/v1/${target.tenant}`
 
@@ -215,6 +285,7 @@ export function remoteConnection(target: Target): Connection {
     manifest: manifestOf(call, prefix),
     ...readingOf(call, prefix),
     ...writingOf(call, prefix),
-    close: async () => undefined
+    ...databaseOf(call, prefix),
+    close: () => Promise.resolve()
   }
 }

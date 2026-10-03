@@ -1,0 +1,5090 @@
+{
+  "protocol": "dbms-operations-1",
+  "before": "1cbcc009bd93814d56410ed3473d65c101f97d8d",
+  "verified": true,
+  "sourceTree": "42254179243812b08dbb977bfcb31121c6afdf4f05cb7cfb728720fa7ef4a82e",
+  "harness": "c4911fbe1218feca54a45c2b7be23b9fdf998098ae692ec9f1a9bd6fafe831ae",
+  "nativeBuild": "5b4e3f1da7e1d8b95331df2d87cf88560be756efb558b6487e1f15c0c76d114f",
+  "operationsHarness": "58efd6da8c7c064891c1c3fa7ccd8d9421b6f31d9901b95d5f6b8e7c1371ecbf",
+  "osRelease": "25.4.0",
+  "filesystem": {
+    "type": 26,
+    "blockSize": 4096
+  },
+  "evaluationDate": "2026-09-21T12:00:00.000Z",
+  "operations": "d526aae83bf090ffa60c550ff2e60b08869d87c89afa82c044921485c480ec0e",
+  "durability": {
+    "before": "legacy file fsync and pointer rename",
+    "after": "artifact fsync, ordered root replacement, native durability barrier"
+  },
+  "cache": "fresh processes; OS filesystem cache is not cleared",
+  "bun": "1.3.12",
+  "platform": "darwin",
+  "arch": "arm64",
+  "cpu": "Apple M1 Pro",
+  "memory": 34359738368,
+  "at": "2026-09-21T13:51:24.199Z",
+  "command": [
+    "/Users/henriquebreim/.bun/bin/bun",
+    "/Users/henriquebreim/langonrock/bench/operations/run.ts",
+    "--repetitions",
+    "10",
+    "--output",
+    "bench/results/dbms/operations-acceptance-v1.json"
+  ],
+  "peakRssUnit": "bytes",
+  "runs": [
+    {
+      "size": 500,
+      "repetition": 0,
+      "fixture": "daefa937a587628f4bee5f33fe0f1946a9bfc68d4b07e8aa1b5f7a2546ecad46",
+      "maintenance": {
+        "timings": {
+          "batchCreate25": [
+            35.303041
+          ],
+          "batchReplace25": [
+            16.299208,
+            13.434292,
+            14.742875,
+            14.8215,
+            15.6235,
+            14.565792,
+            12.963875,
+            14.358583,
+            13.497083
+          ],
+          "historyFirst5": [
+            1.198417
+          ],
+          "historyNext5": [
+            0.958917
+          ],
+          "restore": [
+            16.577208
+          ]
+        },
+        "peakRssBytes": 104529920,
+        "rssBytes": 104529920,
+        "checks": {
+          "batches": 10,
+          "documentsPerBatch": 25,
+          "revisions": 12,
+          "manifestBytes": 82198,
+          "manifestTokenEstimate": 20550,
+          "manifestHash": "c8e4e3d3b3c9f0482d12e410870d46dfa0bcdf85d7d5dfb12eb856f0c550b9a9",
+          "head": "094628670a219770a334b89a16fe91c7569ef4c479dd85beebbbc41ce5336fa4"
+        }
+      },
+      "concurrent": {
+        "simultaneousWorkerRssBytes": 231653376,
+        "coordinatorRssBytes": 68714496,
+        "barrierMemory": [
+          {
+            "rssBytes": 67108864,
+            "peakRssBytes": 67108864
+          },
+          {
+            "rssBytes": 65224704,
+            "peakRssBytes": 65224704
+          },
+          {
+            "rssBytes": 99319808,
+            "peakRssBytes": 99319808
+          }
+        ],
+        "writers": [
+          {
+            "outcome": "committed",
+            "revision": "97c5ffaa8adb2238a7de24d32c07674277c041f5ce5b12d24c1da354c7dc8d2d",
+            "elapsed": 18.9375,
+            "rssBytes": 68075520,
+            "peakRssBytes": 68075520
+          },
+          {
+            "outcome": "conflict",
+            "elapsed": 23.598584,
+            "rssBytes": 65961984,
+            "peakRssBytes": 65961984
+          }
+        ],
+        "reader": {
+          "outcome": "pinned",
+          "revision": "094628670a219770a334b89a16fe91c7569ef4c479dd85beebbbc41ce5336fa4",
+          "rssBytes": 99385344,
+          "peakRssBytes": 99385344
+        },
+        "head": "97c5ffaa8adb2238a7de24d32c07674277c041f5ce5b12d24c1da354c7dc8d2d",
+        "source": "/var/folders/l9/ttg7csmn6cdf83lzysp0v08h0000gn/T/langonrock-operations-pDnBVj/source-500"
+      },
+      "recovery": {
+        "timings": {
+          "recoveryOpenGet": [
+            3.394292
+          ],
+          "gcKeep10": [
+            73.284708
+          ]
+        },
+        "peakRssBytes": 92880896,
+        "rssBytes": 92880896,
+        "checks": {
+          "head": "97c5ffaa8adb2238a7de24d32c07674277c041f5ce5b12d24c1da354c7dc8d2d",
+          "diskBeforeGc": {
+            "logical": 14093428,
+            "allocated": 14209024
+          },
+          "gc": {
+            "removed": [
+              "snapshots/7235ea1ac15edc36b73b18ee43ceb58f8fa01787d8be268d63f7c9e86e37ae1f.tnt",
+              "snapshots/7e3a30efdff57e1d3e8db3c7f29edfee269dc21020744ca2bb956769bfd522da.tnt",
+              "snapshots/f7672daa0d2ae4fbf37a607620ec2a6793cc8be331a397cf038234038fe88e2a.tnt",
+              "sources/823d144886d6686ead2e783bad7d956791582dbfe445e08d5b2c7d6a34129f64.src",
+              "sources/4913337e217824df0edd290b3af3cf05c6da92e1f6ec25b7f5d384150e2f3803.src",
+              "sources/33dff6602f9e97de28fafe7a77bd42140ba1305149dcec1bba4b760712b221e0.src",
+              "revisions/0e24eb377dd8e0f22c078948a27a865ba5502a05fcd1295f5da4d42f2170bb27.rev",
+              "revisions/9c7476bf340106362b079815f15f4b16acaab39867f3c7327ba5df340931e0af.rev",
+              "revisions/278792730eb74a5d958fb8512fdc62c37c157ca69017f9e7c1b9b8ad15828e6c.rev",
+              "revisions/1ff84dc63387c11f49cabafca37f1d86882b56a4edf21e2e26915e85da243a31.rev"
+            ],
+            "partials": [
+              "staging/59329992-ab83-49d4-9188-c04f031f770d"
+            ],
+            "skipped": [],
+            "bytesFreed": 3233769,
+            "tenant": "benchmark",
+            "current": "c71068a62cda2b812efc8e4aef5e9da6c9953ce9a29ea098cad08bf4b31b3d06",
+            "currentCorrupt": false,
+            "kept": 10,
+            "corrupt": []
+          },
+          "diskAfterGc": {
+            "logical": 10860438,
+            "allocated": 10944512
+          },
+          "retainedRevisions": 10
+        }
+      },
+      "retention": {
+        "before": {
+          "before": {
+            "logical": 6053353,
+            "allocated": 6090752
+          },
+          "after": {
+            "logical": 5503373,
+            "allocated": 5537792
+          },
+          "source": {
+            "logical": 1125589,
+            "allocated": 2117632
+          },
+          "manifest": "c8e4e3d3b3c9f0482d12e410870d46dfa0bcdf85d7d5dfb12eb856f0c550b9a9",
+          "retained": 10,
+          "edits": 10
+        },
+        "after": {
+          "before": {
+            "logical": 11837993,
+            "allocated": 11923456
+          },
+          "after": {
+            "logical": 10768832,
+            "allocated": 10846208
+          },
+          "source": {
+            "logical": 1125561,
+            "allocated": 2117632
+          },
+          "manifest": "c8e4e3d3b3c9f0482d12e410870d46dfa0bcdf85d7d5dfb12eb856f0c550b9a9",
+          "retained": 10,
+          "edits": 10
+        }
+      }
+    },
+    {
+      "size": 500,
+      "repetition": 1,
+      "fixture": "daefa937a587628f4bee5f33fe0f1946a9bfc68d4b07e8aa1b5f7a2546ecad46",
+      "maintenance": {
+        "timings": {
+          "batchCreate25": [
+            35.727125
+          ],
+          "batchReplace25": [
+            15.864208,
+            15.2415,
+            15.13975,
+            13.232583,
+            13.006583,
+            13.445,
+            12.617208,
+            13.258875,
+            14.258417
+          ],
+          "historyFirst5": [
+            1.807917
+          ],
+          "historyNext5": [
+            1.407791
+          ],
+          "restore": [
+            19.788
+          ]
+        },
+        "peakRssBytes": 107134976,
+        "rssBytes": 107134976,
+        "checks": {
+          "batches": 10,
+          "documentsPerBatch": 25,
+          "revisions": 12,
+          "manifestBytes": 82198,
+          "manifestTokenEstimate": 20550,
+          "manifestHash": "c8e4e3d3b3c9f0482d12e410870d46dfa0bcdf85d7d5dfb12eb856f0c550b9a9",
+          "head": "094628670a219770a334b89a16fe91c7569ef4c479dd85beebbbc41ce5336fa4"
+        }
+      },
+      "concurrent": {
+        "simultaneousWorkerRssBytes": 226836480,
+        "coordinatorRssBytes": 74842112,
+        "barrierMemory": [
+          {
+            "rssBytes": 64978944,
+            "peakRssBytes": 64978944
+          },
+          {
+            "rssBytes": 64962560,
+            "peakRssBytes": 64962560
+          },
+          {
+            "rssBytes": 96894976,
+            "peakRssBytes": 96894976
+          }
+        ],
+        "writers": [
+          {
+            "outcome": "conflict",
+            "elapsed": 18.496917,
+            "rssBytes": 65716224,
+            "peakRssBytes": 65716224
+          },
+          {
+            "outcome": "committed",
+            "revision": "e83460d98d4f52fb281574b4ed0ab80be962061f2d5b33d263310cc8033bd557",
+            "elapsed": 12.198,
+            "rssBytes": 65929216,
+            "peakRssBytes": 65929216
+          }
+        ],
+        "reader": {
+          "outcome": "pinned",
+          "revision": "094628670a219770a334b89a16fe91c7569ef4c479dd85beebbbc41ce5336fa4",
+          "rssBytes": 96927744,
+          "peakRssBytes": 96927744
+        },
+        "head": "e83460d98d4f52fb281574b4ed0ab80be962061f2d5b33d263310cc8033bd557",
+        "source": "/var/folders/l9/ttg7csmn6cdf83lzysp0v08h0000gn/T/langonrock-operations-pDnBVj/source-500"
+      },
+      "recovery": {
+        "timings": {
+          "recoveryOpenGet": [
+            3.746292
+          ],
+          "gcKeep10": [
+            74.120042
+          ]
+        },
+        "peakRssBytes": 93978624,
+        "rssBytes": 93978624,
+        "checks": {
+          "head": "e83460d98d4f52fb281574b4ed0ab80be962061f2d5b33d263310cc8033bd557",
+          "diskBeforeGc": {
+            "logical": 14093437,
+            "allocated": 14209024
+          },
+          "gc": {
+            "removed": [
+              "snapshots/7235ea1ac15edc36b73b18ee43ceb58f8fa01787d8be268d63f7c9e86e37ae1f.tnt",
+              "snapshots/f7672daa0d2ae4fbf37a607620ec2a6793cc8be331a397cf038234038fe88e2a.tnt",
+              "snapshots/dc92dee8d3cc11ad91f6fefc63b9b9420c148d34825e586ca6620e59b79a0940.tnt",
+              "sources/823d144886d6686ead2e783bad7d956791582dbfe445e08d5b2c7d6a34129f64.src",
+              "sources/12b88bd2c4cdcf82237cf7b10eb3350d3820503686dc0baa6f5f7e86bf9bf288.src",
+              "sources/33dff6602f9e97de28fafe7a77bd42140ba1305149dcec1bba4b760712b221e0.src",
+              "revisions/0e24eb377dd8e0f22c078948a27a865ba5502a05fcd1295f5da4d42f2170bb27.rev",
+              "revisions/9c7476bf340106362b079815f15f4b16acaab39867f3c7327ba5df340931e0af.rev",
+              "revisions/509278fb0642bfabb320a89d31aa241f52b5caa40899c573e4724d464fb73acf.rev",
+              "revisions/1ff84dc63387c11f49cabafca37f1d86882b56a4edf21e2e26915e85da243a31.rev"
+            ],
+            "partials": [
+              "staging/4df2e5fc-37e4-41fb-bf4b-254b05cad2e3"
+            ],
+            "skipped": [],
+            "bytesFreed": 3233776,
+            "tenant": "benchmark",
+            "current": "92ec87f63e9c0e845ce394b26c13d744de2aafbdaca4ea352336751be25c0fc6",
+            "currentCorrupt": false,
+            "kept": 10,
+            "corrupt": []
+          },
+          "diskAfterGc": {
+            "logical": 10860440,
+            "allocated": 10944512
+          },
+          "retainedRevisions": 10
+        }
+      },
+      "retention": {
+        "after": {
+          "before": {
+            "logical": 11837993,
+            "allocated": 11923456
+          },
+          "after": {
+            "logical": 10768832,
+            "allocated": 10846208
+          },
+          "source": {
+            "logical": 1125561,
+            "allocated": 2117632
+          },
+          "manifest": "c8e4e3d3b3c9f0482d12e410870d46dfa0bcdf85d7d5dfb12eb856f0c550b9a9",
+          "retained": 10,
+          "edits": 10
+        },
+        "before": {
+          "before": {
+            "logical": 6053353,
+            "allocated": 6090752
+          },
+          "after": {
+            "logical": 5503373,
+            "allocated": 5537792
+          },
+          "source": {
+            "logical": 1125589,
+            "allocated": 2117632
+          },
+          "manifest": "c8e4e3d3b3c9f0482d12e410870d46dfa0bcdf85d7d5dfb12eb856f0c550b9a9",
+          "retained": 10,
+          "edits": 10
+        }
+      }
+    },
+    {
+      "size": 500,
+      "repetition": 2,
+      "fixture": "daefa937a587628f4bee5f33fe0f1946a9bfc68d4b07e8aa1b5f7a2546ecad46",
+      "maintenance": {
+        "timings": {
+          "batchCreate25": [
+            37.400041
+          ],
+          "batchReplace25": [
+            15.624125,
+            14.283125,
+            14.33625,
+            13.8695,
+            14.023375,
+            12.584459,
+            12.828875,
+            13.698,
+            15.365459
+          ],
+          "historyFirst5": [
+            1.252125
+          ],
+          "historyNext5": [
+            1.09975
+          ],
+          "restore": [
+            17.957292
+          ]
+        },
+        "peakRssBytes": 103956480,
+        "rssBytes": 103956480,
+        "checks": {
+          "batches": 10,
+          "documentsPerBatch": 25,
+          "revisions": 12,
+          "manifestBytes": 82198,
+          "manifestTokenEstimate": 20550,
+          "manifestHash": "c8e4e3d3b3c9f0482d12e410870d46dfa0bcdf85d7d5dfb12eb856f0c550b9a9",
+          "head": "094628670a219770a334b89a16fe91c7569ef4c479dd85beebbbc41ce5336fa4"
+        }
+      },
+      "concurrent": {
+        "simultaneousWorkerRssBytes": 232423424,
+        "coordinatorRssBytes": 77578240,
+        "barrierMemory": [
+          {
+            "rssBytes": 68812800,
+            "peakRssBytes": 68812800
+          },
+          {
+            "rssBytes": 65355776,
+            "peakRssBytes": 65372160
+          },
+          {
+            "rssBytes": 98254848,
+            "peakRssBytes": 98254848
+          }
+        ],
+        "writers": [
+          {
+            "outcome": "conflict",
+            "elapsed": 19.148375,
+            "rssBytes": 69664768,
+            "peakRssBytes": 69664768
+          },
+          {
+            "outcome": "committed",
+            "revision": "e83460d98d4f52fb281574b4ed0ab80be962061f2d5b33d263310cc8033bd557",
+            "elapsed": 13.0025,
+            "rssBytes": 66289664,
+            "peakRssBytes": 66289664
+          }
+        ],
+        "reader": {
+          "outcome": "pinned",
+          "revision": "094628670a219770a334b89a16fe91c7569ef4c479dd85beebbbc41ce5336fa4",
+          "rssBytes": 98304000,
+          "peakRssBytes": 98304000
+        },
+        "head": "e83460d98d4f52fb281574b4ed0ab80be962061f2d5b33d263310cc8033bd557",
+        "source": "/var/folders/l9/ttg7csmn6cdf83lzysp0v08h0000gn/T/langonrock-operations-pDnBVj/source-500"
+      },
+      "recovery": {
+        "timings": {
+          "recoveryOpenGet": [
+            3.35375
+          ],
+          "gcKeep10": [
+            72.426209
+          ]
+        },
+        "peakRssBytes": 93061120,
+        "rssBytes": 93061120,
+        "checks": {
+          "head": "e83460d98d4f52fb281574b4ed0ab80be962061f2d5b33d263310cc8033bd557",
+          "diskBeforeGc": {
+            "logical": 14093437,
+            "allocated": 14209024
+          },
+          "gc": {
+            "removed": [
+              "snapshots/7235ea1ac15edc36b73b18ee43ceb58f8fa01787d8be268d63f7c9e86e37ae1f.tnt",
+              "snapshots/f7672daa0d2ae4fbf37a607620ec2a6793cc8be331a397cf038234038fe88e2a.tnt",
+              "snapshots/dc92dee8d3cc11ad91f6fefc63b9b9420c148d34825e586ca6620e59b79a0940.tnt",
+              "sources/823d144886d6686ead2e783bad7d956791582dbfe445e08d5b2c7d6a34129f64.src",
+              "sources/12b88bd2c4cdcf82237cf7b10eb3350d3820503686dc0baa6f5f7e86bf9bf288.src",
+              "sources/33dff6602f9e97de28fafe7a77bd42140ba1305149dcec1bba4b760712b221e0.src",
+              "revisions/0e24eb377dd8e0f22c078948a27a865ba5502a05fcd1295f5da4d42f2170bb27.rev",
+              "revisions/9c7476bf340106362b079815f15f4b16acaab39867f3c7327ba5df340931e0af.rev",
+              "revisions/509278fb0642bfabb320a89d31aa241f52b5caa40899c573e4724d464fb73acf.rev",
+              "revisions/1ff84dc63387c11f49cabafca37f1d86882b56a4edf21e2e26915e85da243a31.rev"
+            ],
+            "partials": [
+              "staging/35be32a1-877b-4ef3-8a9b-93d2ac4a51ff"
+            ],
+            "skipped": [],
+            "bytesFreed": 3233776,
+            "tenant": "benchmark",
+            "current": "92ec87f63e9c0e845ce394b26c13d744de2aafbdaca4ea352336751be25c0fc6",
+            "currentCorrupt": false,
+            "kept": 10,
+            "corrupt": []
+          },
+          "diskAfterGc": {
+            "logical": 10860440,
+            "allocated": 10944512
+          },
+          "retainedRevisions": 10
+        }
+      },
+      "retention": {
+        "before": {
+          "before": {
+            "logical": 6053353,
+            "allocated": 6090752
+          },
+          "after": {
+            "logical": 5503373,
+            "allocated": 5537792
+          },
+          "source": {
+            "logical": 1125589,
+            "allocated": 2117632
+          },
+          "manifest": "c8e4e3d3b3c9f0482d12e410870d46dfa0bcdf85d7d5dfb12eb856f0c550b9a9",
+          "retained": 10,
+          "edits": 10
+        },
+        "after": {
+          "before": {
+            "logical": 11837993,
+            "allocated": 11923456
+          },
+          "after": {
+            "logical": 10768832,
+            "allocated": 10846208
+          },
+          "source": {
+            "logical": 1125561,
+            "allocated": 2117632
+          },
+          "manifest": "c8e4e3d3b3c9f0482d12e410870d46dfa0bcdf85d7d5dfb12eb856f0c550b9a9",
+          "retained": 10,
+          "edits": 10
+        }
+      }
+    },
+    {
+      "size": 500,
+      "repetition": 3,
+      "fixture": "daefa937a587628f4bee5f33fe0f1946a9bfc68d4b07e8aa1b5f7a2546ecad46",
+      "maintenance": {
+        "timings": {
+          "batchCreate25": [
+            45.806292
+          ],
+          "batchReplace25": [
+            16.974584,
+            15.138416,
+            14.239875,
+            14.544583,
+            13.668709,
+            12.472625,
+            13.197792,
+            13.377792,
+            14.305042
+          ],
+          "historyFirst5": [
+            0.973375
+          ],
+          "historyNext5": [
+            1.852375
+          ],
+          "restore": [
+            18.482416
+          ]
+        },
+        "peakRssBytes": 103284736,
+        "rssBytes": 103284736,
+        "checks": {
+          "batches": 10,
+          "documentsPerBatch": 25,
+          "revisions": 12,
+          "manifestBytes": 82198,
+          "manifestTokenEstimate": 20550,
+          "manifestHash": "c8e4e3d3b3c9f0482d12e410870d46dfa0bcdf85d7d5dfb12eb856f0c550b9a9",
+          "head": "094628670a219770a334b89a16fe91c7569ef4c479dd85beebbbc41ce5336fa4"
+        }
+      },
+      "concurrent": {
+        "simultaneousWorkerRssBytes": 228999168,
+        "coordinatorRssBytes": 79429632,
+        "barrierMemory": [
+          {
+            "rssBytes": 66011136,
+            "peakRssBytes": 66011136
+          },
+          {
+            "rssBytes": 65421312,
+            "peakRssBytes": 65421312
+          },
+          {
+            "rssBytes": 97566720,
+            "peakRssBytes": 97566720
+          }
+        ],
+        "writers": [
+          {
+            "outcome": "conflict",
+            "elapsed": 20.580542,
+            "rssBytes": 66764800,
+            "peakRssBytes": 66764800
+          },
+          {
+            "outcome": "committed",
+            "revision": "e83460d98d4f52fb281574b4ed0ab80be962061f2d5b33d263310cc8033bd557",
+            "elapsed": 12.146833,
+            "rssBytes": 66371584,
+            "peakRssBytes": 66371584
+          }
+        ],
+        "reader": {
+          "outcome": "pinned",
+          "revision": "094628670a219770a334b89a16fe91c7569ef4c479dd85beebbbc41ce5336fa4",
+          "rssBytes": 97583104,
+          "peakRssBytes": 97583104
+        },
+        "head": "e83460d98d4f52fb281574b4ed0ab80be962061f2d5b33d263310cc8033bd557",
+        "source": "/var/folders/l9/ttg7csmn6cdf83lzysp0v08h0000gn/T/langonrock-operations-pDnBVj/source-500"
+      },
+      "recovery": {
+        "timings": {
+          "recoveryOpenGet": [
+            3.514
+          ],
+          "gcKeep10": [
+            74.190834
+          ]
+        },
+        "peakRssBytes": 92520448,
+        "rssBytes": 92520448,
+        "checks": {
+          "head": "e83460d98d4f52fb281574b4ed0ab80be962061f2d5b33d263310cc8033bd557",
+          "diskBeforeGc": {
+            "logical": 14093437,
+            "allocated": 14209024
+          },
+          "gc": {
+            "removed": [
+              "snapshots/7235ea1ac15edc36b73b18ee43ceb58f8fa01787d8be268d63f7c9e86e37ae1f.tnt",
+              "snapshots/f7672daa0d2ae4fbf37a607620ec2a6793cc8be331a397cf038234038fe88e2a.tnt",
+              "snapshots/dc92dee8d3cc11ad91f6fefc63b9b9420c148d34825e586ca6620e59b79a0940.tnt",
+              "sources/823d144886d6686ead2e783bad7d956791582dbfe445e08d5b2c7d6a34129f64.src",
+              "sources/12b88bd2c4cdcf82237cf7b10eb3350d3820503686dc0baa6f5f7e86bf9bf288.src",
+              "sources/33dff6602f9e97de28fafe7a77bd42140ba1305149dcec1bba4b760712b221e0.src",
+              "revisions/0e24eb377dd8e0f22c078948a27a865ba5502a05fcd1295f5da4d42f2170bb27.rev",
+              "revisions/9c7476bf340106362b079815f15f4b16acaab39867f3c7327ba5df340931e0af.rev",
+              "revisions/509278fb0642bfabb320a89d31aa241f52b5caa40899c573e4724d464fb73acf.rev",
+              "revisions/1ff84dc63387c11f49cabafca37f1d86882b56a4edf21e2e26915e85da243a31.rev"
+            ],
+            "partials": [
+              "staging/4b3d856a-5a0e-408e-934e-019cfa30233f"
+            ],
+            "skipped": [],
+            "bytesFreed": 3233776,
+            "tenant": "benchmark",
+            "current": "92ec87f63e9c0e845ce394b26c13d744de2aafbdaca4ea352336751be25c0fc6",
+            "currentCorrupt": false,
+            "kept": 10,
+            "corrupt": []
+          },
+          "diskAfterGc": {
+            "logical": 10860440,
+            "allocated": 10944512
+          },
+          "retainedRevisions": 10
+        }
+      },
+      "retention": {
+        "after": {
+          "before": {
+            "logical": 11837993,
+            "allocated": 11923456
+          },
+          "after": {
+            "logical": 10768832,
+            "allocated": 10846208
+          },
+          "source": {
+            "logical": 1125561,
+            "allocated": 2117632
+          },
+          "manifest": "c8e4e3d3b3c9f0482d12e410870d46dfa0bcdf85d7d5dfb12eb856f0c550b9a9",
+          "retained": 10,
+          "edits": 10
+        },
+        "before": {
+          "before": {
+            "logical": 6053353,
+            "allocated": 6090752
+          },
+          "after": {
+            "logical": 5503373,
+            "allocated": 5537792
+          },
+          "source": {
+            "logical": 1125589,
+            "allocated": 2117632
+          },
+          "manifest": "c8e4e3d3b3c9f0482d12e410870d46dfa0bcdf85d7d5dfb12eb856f0c550b9a9",
+          "retained": 10,
+          "edits": 10
+        }
+      }
+    },
+    {
+      "size": 500,
+      "repetition": 4,
+      "fixture": "daefa937a587628f4bee5f33fe0f1946a9bfc68d4b07e8aa1b5f7a2546ecad46",
+      "maintenance": {
+        "timings": {
+          "batchCreate25": [
+            34.899334
+          ],
+          "batchReplace25": [
+            13.777667,
+            14.008917,
+            13.017959,
+            13.539917,
+            12.31675,
+            13.324,
+            13.534709,
+            13.508625,
+            13.638542
+          ],
+          "historyFirst5": [
+            1.27975
+          ],
+          "historyNext5": [
+            1.870334
+          ],
+          "restore": [
+            18.648542
+          ]
+        },
+        "peakRssBytes": 104792064,
+        "rssBytes": 104775680,
+        "checks": {
+          "batches": 10,
+          "documentsPerBatch": 25,
+          "revisions": 12,
+          "manifestBytes": 82198,
+          "manifestTokenEstimate": 20550,
+          "manifestHash": "c8e4e3d3b3c9f0482d12e410870d46dfa0bcdf85d7d5dfb12eb856f0c550b9a9",
+          "head": "094628670a219770a334b89a16fe91c7569ef4c479dd85beebbbc41ce5336fa4"
+        }
+      },
+      "concurrent": {
+        "simultaneousWorkerRssBytes": 231391232,
+        "coordinatorRssBytes": 85311488,
+        "barrierMemory": [
+          {
+            "rssBytes": 68599808,
+            "peakRssBytes": 68599808
+          },
+          {
+            "rssBytes": 64536576,
+            "peakRssBytes": 64536576
+          },
+          {
+            "rssBytes": 98254848,
+            "peakRssBytes": 98254848
+          }
+        ],
+        "writers": [
+          {
+            "outcome": "committed",
+            "revision": "97c5ffaa8adb2238a7de24d32c07674277c041f5ce5b12d24c1da354c7dc8d2d",
+            "elapsed": 12.386292,
+            "rssBytes": 69533696,
+            "peakRssBytes": 69533696
+          },
+          {
+            "outcome": "conflict",
+            "elapsed": 18.520084,
+            "rssBytes": 65323008,
+            "peakRssBytes": 65323008
+          }
+        ],
+        "reader": {
+          "outcome": "pinned",
+          "revision": "094628670a219770a334b89a16fe91c7569ef4c479dd85beebbbc41ce5336fa4",
+          "rssBytes": 98271232,
+          "peakRssBytes": 98271232
+        },
+        "head": "97c5ffaa8adb2238a7de24d32c07674277c041f5ce5b12d24c1da354c7dc8d2d",
+        "source": "/var/folders/l9/ttg7csmn6cdf83lzysp0v08h0000gn/T/langonrock-operations-pDnBVj/source-500"
+      },
+      "recovery": {
+        "timings": {
+          "recoveryOpenGet": [
+            3.62975
+          ],
+          "gcKeep10": [
+            73.598625
+          ]
+        },
+        "peakRssBytes": 95797248,
+        "rssBytes": 95797248,
+        "checks": {
+          "head": "97c5ffaa8adb2238a7de24d32c07674277c041f5ce5b12d24c1da354c7dc8d2d",
+          "diskBeforeGc": {
+            "logical": 14093428,
+            "allocated": 14209024
+          },
+          "gc": {
+            "removed": [
+              "snapshots/7235ea1ac15edc36b73b18ee43ceb58f8fa01787d8be268d63f7c9e86e37ae1f.tnt",
+              "snapshots/7e3a30efdff57e1d3e8db3c7f29edfee269dc21020744ca2bb956769bfd522da.tnt",
+              "snapshots/f7672daa0d2ae4fbf37a607620ec2a6793cc8be331a397cf038234038fe88e2a.tnt",
+              "sources/823d144886d6686ead2e783bad7d956791582dbfe445e08d5b2c7d6a34129f64.src",
+              "sources/4913337e217824df0edd290b3af3cf05c6da92e1f6ec25b7f5d384150e2f3803.src",
+              "sources/33dff6602f9e97de28fafe7a77bd42140ba1305149dcec1bba4b760712b221e0.src",
+              "revisions/0e24eb377dd8e0f22c078948a27a865ba5502a05fcd1295f5da4d42f2170bb27.rev",
+              "revisions/9c7476bf340106362b079815f15f4b16acaab39867f3c7327ba5df340931e0af.rev",
+              "revisions/278792730eb74a5d958fb8512fdc62c37c157ca69017f9e7c1b9b8ad15828e6c.rev",
+              "revisions/1ff84dc63387c11f49cabafca37f1d86882b56a4edf21e2e26915e85da243a31.rev"
+            ],
+            "partials": [
+              "staging/fee69146-d8cc-4635-a7c8-46deea86a979"
+            ],
+            "skipped": [],
+            "bytesFreed": 3233769,
+            "tenant": "benchmark",
+            "current": "c71068a62cda2b812efc8e4aef5e9da6c9953ce9a29ea098cad08bf4b31b3d06",
+            "currentCorrupt": false,
+            "kept": 10,
+            "corrupt": []
+          },
+          "diskAfterGc": {
+            "logical": 10860438,
+            "allocated": 10944512
+          },
+          "retainedRevisions": 10
+        }
+      },
+      "retention": {
+        "before": {
+          "before": {
+            "logical": 6053353,
+            "allocated": 6090752
+          },
+          "after": {
+            "logical": 5503373,
+            "allocated": 5537792
+          },
+          "source": {
+            "logical": 1125589,
+            "allocated": 2117632
+          },
+          "manifest": "c8e4e3d3b3c9f0482d12e410870d46dfa0bcdf85d7d5dfb12eb856f0c550b9a9",
+          "retained": 10,
+          "edits": 10
+        },
+        "after": {
+          "before": {
+            "logical": 11837993,
+            "allocated": 11923456
+          },
+          "after": {
+            "logical": 10768832,
+            "allocated": 10846208
+          },
+          "source": {
+            "logical": 1125561,
+            "allocated": 2117632
+          },
+          "manifest": "c8e4e3d3b3c9f0482d12e410870d46dfa0bcdf85d7d5dfb12eb856f0c550b9a9",
+          "retained": 10,
+          "edits": 10
+        }
+      }
+    },
+    {
+      "size": 500,
+      "repetition": 5,
+      "fixture": "daefa937a587628f4bee5f33fe0f1946a9bfc68d4b07e8aa1b5f7a2546ecad46",
+      "maintenance": {
+        "timings": {
+          "batchCreate25": [
+            35.00225
+          ],
+          "batchReplace25": [
+            14.284792,
+            16.056625,
+            13.533792,
+            13.598542,
+            12.374333,
+            12.889709,
+            14.084709,
+            13.49425,
+            13.354125
+          ],
+          "historyFirst5": [
+            0.995625
+          ],
+          "historyNext5": [
+            0.904834
+          ],
+          "restore": [
+            17.883666
+          ]
+        },
+        "peakRssBytes": 103235584,
+        "rssBytes": 103235584,
+        "checks": {
+          "batches": 10,
+          "documentsPerBatch": 25,
+          "revisions": 12,
+          "manifestBytes": 82198,
+          "manifestTokenEstimate": 20550,
+          "manifestHash": "c8e4e3d3b3c9f0482d12e410870d46dfa0bcdf85d7d5dfb12eb856f0c550b9a9",
+          "head": "094628670a219770a334b89a16fe91c7569ef4c479dd85beebbbc41ce5336fa4"
+        }
+      },
+      "concurrent": {
+        "simultaneousWorkerRssBytes": 227491840,
+        "coordinatorRssBytes": 88489984,
+        "barrierMemory": [
+          {
+            "rssBytes": 64962560,
+            "peakRssBytes": 64962560
+          },
+          {
+            "rssBytes": 66355200,
+            "peakRssBytes": 66355200
+          },
+          {
+            "rssBytes": 96174080,
+            "peakRssBytes": 96174080
+          }
+        ],
+        "writers": [
+          {
+            "outcome": "conflict",
+            "elapsed": 18.896375,
+            "rssBytes": 65716224,
+            "peakRssBytes": 65716224
+          },
+          {
+            "outcome": "committed",
+            "revision": "e83460d98d4f52fb281574b4ed0ab80be962061f2d5b33d263310cc8033bd557",
+            "elapsed": 12.217917,
+            "rssBytes": 67321856,
+            "peakRssBytes": 67321856
+          }
+        ],
+        "reader": {
+          "outcome": "pinned",
+          "revision": "094628670a219770a334b89a16fe91c7569ef4c479dd85beebbbc41ce5336fa4",
+          "rssBytes": 96223232,
+          "peakRssBytes": 96223232
+        },
+        "head": "e83460d98d4f52fb281574b4ed0ab80be962061f2d5b33d263310cc8033bd557",
+        "source": "/var/folders/l9/ttg7csmn6cdf83lzysp0v08h0000gn/T/langonrock-operations-pDnBVj/source-500"
+      },
+      "recovery": {
+        "timings": {
+          "recoveryOpenGet": [
+            3.664916
+          ],
+          "gcKeep10": [
+            74.739
+          ]
+        },
+        "peakRssBytes": 97550336,
+        "rssBytes": 97550336,
+        "checks": {
+          "head": "e83460d98d4f52fb281574b4ed0ab80be962061f2d5b33d263310cc8033bd557",
+          "diskBeforeGc": {
+            "logical": 14093437,
+            "allocated": 14209024
+          },
+          "gc": {
+            "removed": [
+              "snapshots/7235ea1ac15edc36b73b18ee43ceb58f8fa01787d8be268d63f7c9e86e37ae1f.tnt",
+              "snapshots/f7672daa0d2ae4fbf37a607620ec2a6793cc8be331a397cf038234038fe88e2a.tnt",
+              "snapshots/dc92dee8d3cc11ad91f6fefc63b9b9420c148d34825e586ca6620e59b79a0940.tnt",
+              "sources/823d144886d6686ead2e783bad7d956791582dbfe445e08d5b2c7d6a34129f64.src",
+              "sources/12b88bd2c4cdcf82237cf7b10eb3350d3820503686dc0baa6f5f7e86bf9bf288.src",
+              "sources/33dff6602f9e97de28fafe7a77bd42140ba1305149dcec1bba4b760712b221e0.src",
+              "revisions/0e24eb377dd8e0f22c078948a27a865ba5502a05fcd1295f5da4d42f2170bb27.rev",
+              "revisions/9c7476bf340106362b079815f15f4b16acaab39867f3c7327ba5df340931e0af.rev",
+              "revisions/509278fb0642bfabb320a89d31aa241f52b5caa40899c573e4724d464fb73acf.rev",
+              "revisions/1ff84dc63387c11f49cabafca37f1d86882b56a4edf21e2e26915e85da243a31.rev"
+            ],
+            "partials": [
+              "staging/f4b2e87d-06fb-444e-9a42-9184c1c8119e"
+            ],
+            "skipped": [],
+            "bytesFreed": 3233776,
+            "tenant": "benchmark",
+            "current": "92ec87f63e9c0e845ce394b26c13d744de2aafbdaca4ea352336751be25c0fc6",
+            "currentCorrupt": false,
+            "kept": 10,
+            "corrupt": []
+          },
+          "diskAfterGc": {
+            "logical": 10860440,
+            "allocated": 10944512
+          },
+          "retainedRevisions": 10
+        }
+      },
+      "retention": {
+        "after": {
+          "before": {
+            "logical": 11837993,
+            "allocated": 11923456
+          },
+          "after": {
+            "logical": 10768832,
+            "allocated": 10846208
+          },
+          "source": {
+            "logical": 1125561,
+            "allocated": 2117632
+          },
+          "manifest": "c8e4e3d3b3c9f0482d12e410870d46dfa0bcdf85d7d5dfb12eb856f0c550b9a9",
+          "retained": 10,
+          "edits": 10
+        },
+        "before": {
+          "before": {
+            "logical": 6053353,
+            "allocated": 6090752
+          },
+          "after": {
+            "logical": 5503373,
+            "allocated": 5537792
+          },
+          "source": {
+            "logical": 1125589,
+            "allocated": 2117632
+          },
+          "manifest": "c8e4e3d3b3c9f0482d12e410870d46dfa0bcdf85d7d5dfb12eb856f0c550b9a9",
+          "retained": 10,
+          "edits": 10
+        }
+      }
+    },
+    {
+      "size": 500,
+      "repetition": 6,
+      "fixture": "daefa937a587628f4bee5f33fe0f1946a9bfc68d4b07e8aa1b5f7a2546ecad46",
+      "maintenance": {
+        "timings": {
+          "batchCreate25": [
+            35.811083
+          ],
+          "batchReplace25": [
+            14.726542,
+            13.731208,
+            14.009375,
+            13.511375,
+            13.186833,
+            14.0015,
+            13.93275,
+            15.355416,
+            14.88775
+          ],
+          "historyFirst5": [
+            1.022791
+          ],
+          "historyNext5": [
+            1.038875
+          ],
+          "restore": [
+            16.47025
+          ]
+        },
+        "peakRssBytes": 103186432,
+        "rssBytes": 103186432,
+        "checks": {
+          "batches": 10,
+          "documentsPerBatch": 25,
+          "revisions": 12,
+          "manifestBytes": 82198,
+          "manifestTokenEstimate": 20550,
+          "manifestHash": "c8e4e3d3b3c9f0482d12e410870d46dfa0bcdf85d7d5dfb12eb856f0c550b9a9",
+          "head": "094628670a219770a334b89a16fe91c7569ef4c479dd85beebbbc41ce5336fa4"
+        }
+      },
+      "concurrent": {
+        "simultaneousWorkerRssBytes": 236797952,
+        "coordinatorRssBytes": 88555520,
+        "barrierMemory": [
+          {
+            "rssBytes": 66764800,
+            "peakRssBytes": 66764800
+          },
+          {
+            "rssBytes": 69140480,
+            "peakRssBytes": 69156864
+          },
+          {
+            "rssBytes": 100892672,
+            "peakRssBytes": 100892672
+          }
+        ],
+        "writers": [
+          {
+            "outcome": "committed",
+            "revision": "97c5ffaa8adb2238a7de24d32c07674277c041f5ce5b12d24c1da354c7dc8d2d",
+            "elapsed": 11.511042,
+            "rssBytes": 67731456,
+            "peakRssBytes": 67731456
+          },
+          {
+            "outcome": "conflict",
+            "elapsed": 12.67675,
+            "rssBytes": 69926912,
+            "peakRssBytes": 69926912
+          }
+        ],
+        "reader": {
+          "outcome": "pinned",
+          "revision": "094628670a219770a334b89a16fe91c7569ef4c479dd85beebbbc41ce5336fa4",
+          "rssBytes": 101154816,
+          "peakRssBytes": 101154816
+        },
+        "head": "97c5ffaa8adb2238a7de24d32c07674277c041f5ce5b12d24c1da354c7dc8d2d",
+        "source": "/var/folders/l9/ttg7csmn6cdf83lzysp0v08h0000gn/T/langonrock-operations-pDnBVj/source-500"
+      },
+      "recovery": {
+        "timings": {
+          "recoveryOpenGet": [
+            3.30025
+          ],
+          "gcKeep10": [
+            74.164125
+          ]
+        },
+        "peakRssBytes": 97681408,
+        "rssBytes": 97681408,
+        "checks": {
+          "head": "97c5ffaa8adb2238a7de24d32c07674277c041f5ce5b12d24c1da354c7dc8d2d",
+          "diskBeforeGc": {
+            "logical": 14093428,
+            "allocated": 14209024
+          },
+          "gc": {
+            "removed": [
+              "snapshots/7235ea1ac15edc36b73b18ee43ceb58f8fa01787d8be268d63f7c9e86e37ae1f.tnt",
+              "snapshots/7e3a30efdff57e1d3e8db3c7f29edfee269dc21020744ca2bb956769bfd522da.tnt",
+              "snapshots/f7672daa0d2ae4fbf37a607620ec2a6793cc8be331a397cf038234038fe88e2a.tnt",
+              "sources/823d144886d6686ead2e783bad7d956791582dbfe445e08d5b2c7d6a34129f64.src",
+              "sources/4913337e217824df0edd290b3af3cf05c6da92e1f6ec25b7f5d384150e2f3803.src",
+              "sources/33dff6602f9e97de28fafe7a77bd42140ba1305149dcec1bba4b760712b221e0.src",
+              "revisions/0e24eb377dd8e0f22c078948a27a865ba5502a05fcd1295f5da4d42f2170bb27.rev",
+              "revisions/9c7476bf340106362b079815f15f4b16acaab39867f3c7327ba5df340931e0af.rev",
+              "revisions/278792730eb74a5d958fb8512fdc62c37c157ca69017f9e7c1b9b8ad15828e6c.rev",
+              "revisions/1ff84dc63387c11f49cabafca37f1d86882b56a4edf21e2e26915e85da243a31.rev"
+            ],
+            "partials": [
+              "staging/cc3a81d8-c8d3-47ad-99c1-499172c56d5d"
+            ],
+            "skipped": [],
+            "bytesFreed": 3233769,
+            "tenant": "benchmark",
+            "current": "c71068a62cda2b812efc8e4aef5e9da6c9953ce9a29ea098cad08bf4b31b3d06",
+            "currentCorrupt": false,
+            "kept": 10,
+            "corrupt": []
+          },
+          "diskAfterGc": {
+            "logical": 10860438,
+            "allocated": 10944512
+          },
+          "retainedRevisions": 10
+        }
+      },
+      "retention": {
+        "before": {
+          "before": {
+            "logical": 6053353,
+            "allocated": 6090752
+          },
+          "after": {
+            "logical": 5503373,
+            "allocated": 5537792
+          },
+          "source": {
+            "logical": 1125589,
+            "allocated": 2117632
+          },
+          "manifest": "c8e4e3d3b3c9f0482d12e410870d46dfa0bcdf85d7d5dfb12eb856f0c550b9a9",
+          "retained": 10,
+          "edits": 10
+        },
+        "after": {
+          "before": {
+            "logical": 11837993,
+            "allocated": 11923456
+          },
+          "after": {
+            "logical": 10768832,
+            "allocated": 10846208
+          },
+          "source": {
+            "logical": 1125561,
+            "allocated": 2117632
+          },
+          "manifest": "c8e4e3d3b3c9f0482d12e410870d46dfa0bcdf85d7d5dfb12eb856f0c550b9a9",
+          "retained": 10,
+          "edits": 10
+        }
+      }
+    },
+    {
+      "size": 500,
+      "repetition": 7,
+      "fixture": "daefa937a587628f4bee5f33fe0f1946a9bfc68d4b07e8aa1b5f7a2546ecad46",
+      "maintenance": {
+        "timings": {
+          "batchCreate25": [
+            35.946916
+          ],
+          "batchReplace25": [
+            15.314208,
+            15.16725,
+            12.904208,
+            14.878417,
+            12.403333,
+            13.805083,
+            11.859291,
+            12.58675,
+            13.172791
+          ],
+          "historyFirst5": [
+            1.155625
+          ],
+          "historyNext5": [
+            1.077958
+          ],
+          "restore": [
+            16.318083
+          ]
+        },
+        "peakRssBytes": 105185280,
+        "rssBytes": 105185280,
+        "checks": {
+          "batches": 10,
+          "documentsPerBatch": 25,
+          "revisions": 12,
+          "manifestBytes": 82198,
+          "manifestTokenEstimate": 20550,
+          "manifestHash": "c8e4e3d3b3c9f0482d12e410870d46dfa0bcdf85d7d5dfb12eb856f0c550b9a9",
+          "head": "094628670a219770a334b89a16fe91c7569ef4c479dd85beebbbc41ce5336fa4"
+        }
+      },
+      "concurrent": {
+        "simultaneousWorkerRssBytes": 230359040,
+        "coordinatorRssBytes": 88604672,
+        "barrierMemory": [
+          {
+            "rssBytes": 66289664,
+            "peakRssBytes": 66289664
+          },
+          {
+            "rssBytes": 64831488,
+            "peakRssBytes": 64831488
+          },
+          {
+            "rssBytes": 99237888,
+            "peakRssBytes": 99237888
+          }
+        ],
+        "writers": [
+          {
+            "outcome": "committed",
+            "revision": "97c5ffaa8adb2238a7de24d32c07674277c041f5ce5b12d24c1da354c7dc8d2d",
+            "elapsed": 13.0255,
+            "rssBytes": 67207168,
+            "peakRssBytes": 67207168
+          },
+          {
+            "outcome": "conflict",
+            "elapsed": 18.35375,
+            "rssBytes": 65617920,
+            "peakRssBytes": 65617920
+          }
+        ],
+        "reader": {
+          "outcome": "pinned",
+          "revision": "094628670a219770a334b89a16fe91c7569ef4c479dd85beebbbc41ce5336fa4",
+          "rssBytes": 99303424,
+          "peakRssBytes": 99303424
+        },
+        "head": "97c5ffaa8adb2238a7de24d32c07674277c041f5ce5b12d24c1da354c7dc8d2d",
+        "source": "/var/folders/l9/ttg7csmn6cdf83lzysp0v08h0000gn/T/langonrock-operations-pDnBVj/source-500"
+      },
+      "recovery": {
+        "timings": {
+          "recoveryOpenGet": [
+            3.683916
+          ],
+          "gcKeep10": [
+            73.309167
+          ]
+        },
+        "peakRssBytes": 92848128,
+        "rssBytes": 92848128,
+        "checks": {
+          "head": "97c5ffaa8adb2238a7de24d32c07674277c041f5ce5b12d24c1da354c7dc8d2d",
+          "diskBeforeGc": {
+            "logical": 14093428,
+            "allocated": 14209024
+          },
+          "gc": {
+            "removed": [
+              "snapshots/7235ea1ac15edc36b73b18ee43ceb58f8fa01787d8be268d63f7c9e86e37ae1f.tnt",
+              "snapshots/7e3a30efdff57e1d3e8db3c7f29edfee269dc21020744ca2bb956769bfd522da.tnt",
+              "snapshots/f7672daa0d2ae4fbf37a607620ec2a6793cc8be331a397cf038234038fe88e2a.tnt",
+              "sources/823d144886d6686ead2e783bad7d956791582dbfe445e08d5b2c7d6a34129f64.src",
+              "sources/4913337e217824df0edd290b3af3cf05c6da92e1f6ec25b7f5d384150e2f3803.src",
+              "sources/33dff6602f9e97de28fafe7a77bd42140ba1305149dcec1bba4b760712b221e0.src",
+              "revisions/0e24eb377dd8e0f22c078948a27a865ba5502a05fcd1295f5da4d42f2170bb27.rev",
+              "revisions/9c7476bf340106362b079815f15f4b16acaab39867f3c7327ba5df340931e0af.rev",
+              "revisions/278792730eb74a5d958fb8512fdc62c37c157ca69017f9e7c1b9b8ad15828e6c.rev",
+              "revisions/1ff84dc63387c11f49cabafca37f1d86882b56a4edf21e2e26915e85da243a31.rev"
+            ],
+            "partials": [
+              "staging/6c0c0ed2-e6b4-45af-8e07-ba3088eab1ec"
+            ],
+            "skipped": [],
+            "bytesFreed": 3233769,
+            "tenant": "benchmark",
+            "current": "c71068a62cda2b812efc8e4aef5e9da6c9953ce9a29ea098cad08bf4b31b3d06",
+            "currentCorrupt": false,
+            "kept": 10,
+            "corrupt": []
+          },
+          "diskAfterGc": {
+            "logical": 10860438,
+            "allocated": 10944512
+          },
+          "retainedRevisions": 10
+        }
+      },
+      "retention": {
+        "after": {
+          "before": {
+            "logical": 11837993,
+            "allocated": 11923456
+          },
+          "after": {
+            "logical": 10768832,
+            "allocated": 10846208
+          },
+          "source": {
+            "logical": 1125561,
+            "allocated": 2117632
+          },
+          "manifest": "c8e4e3d3b3c9f0482d12e410870d46dfa0bcdf85d7d5dfb12eb856f0c550b9a9",
+          "retained": 10,
+          "edits": 10
+        },
+        "before": {
+          "before": {
+            "logical": 6053353,
+            "allocated": 6090752
+          },
+          "after": {
+            "logical": 5503373,
+            "allocated": 5537792
+          },
+          "source": {
+            "logical": 1125589,
+            "allocated": 2117632
+          },
+          "manifest": "c8e4e3d3b3c9f0482d12e410870d46dfa0bcdf85d7d5dfb12eb856f0c550b9a9",
+          "retained": 10,
+          "edits": 10
+        }
+      }
+    },
+    {
+      "size": 500,
+      "repetition": 8,
+      "fixture": "daefa937a587628f4bee5f33fe0f1946a9bfc68d4b07e8aa1b5f7a2546ecad46",
+      "maintenance": {
+        "timings": {
+          "batchCreate25": [
+            35.605333
+          ],
+          "batchReplace25": [
+            15.408917,
+            13.359834,
+            13.536834,
+            12.712958,
+            13.333041,
+            12.723958,
+            13.074791,
+            14.560458,
+            12.518708
+          ],
+          "historyFirst5": [
+            0.951291
+          ],
+          "historyNext5": [
+            0.855125
+          ],
+          "restore": [
+            15.742
+          ]
+        },
+        "peakRssBytes": 104955904,
+        "rssBytes": 104955904,
+        "checks": {
+          "batches": 10,
+          "documentsPerBatch": 25,
+          "revisions": 12,
+          "manifestBytes": 82198,
+          "manifestTokenEstimate": 20550,
+          "manifestHash": "c8e4e3d3b3c9f0482d12e410870d46dfa0bcdf85d7d5dfb12eb856f0c550b9a9",
+          "head": "094628670a219770a334b89a16fe91c7569ef4c479dd85beebbbc41ce5336fa4"
+        }
+      },
+      "concurrent": {
+        "simultaneousWorkerRssBytes": 227262464,
+        "coordinatorRssBytes": 88604672,
+        "barrierMemory": [
+          {
+            "rssBytes": 65028096,
+            "peakRssBytes": 65028096
+          },
+          {
+            "rssBytes": 64831488,
+            "peakRssBytes": 64831488
+          },
+          {
+            "rssBytes": 97402880,
+            "peakRssBytes": 97402880
+          }
+        ],
+        "writers": [
+          {
+            "outcome": "conflict",
+            "elapsed": 18.417875,
+            "rssBytes": 65781760,
+            "peakRssBytes": 65781760
+          },
+          {
+            "outcome": "committed",
+            "revision": "e83460d98d4f52fb281574b4ed0ab80be962061f2d5b33d263310cc8033bd557",
+            "elapsed": 12.91875,
+            "rssBytes": 65765376,
+            "peakRssBytes": 65765376
+          }
+        ],
+        "reader": {
+          "outcome": "pinned",
+          "revision": "094628670a219770a334b89a16fe91c7569ef4c479dd85beebbbc41ce5336fa4",
+          "rssBytes": 97452032,
+          "peakRssBytes": 97452032
+        },
+        "head": "e83460d98d4f52fb281574b4ed0ab80be962061f2d5b33d263310cc8033bd557",
+        "source": "/var/folders/l9/ttg7csmn6cdf83lzysp0v08h0000gn/T/langonrock-operations-pDnBVj/source-500"
+      },
+      "recovery": {
+        "timings": {
+          "recoveryOpenGet": [
+            3.726459
+          ],
+          "gcKeep10": [
+            71.707
+          ]
+        },
+        "peakRssBytes": 95256576,
+        "rssBytes": 95256576,
+        "checks": {
+          "head": "e83460d98d4f52fb281574b4ed0ab80be962061f2d5b33d263310cc8033bd557",
+          "diskBeforeGc": {
+            "logical": 14093437,
+            "allocated": 14209024
+          },
+          "gc": {
+            "removed": [
+              "snapshots/7235ea1ac15edc36b73b18ee43ceb58f8fa01787d8be268d63f7c9e86e37ae1f.tnt",
+              "snapshots/f7672daa0d2ae4fbf37a607620ec2a6793cc8be331a397cf038234038fe88e2a.tnt",
+              "snapshots/dc92dee8d3cc11ad91f6fefc63b9b9420c148d34825e586ca6620e59b79a0940.tnt",
+              "sources/823d144886d6686ead2e783bad7d956791582dbfe445e08d5b2c7d6a34129f64.src",
+              "sources/12b88bd2c4cdcf82237cf7b10eb3350d3820503686dc0baa6f5f7e86bf9bf288.src",
+              "sources/33dff6602f9e97de28fafe7a77bd42140ba1305149dcec1bba4b760712b221e0.src",
+              "revisions/0e24eb377dd8e0f22c078948a27a865ba5502a05fcd1295f5da4d42f2170bb27.rev",
+              "revisions/9c7476bf340106362b079815f15f4b16acaab39867f3c7327ba5df340931e0af.rev",
+              "revisions/509278fb0642bfabb320a89d31aa241f52b5caa40899c573e4724d464fb73acf.rev",
+              "revisions/1ff84dc63387c11f49cabafca37f1d86882b56a4edf21e2e26915e85da243a31.rev"
+            ],
+            "partials": [
+              "staging/a0e94ccc-aa7d-42fa-b6c0-e68a5c7c02ab"
+            ],
+            "skipped": [],
+            "bytesFreed": 3233776,
+            "tenant": "benchmark",
+            "current": "92ec87f63e9c0e845ce394b26c13d744de2aafbdaca4ea352336751be25c0fc6",
+            "currentCorrupt": false,
+            "kept": 10,
+            "corrupt": []
+          },
+          "diskAfterGc": {
+            "logical": 10860440,
+            "allocated": 10944512
+          },
+          "retainedRevisions": 10
+        }
+      },
+      "retention": {
+        "before": {
+          "before": {
+            "logical": 6053353,
+            "allocated": 6090752
+          },
+          "after": {
+            "logical": 5503373,
+            "allocated": 5537792
+          },
+          "source": {
+            "logical": 1125589,
+            "allocated": 2117632
+          },
+          "manifest": "c8e4e3d3b3c9f0482d12e410870d46dfa0bcdf85d7d5dfb12eb856f0c550b9a9",
+          "retained": 10,
+          "edits": 10
+        },
+        "after": {
+          "before": {
+            "logical": 11837993,
+            "allocated": 11923456
+          },
+          "after": {
+            "logical": 10768832,
+            "allocated": 10846208
+          },
+          "source": {
+            "logical": 1125561,
+            "allocated": 2117632
+          },
+          "manifest": "c8e4e3d3b3c9f0482d12e410870d46dfa0bcdf85d7d5dfb12eb856f0c550b9a9",
+          "retained": 10,
+          "edits": 10
+        }
+      }
+    },
+    {
+      "size": 500,
+      "repetition": 9,
+      "fixture": "daefa937a587628f4bee5f33fe0f1946a9bfc68d4b07e8aa1b5f7a2546ecad46",
+      "maintenance": {
+        "timings": {
+          "batchCreate25": [
+            35.027541
+          ],
+          "batchReplace25": [
+            15.748292,
+            13.855958,
+            13.945875,
+            14.000209,
+            13.124875,
+            13.736375,
+            13.748667,
+            13.552959,
+            13.967542
+          ],
+          "historyFirst5": [
+            1.142208
+          ],
+          "historyNext5": [
+            1.213583
+          ],
+          "restore": [
+            15.963708
+          ]
+        },
+        "peakRssBytes": 106561536,
+        "rssBytes": 106561536,
+        "checks": {
+          "batches": 10,
+          "documentsPerBatch": 25,
+          "revisions": 12,
+          "manifestBytes": 82198,
+          "manifestTokenEstimate": 20550,
+          "manifestHash": "c8e4e3d3b3c9f0482d12e410870d46dfa0bcdf85d7d5dfb12eb856f0c550b9a9",
+          "head": "094628670a219770a334b89a16fe91c7569ef4c479dd85beebbbc41ce5336fa4"
+        }
+      },
+      "concurrent": {
+        "simultaneousWorkerRssBytes": 230555648,
+        "coordinatorRssBytes": 88637440,
+        "barrierMemory": [
+          {
+            "rssBytes": 65552384,
+            "peakRssBytes": 65552384
+          },
+          {
+            "rssBytes": 66256896,
+            "peakRssBytes": 66256896
+          },
+          {
+            "rssBytes": 98746368,
+            "peakRssBytes": 98746368
+          }
+        ],
+        "writers": [
+          {
+            "outcome": "committed",
+            "revision": "97c5ffaa8adb2238a7de24d32c07674277c041f5ce5b12d24c1da354c7dc8d2d",
+            "elapsed": 11.575458,
+            "rssBytes": 66535424,
+            "peakRssBytes": 66535424
+          },
+          {
+            "outcome": "conflict",
+            "elapsed": 12.676209,
+            "rssBytes": 67010560,
+            "peakRssBytes": 67010560
+          }
+        ],
+        "reader": {
+          "outcome": "pinned",
+          "revision": "094628670a219770a334b89a16fe91c7569ef4c479dd85beebbbc41ce5336fa4",
+          "rssBytes": 99024896,
+          "peakRssBytes": 99024896
+        },
+        "head": "97c5ffaa8adb2238a7de24d32c07674277c041f5ce5b12d24c1da354c7dc8d2d",
+        "source": "/var/folders/l9/ttg7csmn6cdf83lzysp0v08h0000gn/T/langonrock-operations-pDnBVj/source-500"
+      },
+      "recovery": {
+        "timings": {
+          "recoveryOpenGet": [
+            3.362042
+          ],
+          "gcKeep10": [
+            74.140959
+          ]
+        },
+        "peakRssBytes": 95567872,
+        "rssBytes": 95551488,
+        "checks": {
+          "head": "97c5ffaa8adb2238a7de24d32c07674277c041f5ce5b12d24c1da354c7dc8d2d",
+          "diskBeforeGc": {
+            "logical": 14093428,
+            "allocated": 14209024
+          },
+          "gc": {
+            "removed": [
+              "snapshots/7235ea1ac15edc36b73b18ee43ceb58f8fa01787d8be268d63f7c9e86e37ae1f.tnt",
+              "snapshots/7e3a30efdff57e1d3e8db3c7f29edfee269dc21020744ca2bb956769bfd522da.tnt",
+              "snapshots/f7672daa0d2ae4fbf37a607620ec2a6793cc8be331a397cf038234038fe88e2a.tnt",
+              "sources/823d144886d6686ead2e783bad7d956791582dbfe445e08d5b2c7d6a34129f64.src",
+              "sources/4913337e217824df0edd290b3af3cf05c6da92e1f6ec25b7f5d384150e2f3803.src",
+              "sources/33dff6602f9e97de28fafe7a77bd42140ba1305149dcec1bba4b760712b221e0.src",
+              "revisions/0e24eb377dd8e0f22c078948a27a865ba5502a05fcd1295f5da4d42f2170bb27.rev",
+              "revisions/9c7476bf340106362b079815f15f4b16acaab39867f3c7327ba5df340931e0af.rev",
+              "revisions/278792730eb74a5d958fb8512fdc62c37c157ca69017f9e7c1b9b8ad15828e6c.rev",
+              "revisions/1ff84dc63387c11f49cabafca37f1d86882b56a4edf21e2e26915e85da243a31.rev"
+            ],
+            "partials": [
+              "staging/7922b5db-8dea-4a48-91f8-3c3a060aee21"
+            ],
+            "skipped": [],
+            "bytesFreed": 3233769,
+            "tenant": "benchmark",
+            "current": "c71068a62cda2b812efc8e4aef5e9da6c9953ce9a29ea098cad08bf4b31b3d06",
+            "currentCorrupt": false,
+            "kept": 10,
+            "corrupt": []
+          },
+          "diskAfterGc": {
+            "logical": 10860438,
+            "allocated": 10944512
+          },
+          "retainedRevisions": 10
+        }
+      },
+      "retention": {
+        "after": {
+          "before": {
+            "logical": 11837993,
+            "allocated": 11923456
+          },
+          "after": {
+            "logical": 10768832,
+            "allocated": 10846208
+          },
+          "source": {
+            "logical": 1125561,
+            "allocated": 2117632
+          },
+          "manifest": "c8e4e3d3b3c9f0482d12e410870d46dfa0bcdf85d7d5dfb12eb856f0c550b9a9",
+          "retained": 10,
+          "edits": 10
+        },
+        "before": {
+          "before": {
+            "logical": 6053353,
+            "allocated": 6090752
+          },
+          "after": {
+            "logical": 5503373,
+            "allocated": 5537792
+          },
+          "source": {
+            "logical": 1125589,
+            "allocated": 2117632
+          },
+          "manifest": "c8e4e3d3b3c9f0482d12e410870d46dfa0bcdf85d7d5dfb12eb856f0c550b9a9",
+          "retained": 10,
+          "edits": 10
+        }
+      }
+    },
+    {
+      "size": 5000,
+      "repetition": 0,
+      "fixture": "36ef0a1b732b3e5ced3f1af6425aaf836ff2c03ff8ec7435297142f9a0a64028",
+      "maintenance": {
+        "timings": {
+          "batchCreate25": [
+            94.938167
+          ],
+          "batchReplace25": [
+            45.067791,
+            41.4205,
+            41.476583,
+            41.066792,
+            37.273708,
+            39.845333,
+            39.425208,
+            39.171208,
+            38.272083
+          ],
+          "historyFirst5": [
+            1.026542
+          ],
+          "historyNext5": [
+            0.810416
+          ],
+          "restore": [
+            72.979208
+          ]
+        },
+        "peakRssBytes": 313769984,
+        "rssBytes": 313769984,
+        "checks": {
+          "batches": 10,
+          "documentsPerBatch": 25,
+          "revisions": 12,
+          "manifestBytes": 823408,
+          "manifestTokenEstimate": 205852,
+          "manifestHash": "626845bc59ceaf115c3c56d2f269001ab4f2d51fbb9719465cb650d9888af311",
+          "head": "44c73551841c8bfa8979ba373e1442c21d47a2c297a7b37f284bfad668753144"
+        }
+      },
+      "concurrent": {
+        "simultaneousWorkerRssBytes": 436879360,
+        "coordinatorRssBytes": 106627072,
+        "barrierMemory": [
+          {
+            "rssBytes": 146505728,
+            "peakRssBytes": 146505728
+          },
+          {
+            "rssBytes": 142704640,
+            "peakRssBytes": 142704640
+          },
+          {
+            "rssBytes": 147668992,
+            "peakRssBytes": 147668992
+          }
+        ],
+        "writers": [
+          {
+            "outcome": "conflict",
+            "elapsed": 18.789375,
+            "rssBytes": 147095552,
+            "peakRssBytes": 147095552
+          },
+          {
+            "outcome": "committed",
+            "revision": "a50b33d764a9bd8a7c9e4908558b85c960cedda3af094d8d7fcefe1c92308952",
+            "elapsed": 14.62325,
+            "rssBytes": 143360000,
+            "peakRssBytes": 143360000
+          }
+        ],
+        "reader": {
+          "outcome": "pinned",
+          "revision": "44c73551841c8bfa8979ba373e1442c21d47a2c297a7b37f284bfad668753144",
+          "rssBytes": 148062208,
+          "peakRssBytes": 148062208
+        },
+        "head": "a50b33d764a9bd8a7c9e4908558b85c960cedda3af094d8d7fcefe1c92308952",
+        "source": "/var/folders/l9/ttg7csmn6cdf83lzysp0v08h0000gn/T/langonrock-operations-pDnBVj/source-5000"
+      },
+      "recovery": {
+        "timings": {
+          "recoveryOpenGet": [
+            10.706833
+          ],
+          "gcKeep10": [
+            551.376208
+          ]
+        },
+        "peakRssBytes": 194609152,
+        "rssBytes": 194609152,
+        "checks": {
+          "head": "a50b33d764a9bd8a7c9e4908558b85c960cedda3af094d8d7fcefe1c92308952",
+          "diskBeforeGc": {
+            "logical": 140020736,
+            "allocated": 140120064
+          },
+          "gc": {
+            "removed": [
+              "snapshots/1745530a2e4496d793f7c5a7af6900dc896c8b403851588c583e61f42275fa94.tnt",
+              "snapshots/4e9723a7bd7fd2be5001f559921b189f4d93f9cbe6fc286f25cd41a5ea709bcd.tnt",
+              "snapshots/88c225df1ee28f141516eda2df08cf0cb886a0947fbd10b17a11c35141c1a573.tnt",
+              "sources/cdcb0b4a584b26603257b48716067f81bf6085d413e82f500bb00a25e02054d4.src",
+              "sources/96887bfb5ecc5a36a8fe630bf9d11f18f3b293d074d9a2d63ab51efbf0939bf5.src",
+              "sources/813413e4d1505056e1f67236fd29068c0e3c3bbc40258f88a8b3ea3f71e2ac1f.src",
+              "revisions/e0a65e8ba960b86035d5f76f107c698479eecef0356df0902a2c36b7c871a035.rev",
+              "revisions/95f24823f69e09bab9ea495a4c28ca989ef9ee1f218ad35d08731463d96eb6a1.rev",
+              "revisions/d6f2493ab386b8bb1105d8d361186e9ad3112ad9f5788f5add3c1bc441a0198e.rev",
+              "revisions/951a9cdcba2b8cc481070b34cf9a1a5515a1ba93bbb5fb0b29226927070c8424.rev"
+            ],
+            "partials": [
+              "staging/50006c69-4ef9-4104-af18-508322379b28"
+            ],
+            "skipped": [],
+            "bytesFreed": 32154195,
+            "tenant": "benchmark",
+            "current": "ca04ebbd04b9ecef274faf148d8b30537f72a4b6bc55f4a30c148faf2e4fd52b",
+            "currentCorrupt": false,
+            "kept": 10,
+            "corrupt": []
+          },
+          "diskAfterGc": {
+            "logical": 107867320,
+            "allocated": 107937792
+          },
+          "retainedRevisions": 10
+        }
+      },
+      "retention": {
+        "before": {
+          "before": {
+            "logical": 60694945,
+            "allocated": 60743680
+          },
+          "after": {
+            "logical": 55177639,
+            "allocated": 55226368
+          },
+          "source": {
+            "logical": 11255568,
+            "allocated": 21176320
+          },
+          "manifest": "626845bc59ceaf115c3c56d2f269001ab4f2d51fbb9719465cb650d9888af311",
+          "retained": 10,
+          "edits": 10
+        },
+        "after": {
+          "before": {
+            "logical": 118485623,
+            "allocated": 118591488
+          },
+          "after": {
+            "logical": 107776303,
+            "allocated": 107872256
+          },
+          "source": {
+            "logical": 11255540,
+            "allocated": 21176320
+          },
+          "manifest": "626845bc59ceaf115c3c56d2f269001ab4f2d51fbb9719465cb650d9888af311",
+          "retained": 10,
+          "edits": 10
+        }
+      }
+    },
+    {
+      "size": 5000,
+      "repetition": 1,
+      "fixture": "36ef0a1b732b3e5ced3f1af6425aaf836ff2c03ff8ec7435297142f9a0a64028",
+      "maintenance": {
+        "timings": {
+          "batchCreate25": [
+            92.390042
+          ],
+          "batchReplace25": [
+            45.26,
+            40.816875,
+            38.679625,
+            43.182209,
+            41.915167,
+            39.578667,
+            40.8185,
+            38.947791,
+            41.49575
+          ],
+          "historyFirst5": [
+            1.556709
+          ],
+          "historyNext5": [
+            1.0645
+          ],
+          "restore": [
+            70.876167
+          ]
+        },
+        "peakRssBytes": 276348928,
+        "rssBytes": 276348928,
+        "checks": {
+          "batches": 10,
+          "documentsPerBatch": 25,
+          "revisions": 12,
+          "manifestBytes": 823408,
+          "manifestTokenEstimate": 205852,
+          "manifestHash": "626845bc59ceaf115c3c56d2f269001ab4f2d51fbb9719465cb650d9888af311",
+          "head": "44c73551841c8bfa8979ba373e1442c21d47a2c297a7b37f284bfad668753144"
+        }
+      },
+      "concurrent": {
+        "simultaneousWorkerRssBytes": 443727872,
+        "coordinatorRssBytes": 107708416,
+        "barrierMemory": [
+          {
+            "rssBytes": 148127744,
+            "peakRssBytes": 148127744
+          },
+          {
+            "rssBytes": 145702912,
+            "peakRssBytes": 145702912
+          },
+          {
+            "rssBytes": 149897216,
+            "peakRssBytes": 149897216
+          }
+        ],
+        "writers": [
+          {
+            "outcome": "committed",
+            "revision": "378b562f49a606dd8f8581566466cdc0e04784213b192e19009e6fcc7236918a",
+            "elapsed": 12.934166,
+            "rssBytes": 148832256,
+            "peakRssBytes": 148832256
+          },
+          {
+            "outcome": "conflict",
+            "elapsed": 19.063583,
+            "rssBytes": 146292736,
+            "peakRssBytes": 146292736
+          }
+        ],
+        "reader": {
+          "outcome": "pinned",
+          "revision": "44c73551841c8bfa8979ba373e1442c21d47a2c297a7b37f284bfad668753144",
+          "rssBytes": 150257664,
+          "peakRssBytes": 150257664
+        },
+        "head": "378b562f49a606dd8f8581566466cdc0e04784213b192e19009e6fcc7236918a",
+        "source": "/var/folders/l9/ttg7csmn6cdf83lzysp0v08h0000gn/T/langonrock-operations-pDnBVj/source-5000"
+      },
+      "recovery": {
+        "timings": {
+          "recoveryOpenGet": [
+            9.403709
+          ],
+          "gcKeep10": [
+            547.494208
+          ]
+        },
+        "peakRssBytes": 205389824,
+        "rssBytes": 205389824,
+        "checks": {
+          "head": "378b562f49a606dd8f8581566466cdc0e04784213b192e19009e6fcc7236918a",
+          "diskBeforeGc": {
+            "logical": 140020739,
+            "allocated": 140120064
+          },
+          "gc": {
+            "removed": [
+              "snapshots/282b67d4ef08c5434f1628dcda7610d7554eaf09f34bc65ecbe33d4d5ba0f18a.tnt",
+              "snapshots/1745530a2e4496d793f7c5a7af6900dc896c8b403851588c583e61f42275fa94.tnt",
+              "snapshots/4e9723a7bd7fd2be5001f559921b189f4d93f9cbe6fc286f25cd41a5ea709bcd.tnt",
+              "sources/cdcb0b4a584b26603257b48716067f81bf6085d413e82f500bb00a25e02054d4.src",
+              "sources/96887bfb5ecc5a36a8fe630bf9d11f18f3b293d074d9a2d63ab51efbf0939bf5.src",
+              "sources/3ca0227f95c656bf750404d964b3c7e13232899f21b8e5964a74f690b7a82116.src",
+              "revisions/e0a65e8ba960b86035d5f76f107c698479eecef0356df0902a2c36b7c871a035.rev",
+              "revisions/604e1ecbc33356906b829988c61fc7eeb1754db0c4242d9632dc54421a9f3462.rev",
+              "revisions/95f24823f69e09bab9ea495a4c28ca989ef9ee1f218ad35d08731463d96eb6a1.rev",
+              "revisions/951a9cdcba2b8cc481070b34cf9a1a5515a1ba93bbb5fb0b29226927070c8424.rev"
+            ],
+            "partials": [
+              "staging/3cc68b5d-6bb4-4227-a551-6bb35b9102d2"
+            ],
+            "skipped": [],
+            "bytesFreed": 32154195,
+            "tenant": "benchmark",
+            "current": "10cd870bb0ad9043cb2a18241ce66edabccef59de12634a7415cb8f37ea6fb12",
+            "currentCorrupt": false,
+            "kept": 10,
+            "corrupt": []
+          },
+          "diskAfterGc": {
+            "logical": 107867323,
+            "allocated": 107937792
+          },
+          "retainedRevisions": 10
+        }
+      },
+      "retention": {
+        "after": {
+          "before": {
+            "logical": 118485623,
+            "allocated": 118591488
+          },
+          "after": {
+            "logical": 107776303,
+            "allocated": 107872256
+          },
+          "source": {
+            "logical": 11255540,
+            "allocated": 21176320
+          },
+          "manifest": "626845bc59ceaf115c3c56d2f269001ab4f2d51fbb9719465cb650d9888af311",
+          "retained": 10,
+          "edits": 10
+        },
+        "before": {
+          "before": {
+            "logical": 60694945,
+            "allocated": 60743680
+          },
+          "after": {
+            "logical": 55177639,
+            "allocated": 55226368
+          },
+          "source": {
+            "logical": 11255568,
+            "allocated": 21176320
+          },
+          "manifest": "626845bc59ceaf115c3c56d2f269001ab4f2d51fbb9719465cb650d9888af311",
+          "retained": 10,
+          "edits": 10
+        }
+      }
+    },
+    {
+      "size": 5000,
+      "repetition": 2,
+      "fixture": "36ef0a1b732b3e5ced3f1af6425aaf836ff2c03ff8ec7435297142f9a0a64028",
+      "maintenance": {
+        "timings": {
+          "batchCreate25": [
+            93.013375
+          ],
+          "batchReplace25": [
+            42.9275,
+            41.393625,
+            39.591208,
+            42.607791,
+            39.961584,
+            41.814,
+            40.788875,
+            36.159792,
+            38.706917
+          ],
+          "historyFirst5": [
+            1.265875
+          ],
+          "historyNext5": [
+            1.542834
+          ],
+          "restore": [
+            72.851125
+          ]
+        },
+        "peakRssBytes": 297533440,
+        "rssBytes": 297533440,
+        "checks": {
+          "batches": 10,
+          "documentsPerBatch": 25,
+          "revisions": 12,
+          "manifestBytes": 823408,
+          "manifestTokenEstimate": 205852,
+          "manifestHash": "626845bc59ceaf115c3c56d2f269001ab4f2d51fbb9719465cb650d9888af311",
+          "head": "44c73551841c8bfa8979ba373e1442c21d47a2c297a7b37f284bfad668753144"
+        }
+      },
+      "concurrent": {
+        "simultaneousWorkerRssBytes": 444792832,
+        "coordinatorRssBytes": 107626496,
+        "barrierMemory": [
+          {
+            "rssBytes": 147341312,
+            "peakRssBytes": 147341312
+          },
+          {
+            "rssBytes": 150142976,
+            "peakRssBytes": 150142976
+          },
+          {
+            "rssBytes": 147308544,
+            "peakRssBytes": 147308544
+          }
+        ],
+        "writers": [
+          {
+            "outcome": "conflict",
+            "elapsed": 18.747666,
+            "rssBytes": 147980288,
+            "peakRssBytes": 147980288
+          },
+          {
+            "outcome": "committed",
+            "revision": "a50b33d764a9bd8a7c9e4908558b85c960cedda3af094d8d7fcefe1c92308952",
+            "elapsed": 16.407291,
+            "rssBytes": 150814720,
+            "peakRssBytes": 150814720
+          }
+        ],
+        "reader": {
+          "outcome": "pinned",
+          "revision": "44c73551841c8bfa8979ba373e1442c21d47a2c297a7b37f284bfad668753144",
+          "rssBytes": 148029440,
+          "peakRssBytes": 148029440
+        },
+        "head": "a50b33d764a9bd8a7c9e4908558b85c960cedda3af094d8d7fcefe1c92308952",
+        "source": "/var/folders/l9/ttg7csmn6cdf83lzysp0v08h0000gn/T/langonrock-operations-pDnBVj/source-5000"
+      },
+      "recovery": {
+        "timings": {
+          "recoveryOpenGet": [
+            9.852708
+          ],
+          "gcKeep10": [
+            528.217583
+          ]
+        },
+        "peakRssBytes": 206831616,
+        "rssBytes": 206831616,
+        "checks": {
+          "head": "a50b33d764a9bd8a7c9e4908558b85c960cedda3af094d8d7fcefe1c92308952",
+          "diskBeforeGc": {
+            "logical": 140020736,
+            "allocated": 140120064
+          },
+          "gc": {
+            "removed": [
+              "snapshots/1745530a2e4496d793f7c5a7af6900dc896c8b403851588c583e61f42275fa94.tnt",
+              "snapshots/4e9723a7bd7fd2be5001f559921b189f4d93f9cbe6fc286f25cd41a5ea709bcd.tnt",
+              "snapshots/88c225df1ee28f141516eda2df08cf0cb886a0947fbd10b17a11c35141c1a573.tnt",
+              "sources/cdcb0b4a584b26603257b48716067f81bf6085d413e82f500bb00a25e02054d4.src",
+              "sources/96887bfb5ecc5a36a8fe630bf9d11f18f3b293d074d9a2d63ab51efbf0939bf5.src",
+              "sources/813413e4d1505056e1f67236fd29068c0e3c3bbc40258f88a8b3ea3f71e2ac1f.src",
+              "revisions/e0a65e8ba960b86035d5f76f107c698479eecef0356df0902a2c36b7c871a035.rev",
+              "revisions/95f24823f69e09bab9ea495a4c28ca989ef9ee1f218ad35d08731463d96eb6a1.rev",
+              "revisions/d6f2493ab386b8bb1105d8d361186e9ad3112ad9f5788f5add3c1bc441a0198e.rev",
+              "revisions/951a9cdcba2b8cc481070b34cf9a1a5515a1ba93bbb5fb0b29226927070c8424.rev"
+            ],
+            "partials": [
+              "staging/1fcc64b2-2009-437e-9db3-35b10feca86b"
+            ],
+            "skipped": [],
+            "bytesFreed": 32154195,
+            "tenant": "benchmark",
+            "current": "ca04ebbd04b9ecef274faf148d8b30537f72a4b6bc55f4a30c148faf2e4fd52b",
+            "currentCorrupt": false,
+            "kept": 10,
+            "corrupt": []
+          },
+          "diskAfterGc": {
+            "logical": 107867320,
+            "allocated": 107937792
+          },
+          "retainedRevisions": 10
+        }
+      },
+      "retention": {
+        "before": {
+          "before": {
+            "logical": 60694945,
+            "allocated": 60743680
+          },
+          "after": {
+            "logical": 55177639,
+            "allocated": 55226368
+          },
+          "source": {
+            "logical": 11255568,
+            "allocated": 21176320
+          },
+          "manifest": "626845bc59ceaf115c3c56d2f269001ab4f2d51fbb9719465cb650d9888af311",
+          "retained": 10,
+          "edits": 10
+        },
+        "after": {
+          "before": {
+            "logical": 118485623,
+            "allocated": 118591488
+          },
+          "after": {
+            "logical": 107776303,
+            "allocated": 107872256
+          },
+          "source": {
+            "logical": 11255540,
+            "allocated": 21176320
+          },
+          "manifest": "626845bc59ceaf115c3c56d2f269001ab4f2d51fbb9719465cb650d9888af311",
+          "retained": 10,
+          "edits": 10
+        }
+      }
+    },
+    {
+      "size": 5000,
+      "repetition": 3,
+      "fixture": "36ef0a1b732b3e5ced3f1af6425aaf836ff2c03ff8ec7435297142f9a0a64028",
+      "maintenance": {
+        "timings": {
+          "batchCreate25": [
+            93.752708
+          ],
+          "batchReplace25": [
+            52.019333,
+            38.509333,
+            39.016958,
+            43.162583,
+            38.691541,
+            36.663875,
+            40.879041,
+            39.047208,
+            39.098292
+          ],
+          "historyFirst5": [
+            1.380708
+          ],
+          "historyNext5": [
+            1.606
+          ],
+          "restore": [
+            70.946709
+          ]
+        },
+        "peakRssBytes": 288915456,
+        "rssBytes": 288915456,
+        "checks": {
+          "batches": 10,
+          "documentsPerBatch": 25,
+          "revisions": 12,
+          "manifestBytes": 823408,
+          "manifestTokenEstimate": 205852,
+          "manifestHash": "626845bc59ceaf115c3c56d2f269001ab4f2d51fbb9719465cb650d9888af311",
+          "head": "44c73551841c8bfa8979ba373e1442c21d47a2c297a7b37f284bfad668753144"
+        }
+      },
+      "concurrent": {
+        "simultaneousWorkerRssBytes": 436469760,
+        "coordinatorRssBytes": 107528192,
+        "barrierMemory": [
+          {
+            "rssBytes": 148930560,
+            "peakRssBytes": 148930560
+          },
+          {
+            "rssBytes": 140279808,
+            "peakRssBytes": 140279808
+          },
+          {
+            "rssBytes": 147259392,
+            "peakRssBytes": 147259392
+          }
+        ],
+        "writers": [
+          {
+            "outcome": "committed",
+            "revision": "378b562f49a606dd8f8581566466cdc0e04784213b192e19009e6fcc7236918a",
+            "elapsed": 15.021625,
+            "rssBytes": 149618688,
+            "peakRssBytes": 149618688
+          },
+          {
+            "outcome": "conflict",
+            "elapsed": 18.337375,
+            "rssBytes": 140886016,
+            "peakRssBytes": 140886016
+          }
+        ],
+        "reader": {
+          "outcome": "pinned",
+          "revision": "44c73551841c8bfa8979ba373e1442c21d47a2c297a7b37f284bfad668753144",
+          "rssBytes": 147898368,
+          "peakRssBytes": 147898368
+        },
+        "head": "378b562f49a606dd8f8581566466cdc0e04784213b192e19009e6fcc7236918a",
+        "source": "/var/folders/l9/ttg7csmn6cdf83lzysp0v08h0000gn/T/langonrock-operations-pDnBVj/source-5000"
+      },
+      "recovery": {
+        "timings": {
+          "recoveryOpenGet": [
+            9.243125
+          ],
+          "gcKeep10": [
+            531.324167
+          ]
+        },
+        "peakRssBytes": 191954944,
+        "rssBytes": 191954944,
+        "checks": {
+          "head": "378b562f49a606dd8f8581566466cdc0e04784213b192e19009e6fcc7236918a",
+          "diskBeforeGc": {
+            "logical": 140020739,
+            "allocated": 140120064
+          },
+          "gc": {
+            "removed": [
+              "snapshots/282b67d4ef08c5434f1628dcda7610d7554eaf09f34bc65ecbe33d4d5ba0f18a.tnt",
+              "snapshots/1745530a2e4496d793f7c5a7af6900dc896c8b403851588c583e61f42275fa94.tnt",
+              "snapshots/4e9723a7bd7fd2be5001f559921b189f4d93f9cbe6fc286f25cd41a5ea709bcd.tnt",
+              "sources/cdcb0b4a584b26603257b48716067f81bf6085d413e82f500bb00a25e02054d4.src",
+              "sources/96887bfb5ecc5a36a8fe630bf9d11f18f3b293d074d9a2d63ab51efbf0939bf5.src",
+              "sources/3ca0227f95c656bf750404d964b3c7e13232899f21b8e5964a74f690b7a82116.src",
+              "revisions/e0a65e8ba960b86035d5f76f107c698479eecef0356df0902a2c36b7c871a035.rev",
+              "revisions/604e1ecbc33356906b829988c61fc7eeb1754db0c4242d9632dc54421a9f3462.rev",
+              "revisions/95f24823f69e09bab9ea495a4c28ca989ef9ee1f218ad35d08731463d96eb6a1.rev",
+              "revisions/951a9cdcba2b8cc481070b34cf9a1a5515a1ba93bbb5fb0b29226927070c8424.rev"
+            ],
+            "partials": [
+              "staging/040ea78a-f660-4bc5-a211-938ebcc42ccd"
+            ],
+            "skipped": [],
+            "bytesFreed": 32154195,
+            "tenant": "benchmark",
+            "current": "10cd870bb0ad9043cb2a18241ce66edabccef59de12634a7415cb8f37ea6fb12",
+            "currentCorrupt": false,
+            "kept": 10,
+            "corrupt": []
+          },
+          "diskAfterGc": {
+            "logical": 107867323,
+            "allocated": 107937792
+          },
+          "retainedRevisions": 10
+        }
+      },
+      "retention": {
+        "after": {
+          "before": {
+            "logical": 118485623,
+            "allocated": 118591488
+          },
+          "after": {
+            "logical": 107776303,
+            "allocated": 107872256
+          },
+          "source": {
+            "logical": 11255540,
+            "allocated": 21176320
+          },
+          "manifest": "626845bc59ceaf115c3c56d2f269001ab4f2d51fbb9719465cb650d9888af311",
+          "retained": 10,
+          "edits": 10
+        },
+        "before": {
+          "before": {
+            "logical": 60694945,
+            "allocated": 60743680
+          },
+          "after": {
+            "logical": 55177639,
+            "allocated": 55226368
+          },
+          "source": {
+            "logical": 11255568,
+            "allocated": 21176320
+          },
+          "manifest": "626845bc59ceaf115c3c56d2f269001ab4f2d51fbb9719465cb650d9888af311",
+          "retained": 10,
+          "edits": 10
+        }
+      }
+    },
+    {
+      "size": 5000,
+      "repetition": 4,
+      "fixture": "36ef0a1b732b3e5ced3f1af6425aaf836ff2c03ff8ec7435297142f9a0a64028",
+      "maintenance": {
+        "timings": {
+          "batchCreate25": [
+            92.316708
+          ],
+          "batchReplace25": [
+            45.161083,
+            40.744917,
+            39.852667,
+            39.651416,
+            38.930916,
+            38.304375,
+            39.681708,
+            38.990542,
+            38.968541
+          ],
+          "historyFirst5": [
+            1.213542
+          ],
+          "historyNext5": [
+            1.720833
+          ],
+          "restore": [
+            70.598916
+          ]
+        },
+        "peakRssBytes": 290455552,
+        "rssBytes": 290455552,
+        "checks": {
+          "batches": 10,
+          "documentsPerBatch": 25,
+          "revisions": 12,
+          "manifestBytes": 823408,
+          "manifestTokenEstimate": 205852,
+          "manifestHash": "626845bc59ceaf115c3c56d2f269001ab4f2d51fbb9719465cb650d9888af311",
+          "head": "44c73551841c8bfa8979ba373e1442c21d47a2c297a7b37f284bfad668753144"
+        }
+      },
+      "concurrent": {
+        "simultaneousWorkerRssBytes": 438075392,
+        "coordinatorRssBytes": 107577344,
+        "barrierMemory": [
+          {
+            "rssBytes": 144375808,
+            "peakRssBytes": 144375808
+          },
+          {
+            "rssBytes": 142884864,
+            "peakRssBytes": 142884864
+          },
+          {
+            "rssBytes": 150814720,
+            "peakRssBytes": 150814720
+          }
+        ],
+        "writers": [
+          {
+            "outcome": "committed",
+            "revision": "378b562f49a606dd8f8581566466cdc0e04784213b192e19009e6fcc7236918a",
+            "elapsed": 14.874375,
+            "rssBytes": 145047552,
+            "peakRssBytes": 145047552
+          },
+          {
+            "outcome": "conflict",
+            "elapsed": 18.469584,
+            "rssBytes": 143474688,
+            "peakRssBytes": 143474688
+          }
+        ],
+        "reader": {
+          "outcome": "pinned",
+          "revision": "44c73551841c8bfa8979ba373e1442c21d47a2c297a7b37f284bfad668753144",
+          "rssBytes": 151175168,
+          "peakRssBytes": 151175168
+        },
+        "head": "378b562f49a606dd8f8581566466cdc0e04784213b192e19009e6fcc7236918a",
+        "source": "/var/folders/l9/ttg7csmn6cdf83lzysp0v08h0000gn/T/langonrock-operations-pDnBVj/source-5000"
+      },
+      "recovery": {
+        "timings": {
+          "recoveryOpenGet": [
+            9.819875
+          ],
+          "gcKeep10": [
+            531.481667
+          ]
+        },
+        "peakRssBytes": 209125376,
+        "rssBytes": 209125376,
+        "checks": {
+          "head": "378b562f49a606dd8f8581566466cdc0e04784213b192e19009e6fcc7236918a",
+          "diskBeforeGc": {
+            "logical": 140020739,
+            "allocated": 140120064
+          },
+          "gc": {
+            "removed": [
+              "snapshots/282b67d4ef08c5434f1628dcda7610d7554eaf09f34bc65ecbe33d4d5ba0f18a.tnt",
+              "snapshots/1745530a2e4496d793f7c5a7af6900dc896c8b403851588c583e61f42275fa94.tnt",
+              "snapshots/4e9723a7bd7fd2be5001f559921b189f4d93f9cbe6fc286f25cd41a5ea709bcd.tnt",
+              "sources/cdcb0b4a584b26603257b48716067f81bf6085d413e82f500bb00a25e02054d4.src",
+              "sources/96887bfb5ecc5a36a8fe630bf9d11f18f3b293d074d9a2d63ab51efbf0939bf5.src",
+              "sources/3ca0227f95c656bf750404d964b3c7e13232899f21b8e5964a74f690b7a82116.src",
+              "revisions/e0a65e8ba960b86035d5f76f107c698479eecef0356df0902a2c36b7c871a035.rev",
+              "revisions/604e1ecbc33356906b829988c61fc7eeb1754db0c4242d9632dc54421a9f3462.rev",
+              "revisions/95f24823f69e09bab9ea495a4c28ca989ef9ee1f218ad35d08731463d96eb6a1.rev",
+              "revisions/951a9cdcba2b8cc481070b34cf9a1a5515a1ba93bbb5fb0b29226927070c8424.rev"
+            ],
+            "partials": [
+              "staging/529db824-5d3c-4471-bee6-54e9cf1040a0"
+            ],
+            "skipped": [],
+            "bytesFreed": 32154195,
+            "tenant": "benchmark",
+            "current": "10cd870bb0ad9043cb2a18241ce66edabccef59de12634a7415cb8f37ea6fb12",
+            "currentCorrupt": false,
+            "kept": 10,
+            "corrupt": []
+          },
+          "diskAfterGc": {
+            "logical": 107867323,
+            "allocated": 107937792
+          },
+          "retainedRevisions": 10
+        }
+      },
+      "retention": {
+        "before": {
+          "before": {
+            "logical": 60694945,
+            "allocated": 60743680
+          },
+          "after": {
+            "logical": 55177639,
+            "allocated": 55226368
+          },
+          "source": {
+            "logical": 11255568,
+            "allocated": 21176320
+          },
+          "manifest": "626845bc59ceaf115c3c56d2f269001ab4f2d51fbb9719465cb650d9888af311",
+          "retained": 10,
+          "edits": 10
+        },
+        "after": {
+          "before": {
+            "logical": 118485623,
+            "allocated": 118591488
+          },
+          "after": {
+            "logical": 107776303,
+            "allocated": 107872256
+          },
+          "source": {
+            "logical": 11255540,
+            "allocated": 21176320
+          },
+          "manifest": "626845bc59ceaf115c3c56d2f269001ab4f2d51fbb9719465cb650d9888af311",
+          "retained": 10,
+          "edits": 10
+        }
+      }
+    },
+    {
+      "size": 5000,
+      "repetition": 5,
+      "fixture": "36ef0a1b732b3e5ced3f1af6425aaf836ff2c03ff8ec7435297142f9a0a64028",
+      "maintenance": {
+        "timings": {
+          "batchCreate25": [
+            98.12925
+          ],
+          "batchReplace25": [
+            45.311417,
+            39.473459,
+            37.503417,
+            41.583709,
+            39.547125,
+            43.558792,
+            37.76375,
+            38.523792,
+            39.48175
+          ],
+          "historyFirst5": [
+            1.182334
+          ],
+          "historyNext5": [
+            1.361208
+          ],
+          "restore": [
+            76.837875
+          ]
+        },
+        "peakRssBytes": 274055168,
+        "rssBytes": 274055168,
+        "checks": {
+          "batches": 10,
+          "documentsPerBatch": 25,
+          "revisions": 12,
+          "manifestBytes": 823408,
+          "manifestTokenEstimate": 205852,
+          "manifestHash": "626845bc59ceaf115c3c56d2f269001ab4f2d51fbb9719465cb650d9888af311",
+          "head": "44c73551841c8bfa8979ba373e1442c21d47a2c297a7b37f284bfad668753144"
+        }
+      },
+      "concurrent": {
+        "simultaneousWorkerRssBytes": 434290688,
+        "coordinatorRssBytes": 107577344,
+        "barrierMemory": [
+          {
+            "rssBytes": 142491648,
+            "peakRssBytes": 142491648
+          },
+          {
+            "rssBytes": 145686528,
+            "peakRssBytes": 145686528
+          },
+          {
+            "rssBytes": 146112512,
+            "peakRssBytes": 146112512
+          }
+        ],
+        "writers": [
+          {
+            "outcome": "committed",
+            "revision": "378b562f49a606dd8f8581566466cdc0e04784213b192e19009e6fcc7236918a",
+            "elapsed": 13.742125,
+            "rssBytes": 143228928,
+            "peakRssBytes": 143228928
+          },
+          {
+            "outcome": "conflict",
+            "elapsed": 18.731333,
+            "rssBytes": 146309120,
+            "peakRssBytes": 146309120
+          }
+        ],
+        "reader": {
+          "outcome": "pinned",
+          "revision": "44c73551841c8bfa8979ba373e1442c21d47a2c297a7b37f284bfad668753144",
+          "rssBytes": 146685952,
+          "peakRssBytes": 146685952
+        },
+        "head": "378b562f49a606dd8f8581566466cdc0e04784213b192e19009e6fcc7236918a",
+        "source": "/var/folders/l9/ttg7csmn6cdf83lzysp0v08h0000gn/T/langonrock-operations-pDnBVj/source-5000"
+      },
+      "recovery": {
+        "timings": {
+          "recoveryOpenGet": [
+            9.742792
+          ],
+          "gcKeep10": [
+            531.162667
+          ]
+        },
+        "peakRssBytes": 211222528,
+        "rssBytes": 211222528,
+        "checks": {
+          "head": "378b562f49a606dd8f8581566466cdc0e04784213b192e19009e6fcc7236918a",
+          "diskBeforeGc": {
+            "logical": 140020739,
+            "allocated": 140120064
+          },
+          "gc": {
+            "removed": [
+              "snapshots/282b67d4ef08c5434f1628dcda7610d7554eaf09f34bc65ecbe33d4d5ba0f18a.tnt",
+              "snapshots/1745530a2e4496d793f7c5a7af6900dc896c8b403851588c583e61f42275fa94.tnt",
+              "snapshots/4e9723a7bd7fd2be5001f559921b189f4d93f9cbe6fc286f25cd41a5ea709bcd.tnt",
+              "sources/cdcb0b4a584b26603257b48716067f81bf6085d413e82f500bb00a25e02054d4.src",
+              "sources/96887bfb5ecc5a36a8fe630bf9d11f18f3b293d074d9a2d63ab51efbf0939bf5.src",
+              "sources/3ca0227f95c656bf750404d964b3c7e13232899f21b8e5964a74f690b7a82116.src",
+              "revisions/e0a65e8ba960b86035d5f76f107c698479eecef0356df0902a2c36b7c871a035.rev",
+              "revisions/604e1ecbc33356906b829988c61fc7eeb1754db0c4242d9632dc54421a9f3462.rev",
+              "revisions/95f24823f69e09bab9ea495a4c28ca989ef9ee1f218ad35d08731463d96eb6a1.rev",
+              "revisions/951a9cdcba2b8cc481070b34cf9a1a5515a1ba93bbb5fb0b29226927070c8424.rev"
+            ],
+            "partials": [
+              "staging/877a82f8-d74e-41ab-af56-0844220d007e"
+            ],
+            "skipped": [],
+            "bytesFreed": 32154195,
+            "tenant": "benchmark",
+            "current": "10cd870bb0ad9043cb2a18241ce66edabccef59de12634a7415cb8f37ea6fb12",
+            "currentCorrupt": false,
+            "kept": 10,
+            "corrupt": []
+          },
+          "diskAfterGc": {
+            "logical": 107867323,
+            "allocated": 107937792
+          },
+          "retainedRevisions": 10
+        }
+      },
+      "retention": {
+        "after": {
+          "before": {
+            "logical": 118485623,
+            "allocated": 118591488
+          },
+          "after": {
+            "logical": 107776303,
+            "allocated": 107872256
+          },
+          "source": {
+            "logical": 11255540,
+            "allocated": 21176320
+          },
+          "manifest": "626845bc59ceaf115c3c56d2f269001ab4f2d51fbb9719465cb650d9888af311",
+          "retained": 10,
+          "edits": 10
+        },
+        "before": {
+          "before": {
+            "logical": 60694945,
+            "allocated": 60743680
+          },
+          "after": {
+            "logical": 55177639,
+            "allocated": 55226368
+          },
+          "source": {
+            "logical": 11255568,
+            "allocated": 21176320
+          },
+          "manifest": "626845bc59ceaf115c3c56d2f269001ab4f2d51fbb9719465cb650d9888af311",
+          "retained": 10,
+          "edits": 10
+        }
+      }
+    },
+    {
+      "size": 5000,
+      "repetition": 6,
+      "fixture": "36ef0a1b732b3e5ced3f1af6425aaf836ff2c03ff8ec7435297142f9a0a64028",
+      "maintenance": {
+        "timings": {
+          "batchCreate25": [
+            93.39125
+          ],
+          "batchReplace25": [
+            46.199,
+            39.93475,
+            39.25125,
+            41.071375,
+            38.9405,
+            36.807958,
+            40.271542,
+            38.97225,
+            39.590667
+          ],
+          "historyFirst5": [
+            1.13475
+          ],
+          "historyNext5": [
+            1.007292
+          ],
+          "restore": [
+            70.271208
+          ]
+        },
+        "peakRssBytes": 301842432,
+        "rssBytes": 301842432,
+        "checks": {
+          "batches": 10,
+          "documentsPerBatch": 25,
+          "revisions": 12,
+          "manifestBytes": 823408,
+          "manifestTokenEstimate": 205852,
+          "manifestHash": "626845bc59ceaf115c3c56d2f269001ab4f2d51fbb9719465cb650d9888af311",
+          "head": "44c73551841c8bfa8979ba373e1442c21d47a2c297a7b37f284bfad668753144"
+        }
+      },
+      "concurrent": {
+        "simultaneousWorkerRssBytes": 444137472,
+        "coordinatorRssBytes": 107577344,
+        "barrierMemory": [
+          {
+            "rssBytes": 150503424,
+            "peakRssBytes": 150503424
+          },
+          {
+            "rssBytes": 144621568,
+            "peakRssBytes": 144621568
+          },
+          {
+            "rssBytes": 149012480,
+            "peakRssBytes": 149012480
+          }
+        ],
+        "writers": [
+          {
+            "outcome": "committed",
+            "revision": "378b562f49a606dd8f8581566466cdc0e04784213b192e19009e6fcc7236918a",
+            "elapsed": 14.466708,
+            "rssBytes": 151224320,
+            "peakRssBytes": 151224320
+          },
+          {
+            "outcome": "conflict",
+            "elapsed": 18.362958,
+            "rssBytes": 145211392,
+            "peakRssBytes": 145211392
+          }
+        ],
+        "reader": {
+          "outcome": "pinned",
+          "revision": "44c73551841c8bfa8979ba373e1442c21d47a2c297a7b37f284bfad668753144",
+          "rssBytes": 149471232,
+          "peakRssBytes": 149471232
+        },
+        "head": "378b562f49a606dd8f8581566466cdc0e04784213b192e19009e6fcc7236918a",
+        "source": "/var/folders/l9/ttg7csmn6cdf83lzysp0v08h0000gn/T/langonrock-operations-pDnBVj/source-5000"
+      },
+      "recovery": {
+        "timings": {
+          "recoveryOpenGet": [
+            9.147167
+          ],
+          "gcKeep10": [
+            524.508125
+          ]
+        },
+        "peakRssBytes": 193560576,
+        "rssBytes": 193560576,
+        "checks": {
+          "head": "378b562f49a606dd8f8581566466cdc0e04784213b192e19009e6fcc7236918a",
+          "diskBeforeGc": {
+            "logical": 140020739,
+            "allocated": 140120064
+          },
+          "gc": {
+            "removed": [
+              "snapshots/282b67d4ef08c5434f1628dcda7610d7554eaf09f34bc65ecbe33d4d5ba0f18a.tnt",
+              "snapshots/1745530a2e4496d793f7c5a7af6900dc896c8b403851588c583e61f42275fa94.tnt",
+              "snapshots/4e9723a7bd7fd2be5001f559921b189f4d93f9cbe6fc286f25cd41a5ea709bcd.tnt",
+              "sources/cdcb0b4a584b26603257b48716067f81bf6085d413e82f500bb00a25e02054d4.src",
+              "sources/96887bfb5ecc5a36a8fe630bf9d11f18f3b293d074d9a2d63ab51efbf0939bf5.src",
+              "sources/3ca0227f95c656bf750404d964b3c7e13232899f21b8e5964a74f690b7a82116.src",
+              "revisions/e0a65e8ba960b86035d5f76f107c698479eecef0356df0902a2c36b7c871a035.rev",
+              "revisions/604e1ecbc33356906b829988c61fc7eeb1754db0c4242d9632dc54421a9f3462.rev",
+              "revisions/95f24823f69e09bab9ea495a4c28ca989ef9ee1f218ad35d08731463d96eb6a1.rev",
+              "revisions/951a9cdcba2b8cc481070b34cf9a1a5515a1ba93bbb5fb0b29226927070c8424.rev"
+            ],
+            "partials": [
+              "staging/bda7ac5d-4cc4-4229-a6db-b80267de2cee"
+            ],
+            "skipped": [],
+            "bytesFreed": 32154195,
+            "tenant": "benchmark",
+            "current": "10cd870bb0ad9043cb2a18241ce66edabccef59de12634a7415cb8f37ea6fb12",
+            "currentCorrupt": false,
+            "kept": 10,
+            "corrupt": []
+          },
+          "diskAfterGc": {
+            "logical": 107867323,
+            "allocated": 107937792
+          },
+          "retainedRevisions": 10
+        }
+      },
+      "retention": {
+        "before": {
+          "before": {
+            "logical": 60694945,
+            "allocated": 60743680
+          },
+          "after": {
+            "logical": 55177639,
+            "allocated": 55226368
+          },
+          "source": {
+            "logical": 11255568,
+            "allocated": 21176320
+          },
+          "manifest": "626845bc59ceaf115c3c56d2f269001ab4f2d51fbb9719465cb650d9888af311",
+          "retained": 10,
+          "edits": 10
+        },
+        "after": {
+          "before": {
+            "logical": 118485623,
+            "allocated": 118591488
+          },
+          "after": {
+            "logical": 107776303,
+            "allocated": 107872256
+          },
+          "source": {
+            "logical": 11255540,
+            "allocated": 21176320
+          },
+          "manifest": "626845bc59ceaf115c3c56d2f269001ab4f2d51fbb9719465cb650d9888af311",
+          "retained": 10,
+          "edits": 10
+        }
+      }
+    },
+    {
+      "size": 5000,
+      "repetition": 7,
+      "fixture": "36ef0a1b732b3e5ced3f1af6425aaf836ff2c03ff8ec7435297142f9a0a64028",
+      "maintenance": {
+        "timings": {
+          "batchCreate25": [
+            95.277833
+          ],
+          "batchReplace25": [
+            45.287208,
+            40.2355,
+            37.604542,
+            39.878959,
+            47.429208,
+            39.152417,
+            38.960375,
+            43.77225,
+            38.392333
+          ],
+          "historyFirst5": [
+            0.976041
+          ],
+          "historyNext5": [
+            1.558708
+          ],
+          "restore": [
+            73.784
+          ]
+        },
+        "peakRssBytes": 269336576,
+        "rssBytes": 269336576,
+        "checks": {
+          "batches": 10,
+          "documentsPerBatch": 25,
+          "revisions": 12,
+          "manifestBytes": 823408,
+          "manifestTokenEstimate": 205852,
+          "manifestHash": "626845bc59ceaf115c3c56d2f269001ab4f2d51fbb9719465cb650d9888af311",
+          "head": "44c73551841c8bfa8979ba373e1442c21d47a2c297a7b37f284bfad668753144"
+        }
+      },
+      "concurrent": {
+        "simultaneousWorkerRssBytes": 438337536,
+        "coordinatorRssBytes": 107593728,
+        "barrierMemory": [
+          {
+            "rssBytes": 146964480,
+            "peakRssBytes": 146964480
+          },
+          {
+            "rssBytes": 144769024,
+            "peakRssBytes": 144769024
+          },
+          {
+            "rssBytes": 146604032,
+            "peakRssBytes": 146604032
+          }
+        ],
+        "writers": [
+          {
+            "outcome": "committed",
+            "revision": "378b562f49a606dd8f8581566466cdc0e04784213b192e19009e6fcc7236918a",
+            "elapsed": 15.377041,
+            "rssBytes": 147668992,
+            "peakRssBytes": 147668992
+          },
+          {
+            "outcome": "conflict",
+            "elapsed": 18.415167,
+            "rssBytes": 145375232,
+            "peakRssBytes": 145375232
+          }
+        ],
+        "reader": {
+          "outcome": "pinned",
+          "revision": "44c73551841c8bfa8979ba373e1442c21d47a2c297a7b37f284bfad668753144",
+          "rssBytes": 147357696,
+          "peakRssBytes": 147357696
+        },
+        "head": "378b562f49a606dd8f8581566466cdc0e04784213b192e19009e6fcc7236918a",
+        "source": "/var/folders/l9/ttg7csmn6cdf83lzysp0v08h0000gn/T/langonrock-operations-pDnBVj/source-5000"
+      },
+      "recovery": {
+        "timings": {
+          "recoveryOpenGet": [
+            10.183167
+          ],
+          "gcKeep10": [
+            535.219625
+          ]
+        },
+        "peakRssBytes": 211107840,
+        "rssBytes": 211107840,
+        "checks": {
+          "head": "378b562f49a606dd8f8581566466cdc0e04784213b192e19009e6fcc7236918a",
+          "diskBeforeGc": {
+            "logical": 140020739,
+            "allocated": 140120064
+          },
+          "gc": {
+            "removed": [
+              "snapshots/282b67d4ef08c5434f1628dcda7610d7554eaf09f34bc65ecbe33d4d5ba0f18a.tnt",
+              "snapshots/1745530a2e4496d793f7c5a7af6900dc896c8b403851588c583e61f42275fa94.tnt",
+              "snapshots/4e9723a7bd7fd2be5001f559921b189f4d93f9cbe6fc286f25cd41a5ea709bcd.tnt",
+              "sources/cdcb0b4a584b26603257b48716067f81bf6085d413e82f500bb00a25e02054d4.src",
+              "sources/96887bfb5ecc5a36a8fe630bf9d11f18f3b293d074d9a2d63ab51efbf0939bf5.src",
+              "sources/3ca0227f95c656bf750404d964b3c7e13232899f21b8e5964a74f690b7a82116.src",
+              "revisions/e0a65e8ba960b86035d5f76f107c698479eecef0356df0902a2c36b7c871a035.rev",
+              "revisions/604e1ecbc33356906b829988c61fc7eeb1754db0c4242d9632dc54421a9f3462.rev",
+              "revisions/95f24823f69e09bab9ea495a4c28ca989ef9ee1f218ad35d08731463d96eb6a1.rev",
+              "revisions/951a9cdcba2b8cc481070b34cf9a1a5515a1ba93bbb5fb0b29226927070c8424.rev"
+            ],
+            "partials": [
+              "staging/330da5e8-dff6-42b2-990f-64fd516f480e"
+            ],
+            "skipped": [],
+            "bytesFreed": 32154195,
+            "tenant": "benchmark",
+            "current": "10cd870bb0ad9043cb2a18241ce66edabccef59de12634a7415cb8f37ea6fb12",
+            "currentCorrupt": false,
+            "kept": 10,
+            "corrupt": []
+          },
+          "diskAfterGc": {
+            "logical": 107867323,
+            "allocated": 107937792
+          },
+          "retainedRevisions": 10
+        }
+      },
+      "retention": {
+        "after": {
+          "before": {
+            "logical": 118485623,
+            "allocated": 118591488
+          },
+          "after": {
+            "logical": 107776303,
+            "allocated": 107872256
+          },
+          "source": {
+            "logical": 11255540,
+            "allocated": 21176320
+          },
+          "manifest": "626845bc59ceaf115c3c56d2f269001ab4f2d51fbb9719465cb650d9888af311",
+          "retained": 10,
+          "edits": 10
+        },
+        "before": {
+          "before": {
+            "logical": 60694945,
+            "allocated": 60743680
+          },
+          "after": {
+            "logical": 55177639,
+            "allocated": 55226368
+          },
+          "source": {
+            "logical": 11255568,
+            "allocated": 21176320
+          },
+          "manifest": "626845bc59ceaf115c3c56d2f269001ab4f2d51fbb9719465cb650d9888af311",
+          "retained": 10,
+          "edits": 10
+        }
+      }
+    },
+    {
+      "size": 5000,
+      "repetition": 8,
+      "fixture": "36ef0a1b732b3e5ced3f1af6425aaf836ff2c03ff8ec7435297142f9a0a64028",
+      "maintenance": {
+        "timings": {
+          "batchCreate25": [
+            94.525042
+          ],
+          "batchReplace25": [
+            46.373417,
+            42.047625,
+            39.457667,
+            40.367584,
+            44.149333,
+            39.915708,
+            57.822584,
+            40.251083,
+            43.05625
+          ],
+          "historyFirst5": [
+            1.107625
+          ],
+          "historyNext5": [
+            0.919125
+          ],
+          "restore": [
+            71.397042
+          ]
+        },
+        "peakRssBytes": 301907968,
+        "rssBytes": 301907968,
+        "checks": {
+          "batches": 10,
+          "documentsPerBatch": 25,
+          "revisions": 12,
+          "manifestBytes": 823408,
+          "manifestTokenEstimate": 205852,
+          "manifestHash": "626845bc59ceaf115c3c56d2f269001ab4f2d51fbb9719465cb650d9888af311",
+          "head": "44c73551841c8bfa8979ba373e1442c21d47a2c297a7b37f284bfad668753144"
+        }
+      },
+      "concurrent": {
+        "simultaneousWorkerRssBytes": 441450496,
+        "coordinatorRssBytes": 107593728,
+        "barrierMemory": [
+          {
+            "rssBytes": 150487040,
+            "peakRssBytes": 150487040
+          },
+          {
+            "rssBytes": 142540800,
+            "peakRssBytes": 142540800
+          },
+          {
+            "rssBytes": 148422656,
+            "peakRssBytes": 148422656
+          }
+        ],
+        "writers": [
+          {
+            "outcome": "conflict",
+            "elapsed": 23.939,
+            "rssBytes": 151109632,
+            "peakRssBytes": 151109632
+          },
+          {
+            "outcome": "committed",
+            "revision": "a50b33d764a9bd8a7c9e4908558b85c960cedda3af094d8d7fcefe1c92308952",
+            "elapsed": 21.284167,
+            "rssBytes": 143261696,
+            "peakRssBytes": 143261696
+          }
+        ],
+        "reader": {
+          "outcome": "pinned",
+          "revision": "44c73551841c8bfa8979ba373e1442c21d47a2c297a7b37f284bfad668753144",
+          "rssBytes": 148750336,
+          "peakRssBytes": 148750336
+        },
+        "head": "a50b33d764a9bd8a7c9e4908558b85c960cedda3af094d8d7fcefe1c92308952",
+        "source": "/var/folders/l9/ttg7csmn6cdf83lzysp0v08h0000gn/T/langonrock-operations-pDnBVj/source-5000"
+      },
+      "recovery": {
+        "timings": {
+          "recoveryOpenGet": [
+            10.208584
+          ],
+          "gcKeep10": [
+            529.576667
+          ]
+        },
+        "peakRssBytes": 190676992,
+        "rssBytes": 190676992,
+        "checks": {
+          "head": "a50b33d764a9bd8a7c9e4908558b85c960cedda3af094d8d7fcefe1c92308952",
+          "diskBeforeGc": {
+            "logical": 140020736,
+            "allocated": 140120064
+          },
+          "gc": {
+            "removed": [
+              "snapshots/1745530a2e4496d793f7c5a7af6900dc896c8b403851588c583e61f42275fa94.tnt",
+              "snapshots/4e9723a7bd7fd2be5001f559921b189f4d93f9cbe6fc286f25cd41a5ea709bcd.tnt",
+              "snapshots/88c225df1ee28f141516eda2df08cf0cb886a0947fbd10b17a11c35141c1a573.tnt",
+              "sources/cdcb0b4a584b26603257b48716067f81bf6085d413e82f500bb00a25e02054d4.src",
+              "sources/96887bfb5ecc5a36a8fe630bf9d11f18f3b293d074d9a2d63ab51efbf0939bf5.src",
+              "sources/813413e4d1505056e1f67236fd29068c0e3c3bbc40258f88a8b3ea3f71e2ac1f.src",
+              "revisions/e0a65e8ba960b86035d5f76f107c698479eecef0356df0902a2c36b7c871a035.rev",
+              "revisions/95f24823f69e09bab9ea495a4c28ca989ef9ee1f218ad35d08731463d96eb6a1.rev",
+              "revisions/d6f2493ab386b8bb1105d8d361186e9ad3112ad9f5788f5add3c1bc441a0198e.rev",
+              "revisions/951a9cdcba2b8cc481070b34cf9a1a5515a1ba93bbb5fb0b29226927070c8424.rev"
+            ],
+            "partials": [
+              "staging/e97606d1-df62-46fd-88a6-4060dafecdc2"
+            ],
+            "skipped": [],
+            "bytesFreed": 32154195,
+            "tenant": "benchmark",
+            "current": "ca04ebbd04b9ecef274faf148d8b30537f72a4b6bc55f4a30c148faf2e4fd52b",
+            "currentCorrupt": false,
+            "kept": 10,
+            "corrupt": []
+          },
+          "diskAfterGc": {
+            "logical": 107867320,
+            "allocated": 107937792
+          },
+          "retainedRevisions": 10
+        }
+      },
+      "retention": {
+        "before": {
+          "before": {
+            "logical": 60694945,
+            "allocated": 60743680
+          },
+          "after": {
+            "logical": 55177639,
+            "allocated": 55226368
+          },
+          "source": {
+            "logical": 11255568,
+            "allocated": 21176320
+          },
+          "manifest": "626845bc59ceaf115c3c56d2f269001ab4f2d51fbb9719465cb650d9888af311",
+          "retained": 10,
+          "edits": 10
+        },
+        "after": {
+          "before": {
+            "logical": 118485623,
+            "allocated": 118591488
+          },
+          "after": {
+            "logical": 107776303,
+            "allocated": 107872256
+          },
+          "source": {
+            "logical": 11255540,
+            "allocated": 21176320
+          },
+          "manifest": "626845bc59ceaf115c3c56d2f269001ab4f2d51fbb9719465cb650d9888af311",
+          "retained": 10,
+          "edits": 10
+        }
+      }
+    },
+    {
+      "size": 5000,
+      "repetition": 9,
+      "fixture": "36ef0a1b732b3e5ced3f1af6425aaf836ff2c03ff8ec7435297142f9a0a64028",
+      "maintenance": {
+        "timings": {
+          "batchCreate25": [
+            97.823667
+          ],
+          "batchReplace25": [
+            43.8615,
+            41.057083,
+            39.881334,
+            39.525958,
+            40.977417,
+            44.912208,
+            37.835417,
+            39.688083,
+            37.681709
+          ],
+          "historyFirst5": [
+            1.073166
+          ],
+          "historyNext5": [
+            2.195458
+          ],
+          "restore": [
+            75.75625
+          ]
+        },
+        "peakRssBytes": 325287936,
+        "rssBytes": 325287936,
+        "checks": {
+          "batches": 10,
+          "documentsPerBatch": 25,
+          "revisions": 12,
+          "manifestBytes": 823408,
+          "manifestTokenEstimate": 205852,
+          "manifestHash": "626845bc59ceaf115c3c56d2f269001ab4f2d51fbb9719465cb650d9888af311",
+          "head": "44c73551841c8bfa8979ba373e1442c21d47a2c297a7b37f284bfad668753144"
+        }
+      },
+      "concurrent": {
+        "simultaneousWorkerRssBytes": 446136320,
+        "coordinatorRssBytes": 107610112,
+        "barrierMemory": [
+          {
+            "rssBytes": 149225472,
+            "peakRssBytes": 149225472
+          },
+          {
+            "rssBytes": 147750912,
+            "peakRssBytes": 147750912
+          },
+          {
+            "rssBytes": 149159936,
+            "peakRssBytes": 149159936
+          }
+        ],
+        "writers": [
+          {
+            "outcome": "conflict",
+            "elapsed": 20.199417,
+            "rssBytes": 149831680,
+            "peakRssBytes": 149831680
+          },
+          {
+            "outcome": "committed",
+            "revision": "a50b33d764a9bd8a7c9e4908558b85c960cedda3af094d8d7fcefe1c92308952",
+            "elapsed": 15.06325,
+            "rssBytes": 148422656,
+            "peakRssBytes": 148422656
+          }
+        ],
+        "reader": {
+          "outcome": "pinned",
+          "revision": "44c73551841c8bfa8979ba373e1442c21d47a2c297a7b37f284bfad668753144",
+          "rssBytes": 149848064,
+          "peakRssBytes": 149848064
+        },
+        "head": "a50b33d764a9bd8a7c9e4908558b85c960cedda3af094d8d7fcefe1c92308952",
+        "source": "/var/folders/l9/ttg7csmn6cdf83lzysp0v08h0000gn/T/langonrock-operations-pDnBVj/source-5000"
+      },
+      "recovery": {
+        "timings": {
+          "recoveryOpenGet": [
+            10.299625
+          ],
+          "gcKeep10": [
+            531.171
+          ]
+        },
+        "peakRssBytes": 195231744,
+        "rssBytes": 195231744,
+        "checks": {
+          "head": "a50b33d764a9bd8a7c9e4908558b85c960cedda3af094d8d7fcefe1c92308952",
+          "diskBeforeGc": {
+            "logical": 140020736,
+            "allocated": 140120064
+          },
+          "gc": {
+            "removed": [
+              "snapshots/1745530a2e4496d793f7c5a7af6900dc896c8b403851588c583e61f42275fa94.tnt",
+              "snapshots/4e9723a7bd7fd2be5001f559921b189f4d93f9cbe6fc286f25cd41a5ea709bcd.tnt",
+              "snapshots/88c225df1ee28f141516eda2df08cf0cb886a0947fbd10b17a11c35141c1a573.tnt",
+              "sources/cdcb0b4a584b26603257b48716067f81bf6085d413e82f500bb00a25e02054d4.src",
+              "sources/96887bfb5ecc5a36a8fe630bf9d11f18f3b293d074d9a2d63ab51efbf0939bf5.src",
+              "sources/813413e4d1505056e1f67236fd29068c0e3c3bbc40258f88a8b3ea3f71e2ac1f.src",
+              "revisions/e0a65e8ba960b86035d5f76f107c698479eecef0356df0902a2c36b7c871a035.rev",
+              "revisions/95f24823f69e09bab9ea495a4c28ca989ef9ee1f218ad35d08731463d96eb6a1.rev",
+              "revisions/d6f2493ab386b8bb1105d8d361186e9ad3112ad9f5788f5add3c1bc441a0198e.rev",
+              "revisions/951a9cdcba2b8cc481070b34cf9a1a5515a1ba93bbb5fb0b29226927070c8424.rev"
+            ],
+            "partials": [
+              "staging/ce932efb-622a-4304-8453-9b94d750c250"
+            ],
+            "skipped": [],
+            "bytesFreed": 32154195,
+            "tenant": "benchmark",
+            "current": "ca04ebbd04b9ecef274faf148d8b30537f72a4b6bc55f4a30c148faf2e4fd52b",
+            "currentCorrupt": false,
+            "kept": 10,
+            "corrupt": []
+          },
+          "diskAfterGc": {
+            "logical": 107867320,
+            "allocated": 107937792
+          },
+          "retainedRevisions": 10
+        }
+      },
+      "retention": {
+        "after": {
+          "before": {
+            "logical": 118485623,
+            "allocated": 118591488
+          },
+          "after": {
+            "logical": 107776303,
+            "allocated": 107872256
+          },
+          "source": {
+            "logical": 11255540,
+            "allocated": 21176320
+          },
+          "manifest": "626845bc59ceaf115c3c56d2f269001ab4f2d51fbb9719465cb650d9888af311",
+          "retained": 10,
+          "edits": 10
+        },
+        "before": {
+          "before": {
+            "logical": 60694945,
+            "allocated": 60743680
+          },
+          "after": {
+            "logical": 55177639,
+            "allocated": 55226368
+          },
+          "source": {
+            "logical": 11255568,
+            "allocated": 21176320
+          },
+          "manifest": "626845bc59ceaf115c3c56d2f269001ab4f2d51fbb9719465cb650d9888af311",
+          "retained": 10,
+          "edits": 10
+        }
+      }
+    },
+    {
+      "size": 20000,
+      "repetition": 0,
+      "fixture": "a1c1638cd368b9b8fc947f50763e62ba6604d98da417e465a98076a63ce874e3",
+      "maintenance": {
+        "timings": {
+          "batchCreate25": [
+            283.967667
+          ],
+          "batchReplace25": [
+            142.641208,
+            135.628083,
+            134.851458,
+            133.0725,
+            129.919792,
+            132.680083,
+            131.755834,
+            130.295458,
+            131.807583
+          ],
+          "historyFirst5": [
+            1.028291
+          ],
+          "historyNext5": [
+            0.92925
+          ],
+          "restore": [
+            263.297708
+          ]
+        },
+        "peakRssBytes": 896172032,
+        "rssBytes": 896172032,
+        "checks": {
+          "batches": 10,
+          "documentsPerBatch": 25,
+          "revisions": 12,
+          "manifestBytes": 3343691,
+          "manifestTokenEstimate": 835923,
+          "manifestHash": "d3598ddd74ddff654868246f0a3392756951724b62f756d1c86b7835167f389a",
+          "head": "9868373552b18ea9165979cfe7f67b94743521ef7371da1469bc000927b0ac8a"
+        }
+      },
+      "concurrent": {
+        "simultaneousWorkerRssBytes": 1099071488,
+        "coordinatorRssBytes": 152059904,
+        "barrierMemory": [
+          {
+            "rssBytes": 378257408,
+            "peakRssBytes": 378257408
+          },
+          {
+            "rssBytes": 395395072,
+            "peakRssBytes": 395395072
+          },
+          {
+            "rssBytes": 325419008,
+            "peakRssBytes": 325419008
+          }
+        ],
+        "writers": [
+          {
+            "outcome": "conflict",
+            "elapsed": 35.340542,
+            "rssBytes": 378847232,
+            "peakRssBytes": 378847232
+          },
+          {
+            "outcome": "committed",
+            "revision": "525a3b91efbff8128e13ca178cab5260b1171ba88236e4030ab4442bdf9a6323",
+            "elapsed": 33.859834,
+            "rssBytes": 396099584,
+            "peakRssBytes": 396099584
+          }
+        ],
+        "reader": {
+          "outcome": "pinned",
+          "revision": "9868373552b18ea9165979cfe7f67b94743521ef7371da1469bc000927b0ac8a",
+          "rssBytes": 325484544,
+          "peakRssBytes": 325484544
+        },
+        "head": "525a3b91efbff8128e13ca178cab5260b1171ba88236e4030ab4442bdf9a6323",
+        "source": "/var/folders/l9/ttg7csmn6cdf83lzysp0v08h0000gn/T/langonrock-operations-pDnBVj/source-20000"
+      },
+      "recovery": {
+        "timings": {
+          "recoveryOpenGet": [
+            26.958
+          ],
+          "gcKeep10": [
+            2026.560125
+          ]
+        },
+        "peakRssBytes": 578011136,
+        "rssBytes": 578011136,
+        "checks": {
+          "head": "525a3b91efbff8128e13ca178cab5260b1171ba88236e4030ab4442bdf9a6323",
+          "diskBeforeGc": {
+            "logical": 563690862,
+            "allocated": 563785728
+          },
+          "gc": {
+            "removed": [
+              "snapshots/2571c2e1b18da7e519b2d64340cf01f4dacf170a7ea0463ddf21c6fc90ee3c5b.tnt",
+              "snapshots/27d3139d8d5459ef1ce6195b35e4ebd9f92546fb3b0f8e87a39cf55e6d76118f.tnt",
+              "snapshots/fba78946a4a737d121b044f077868b534688dac62142af5d4da79d069022433e.tnt",
+              "sources/102480dc2847248b75416f1581f9856197586e3ca126aae9aa475ccc6cd71903.src",
+              "sources/8b9b71f7277e81b661ee473f9ffe8ac74112ce683df5123c8b1a1b6391396ee2.src",
+              "sources/f9553f772b6ec46b34d77a62f1f379c79bf011385b2eaebe9502efd85c99ab14.src",
+              "revisions/6c62a455a5d8da19e36c793b1354e97c11b537e2f2fade6e168de4b580a5d12e.rev",
+              "revisions/5350f78459e5eb330d5dbae25fbceded0ec2c15922fcb3e2f83dde196faa402f.rev",
+              "revisions/4e94e9533214b0577398587e31b8d2d34f36a6cebc489d45cc08de2d87fc7958.rev",
+              "revisions/c8730e55097e813683b40e0631099d797d04cd23598e0ab70086bfc37b661bfe.rev"
+            ],
+            "partials": [
+              "staging/c530a55b-908f-4023-bcf0-8db0bc1221fe"
+            ],
+            "skipped": [],
+            "bytesFreed": 129451590,
+            "tenant": "benchmark",
+            "current": "6d25224d7eede8724bcdb59eb49b113321bb227f593b8b230f61e2e1c140c97c",
+            "currentCorrupt": false,
+            "kept": 10,
+            "corrupt": []
+          },
+          "diskAfterGc": {
+            "logical": 434240051,
+            "allocated": 434307072
+          },
+          "retainedRevisions": 10
+        }
+      },
+      "retention": {
+        "before": {
+          "before": {
+            "logical": 244180269,
+            "allocated": 244215808
+          },
+          "after": {
+            "logical": 221982812,
+            "allocated": 222015488
+          },
+          "source": {
+            "logical": 45238815,
+            "allocated": 84705280
+          },
+          "manifest": "d3598ddd74ddff654868246f0a3392756951724b62f756d1c86b7835167f389a",
+          "retained": 10,
+          "edits": 10
+        },
+        "after": {
+          "before": {
+            "logical": 477290557,
+            "allocated": 477392896
+          },
+          "after": {
+            "logical": 434148894,
+            "allocated": 434241536
+          },
+          "source": {
+            "logical": 45238787,
+            "allocated": 84705280
+          },
+          "manifest": "d3598ddd74ddff654868246f0a3392756951724b62f756d1c86b7835167f389a",
+          "retained": 10,
+          "edits": 10
+        }
+      }
+    },
+    {
+      "size": 20000,
+      "repetition": 1,
+      "fixture": "a1c1638cd368b9b8fc947f50763e62ba6604d98da417e465a98076a63ce874e3",
+      "maintenance": {
+        "timings": {
+          "batchCreate25": [
+            277.915
+          ],
+          "batchReplace25": [
+            143.528292,
+            133.184709,
+            134.35775,
+            133.342958,
+            131.088167,
+            138.191,
+            130.63375,
+            128.149167,
+            128.964166
+          ],
+          "historyFirst5": [
+            1.061125
+          ],
+          "historyNext5": [
+            1.241292
+          ],
+          "restore": [
+            261.211416
+          ]
+        },
+        "peakRssBytes": 854310912,
+        "rssBytes": 854310912,
+        "checks": {
+          "batches": 10,
+          "documentsPerBatch": 25,
+          "revisions": 12,
+          "manifestBytes": 3343691,
+          "manifestTokenEstimate": 835923,
+          "manifestHash": "d3598ddd74ddff654868246f0a3392756951724b62f756d1c86b7835167f389a",
+          "head": "9868373552b18ea9165979cfe7f67b94743521ef7371da1469bc000927b0ac8a"
+        }
+      },
+      "concurrent": {
+        "simultaneousWorkerRssBytes": 1148207104,
+        "coordinatorRssBytes": 151814144,
+        "barrierMemory": [
+          {
+            "rssBytes": 380928000,
+            "peakRssBytes": 380928000
+          },
+          {
+            "rssBytes": 396476416,
+            "peakRssBytes": 396476416
+          },
+          {
+            "rssBytes": 370802688,
+            "peakRssBytes": 370802688
+          }
+        ],
+        "writers": [
+          {
+            "outcome": "committed",
+            "revision": "64c133d865af56ecc72f4d1ba7bb1c3d2b82db4e439c76249fa829fbe87dc7c1",
+            "elapsed": 26.828166,
+            "rssBytes": 381632512,
+            "peakRssBytes": 381632512
+          },
+          {
+            "outcome": "conflict",
+            "elapsed": 30.584542,
+            "rssBytes": 397066240,
+            "peakRssBytes": 397066240
+          }
+        ],
+        "reader": {
+          "outcome": "pinned",
+          "revision": "9868373552b18ea9165979cfe7f67b94743521ef7371da1469bc000927b0ac8a",
+          "rssBytes": 370819072,
+          "peakRssBytes": 370819072
+        },
+        "head": "64c133d865af56ecc72f4d1ba7bb1c3d2b82db4e439c76249fa829fbe87dc7c1",
+        "source": "/var/folders/l9/ttg7csmn6cdf83lzysp0v08h0000gn/T/langonrock-operations-pDnBVj/source-20000"
+      },
+      "recovery": {
+        "timings": {
+          "recoveryOpenGet": [
+            26.753542
+          ],
+          "gcKeep10": [
+            1995.590667
+          ]
+        },
+        "peakRssBytes": 558170112,
+        "rssBytes": 558170112,
+        "checks": {
+          "head": "64c133d865af56ecc72f4d1ba7bb1c3d2b82db4e439c76249fa829fbe87dc7c1",
+          "diskBeforeGc": {
+            "logical": 563690865,
+            "allocated": 563785728
+          },
+          "gc": {
+            "removed": [
+              "snapshots/2571c2e1b18da7e519b2d64340cf01f4dacf170a7ea0463ddf21c6fc90ee3c5b.tnt",
+              "snapshots/27d3139d8d5459ef1ce6195b35e4ebd9f92546fb3b0f8e87a39cf55e6d76118f.tnt",
+              "snapshots/2e7d83894b9bf4898674c19164c54cdc070f6acc84bd564aeb45807714da7fd9.tnt",
+              "sources/8b9b71f7277e81b661ee473f9ffe8ac74112ce683df5123c8b1a1b6391396ee2.src",
+              "sources/f9553f772b6ec46b34d77a62f1f379c79bf011385b2eaebe9502efd85c99ab14.src",
+              "sources/023a83a3f3361443636a8c6b55b0e1cd2f467c7bd105fb10d3ab6fd2e1b7d5a6.src",
+              "revisions/6c62a455a5d8da19e36c793b1354e97c11b537e2f2fade6e168de4b580a5d12e.rev",
+              "revisions/1cfe5bb5a74a02e5d8850e386caae4b499d8fd50422c2b5909010206c737d6f3.rev",
+              "revisions/5350f78459e5eb330d5dbae25fbceded0ec2c15922fcb3e2f83dde196faa402f.rev",
+              "revisions/4e94e9533214b0577398587e31b8d2d34f36a6cebc489d45cc08de2d87fc7958.rev"
+            ],
+            "partials": [
+              "staging/6a26c479-c06e-4ecd-9db9-5329761759fb"
+            ],
+            "skipped": [],
+            "bytesFreed": 129451590,
+            "tenant": "benchmark",
+            "current": "d1013c67bcfb1a42a7f529be57e439ba4df1c17fb5ff5245ca848d396bd80a50",
+            "currentCorrupt": false,
+            "kept": 10,
+            "corrupt": []
+          },
+          "diskAfterGc": {
+            "logical": 434240054,
+            "allocated": 434307072
+          },
+          "retainedRevisions": 10
+        }
+      },
+      "retention": {
+        "after": {
+          "before": {
+            "logical": 477290557,
+            "allocated": 477392896
+          },
+          "after": {
+            "logical": 434148894,
+            "allocated": 434241536
+          },
+          "source": {
+            "logical": 45238787,
+            "allocated": 84705280
+          },
+          "manifest": "d3598ddd74ddff654868246f0a3392756951724b62f756d1c86b7835167f389a",
+          "retained": 10,
+          "edits": 10
+        },
+        "before": {
+          "before": {
+            "logical": 244180269,
+            "allocated": 244215808
+          },
+          "after": {
+            "logical": 221982812,
+            "allocated": 222015488
+          },
+          "source": {
+            "logical": 45238815,
+            "allocated": 84705280
+          },
+          "manifest": "d3598ddd74ddff654868246f0a3392756951724b62f756d1c86b7835167f389a",
+          "retained": 10,
+          "edits": 10
+        }
+      }
+    },
+    {
+      "size": 20000,
+      "repetition": 2,
+      "fixture": "a1c1638cd368b9b8fc947f50763e62ba6604d98da417e465a98076a63ce874e3",
+      "maintenance": {
+        "timings": {
+          "batchCreate25": [
+            280.319208
+          ],
+          "batchReplace25": [
+            147.671125,
+            144.227459,
+            137.098167,
+            135.054917,
+            131.238916,
+            131.483,
+            134.811292,
+            129.70375,
+            130.219625
+          ],
+          "historyFirst5": [
+            1.057125
+          ],
+          "historyNext5": [
+            1.005875
+          ],
+          "restore": [
+            262.721375
+          ]
+        },
+        "peakRssBytes": 884834304,
+        "rssBytes": 884834304,
+        "checks": {
+          "batches": 10,
+          "documentsPerBatch": 25,
+          "revisions": 12,
+          "manifestBytes": 3343691,
+          "manifestTokenEstimate": 835923,
+          "manifestHash": "d3598ddd74ddff654868246f0a3392756951724b62f756d1c86b7835167f389a",
+          "head": "9868373552b18ea9165979cfe7f67b94743521ef7371da1469bc000927b0ac8a"
+        }
+      },
+      "concurrent": {
+        "simultaneousWorkerRssBytes": 1074970624,
+        "coordinatorRssBytes": 151764992,
+        "barrierMemory": [
+          {
+            "rssBytes": 371130368,
+            "peakRssBytes": 371130368
+          },
+          {
+            "rssBytes": 377585664,
+            "peakRssBytes": 377585664
+          },
+          {
+            "rssBytes": 326254592,
+            "peakRssBytes": 326254592
+          }
+        ],
+        "writers": [
+          {
+            "outcome": "committed",
+            "revision": "64c133d865af56ecc72f4d1ba7bb1c3d2b82db4e439c76249fa829fbe87dc7c1",
+            "elapsed": 27.244834,
+            "rssBytes": 371818496,
+            "peakRssBytes": 371818496
+          },
+          {
+            "outcome": "conflict",
+            "elapsed": 31.265833,
+            "rssBytes": 378175488,
+            "peakRssBytes": 378175488
+          }
+        ],
+        "reader": {
+          "outcome": "pinned",
+          "revision": "9868373552b18ea9165979cfe7f67b94743521ef7371da1469bc000927b0ac8a",
+          "rssBytes": 326254592,
+          "peakRssBytes": 326254592
+        },
+        "head": "64c133d865af56ecc72f4d1ba7bb1c3d2b82db4e439c76249fa829fbe87dc7c1",
+        "source": "/var/folders/l9/ttg7csmn6cdf83lzysp0v08h0000gn/T/langonrock-operations-pDnBVj/source-20000"
+      },
+      "recovery": {
+        "timings": {
+          "recoveryOpenGet": [
+            27.862125
+          ],
+          "gcKeep10": [
+            1999.982333
+          ]
+        },
+        "peakRssBytes": 599343104,
+        "rssBytes": 599343104,
+        "checks": {
+          "head": "64c133d865af56ecc72f4d1ba7bb1c3d2b82db4e439c76249fa829fbe87dc7c1",
+          "diskBeforeGc": {
+            "logical": 563690865,
+            "allocated": 563785728
+          },
+          "gc": {
+            "removed": [
+              "snapshots/2571c2e1b18da7e519b2d64340cf01f4dacf170a7ea0463ddf21c6fc90ee3c5b.tnt",
+              "snapshots/27d3139d8d5459ef1ce6195b35e4ebd9f92546fb3b0f8e87a39cf55e6d76118f.tnt",
+              "snapshots/2e7d83894b9bf4898674c19164c54cdc070f6acc84bd564aeb45807714da7fd9.tnt",
+              "sources/8b9b71f7277e81b661ee473f9ffe8ac74112ce683df5123c8b1a1b6391396ee2.src",
+              "sources/f9553f772b6ec46b34d77a62f1f379c79bf011385b2eaebe9502efd85c99ab14.src",
+              "sources/023a83a3f3361443636a8c6b55b0e1cd2f467c7bd105fb10d3ab6fd2e1b7d5a6.src",
+              "revisions/6c62a455a5d8da19e36c793b1354e97c11b537e2f2fade6e168de4b580a5d12e.rev",
+              "revisions/1cfe5bb5a74a02e5d8850e386caae4b499d8fd50422c2b5909010206c737d6f3.rev",
+              "revisions/5350f78459e5eb330d5dbae25fbceded0ec2c15922fcb3e2f83dde196faa402f.rev",
+              "revisions/4e94e9533214b0577398587e31b8d2d34f36a6cebc489d45cc08de2d87fc7958.rev"
+            ],
+            "partials": [
+              "staging/e6768d21-b5e3-4480-9c62-c3500cbd1ed8"
+            ],
+            "skipped": [],
+            "bytesFreed": 129451590,
+            "tenant": "benchmark",
+            "current": "d1013c67bcfb1a42a7f529be57e439ba4df1c17fb5ff5245ca848d396bd80a50",
+            "currentCorrupt": false,
+            "kept": 10,
+            "corrupt": []
+          },
+          "diskAfterGc": {
+            "logical": 434240054,
+            "allocated": 434307072
+          },
+          "retainedRevisions": 10
+        }
+      },
+      "retention": {
+        "before": {
+          "before": {
+            "logical": 244180269,
+            "allocated": 244215808
+          },
+          "after": {
+            "logical": 221982812,
+            "allocated": 222015488
+          },
+          "source": {
+            "logical": 45238815,
+            "allocated": 84705280
+          },
+          "manifest": "d3598ddd74ddff654868246f0a3392756951724b62f756d1c86b7835167f389a",
+          "retained": 10,
+          "edits": 10
+        },
+        "after": {
+          "before": {
+            "logical": 477290557,
+            "allocated": 477392896
+          },
+          "after": {
+            "logical": 434148894,
+            "allocated": 434241536
+          },
+          "source": {
+            "logical": 45238787,
+            "allocated": 84705280
+          },
+          "manifest": "d3598ddd74ddff654868246f0a3392756951724b62f756d1c86b7835167f389a",
+          "retained": 10,
+          "edits": 10
+        }
+      }
+    },
+    {
+      "size": 20000,
+      "repetition": 3,
+      "fixture": "a1c1638cd368b9b8fc947f50763e62ba6604d98da417e465a98076a63ce874e3",
+      "maintenance": {
+        "timings": {
+          "batchCreate25": [
+            265.730834
+          ],
+          "batchReplace25": [
+            143.855416,
+            132.633042,
+            131.245667,
+            128.393083,
+            130.6975,
+            130.8705,
+            127.028417,
+            128.992125,
+            130.616459
+          ],
+          "historyFirst5": [
+            1.54525
+          ],
+          "historyNext5": [
+            1.0315
+          ],
+          "restore": [
+            251.318375
+          ]
+        },
+        "peakRssBytes": 907313152,
+        "rssBytes": 907313152,
+        "checks": {
+          "batches": 10,
+          "documentsPerBatch": 25,
+          "revisions": 12,
+          "manifestBytes": 3343691,
+          "manifestTokenEstimate": 835923,
+          "manifestHash": "d3598ddd74ddff654868246f0a3392756951724b62f756d1c86b7835167f389a",
+          "head": "9868373552b18ea9165979cfe7f67b94743521ef7371da1469bc000927b0ac8a"
+        }
+      },
+      "concurrent": {
+        "simultaneousWorkerRssBytes": 1117061120,
+        "coordinatorRssBytes": 151814144,
+        "barrierMemory": [
+          {
+            "rssBytes": 376111104,
+            "peakRssBytes": 376111104
+          },
+          {
+            "rssBytes": 361447424,
+            "peakRssBytes": 361447424
+          },
+          {
+            "rssBytes": 379502592,
+            "peakRssBytes": 379502592
+          }
+        ],
+        "writers": [
+          {
+            "outcome": "conflict",
+            "elapsed": 30.53925,
+            "rssBytes": 376700928,
+            "peakRssBytes": 376700928
+          },
+          {
+            "outcome": "committed",
+            "revision": "525a3b91efbff8128e13ca178cab5260b1171ba88236e4030ab4442bdf9a6323",
+            "elapsed": 25.284542,
+            "rssBytes": 362184704,
+            "peakRssBytes": 362184704
+          }
+        ],
+        "reader": {
+          "outcome": "pinned",
+          "revision": "9868373552b18ea9165979cfe7f67b94743521ef7371da1469bc000927b0ac8a",
+          "rssBytes": 379518976,
+          "peakRssBytes": 379518976
+        },
+        "head": "525a3b91efbff8128e13ca178cab5260b1171ba88236e4030ab4442bdf9a6323",
+        "source": "/var/folders/l9/ttg7csmn6cdf83lzysp0v08h0000gn/T/langonrock-operations-pDnBVj/source-20000"
+      },
+      "recovery": {
+        "timings": {
+          "recoveryOpenGet": [
+            28.209209
+          ],
+          "gcKeep10": [
+            2015.383708
+          ]
+        },
+        "peakRssBytes": 603734016,
+        "rssBytes": 603734016,
+        "checks": {
+          "head": "525a3b91efbff8128e13ca178cab5260b1171ba88236e4030ab4442bdf9a6323",
+          "diskBeforeGc": {
+            "logical": 563690862,
+            "allocated": 563785728
+          },
+          "gc": {
+            "removed": [
+              "snapshots/2571c2e1b18da7e519b2d64340cf01f4dacf170a7ea0463ddf21c6fc90ee3c5b.tnt",
+              "snapshots/27d3139d8d5459ef1ce6195b35e4ebd9f92546fb3b0f8e87a39cf55e6d76118f.tnt",
+              "snapshots/fba78946a4a737d121b044f077868b534688dac62142af5d4da79d069022433e.tnt",
+              "sources/102480dc2847248b75416f1581f9856197586e3ca126aae9aa475ccc6cd71903.src",
+              "sources/8b9b71f7277e81b661ee473f9ffe8ac74112ce683df5123c8b1a1b6391396ee2.src",
+              "sources/f9553f772b6ec46b34d77a62f1f379c79bf011385b2eaebe9502efd85c99ab14.src",
+              "revisions/6c62a455a5d8da19e36c793b1354e97c11b537e2f2fade6e168de4b580a5d12e.rev",
+              "revisions/5350f78459e5eb330d5dbae25fbceded0ec2c15922fcb3e2f83dde196faa402f.rev",
+              "revisions/4e94e9533214b0577398587e31b8d2d34f36a6cebc489d45cc08de2d87fc7958.rev",
+              "revisions/c8730e55097e813683b40e0631099d797d04cd23598e0ab70086bfc37b661bfe.rev"
+            ],
+            "partials": [
+              "staging/355b5ff1-95eb-409c-8d66-336894cdf58b"
+            ],
+            "skipped": [],
+            "bytesFreed": 129451590,
+            "tenant": "benchmark",
+            "current": "6d25224d7eede8724bcdb59eb49b113321bb227f593b8b230f61e2e1c140c97c",
+            "currentCorrupt": false,
+            "kept": 10,
+            "corrupt": []
+          },
+          "diskAfterGc": {
+            "logical": 434240051,
+            "allocated": 434307072
+          },
+          "retainedRevisions": 10
+        }
+      },
+      "retention": {
+        "after": {
+          "before": {
+            "logical": 477290557,
+            "allocated": 477392896
+          },
+          "after": {
+            "logical": 434148894,
+            "allocated": 434241536
+          },
+          "source": {
+            "logical": 45238787,
+            "allocated": 84705280
+          },
+          "manifest": "d3598ddd74ddff654868246f0a3392756951724b62f756d1c86b7835167f389a",
+          "retained": 10,
+          "edits": 10
+        },
+        "before": {
+          "before": {
+            "logical": 244180269,
+            "allocated": 244215808
+          },
+          "after": {
+            "logical": 221982812,
+            "allocated": 222015488
+          },
+          "source": {
+            "logical": 45238815,
+            "allocated": 84705280
+          },
+          "manifest": "d3598ddd74ddff654868246f0a3392756951724b62f756d1c86b7835167f389a",
+          "retained": 10,
+          "edits": 10
+        }
+      }
+    },
+    {
+      "size": 20000,
+      "repetition": 4,
+      "fixture": "a1c1638cd368b9b8fc947f50763e62ba6604d98da417e465a98076a63ce874e3",
+      "maintenance": {
+        "timings": {
+          "batchCreate25": [
+            280.160458
+          ],
+          "batchReplace25": [
+            147.181084,
+            135.524208,
+            132.594875,
+            133.216083,
+            129.325458,
+            128.862583,
+            130.295375,
+            131.709875,
+            130.152959
+          ],
+          "historyFirst5": [
+            1.073709
+          ],
+          "historyNext5": [
+            0.904292
+          ],
+          "restore": [
+            253.94975
+          ]
+        },
+        "peakRssBytes": 916471808,
+        "rssBytes": 916471808,
+        "checks": {
+          "batches": 10,
+          "documentsPerBatch": 25,
+          "revisions": 12,
+          "manifestBytes": 3343691,
+          "manifestTokenEstimate": 835923,
+          "manifestHash": "d3598ddd74ddff654868246f0a3392756951724b62f756d1c86b7835167f389a",
+          "head": "9868373552b18ea9165979cfe7f67b94743521ef7371da1469bc000927b0ac8a"
+        }
+      },
+      "concurrent": {
+        "simultaneousWorkerRssBytes": 1103085568,
+        "coordinatorRssBytes": 151814144,
+        "barrierMemory": [
+          {
+            "rssBytes": 374030336,
+            "peakRssBytes": 374030336
+          },
+          {
+            "rssBytes": 366886912,
+            "peakRssBytes": 366886912
+          },
+          {
+            "rssBytes": 362168320,
+            "peakRssBytes": 362168320
+          }
+        ],
+        "writers": [
+          {
+            "outcome": "committed",
+            "revision": "64c133d865af56ecc72f4d1ba7bb1c3d2b82db4e439c76249fa829fbe87dc7c1",
+            "elapsed": 27.392333,
+            "rssBytes": 374751232,
+            "peakRssBytes": 374751232
+          },
+          {
+            "outcome": "conflict",
+            "elapsed": 29.981791,
+            "rssBytes": 367476736,
+            "peakRssBytes": 367476736
+          }
+        ],
+        "reader": {
+          "outcome": "pinned",
+          "revision": "9868373552b18ea9165979cfe7f67b94743521ef7371da1469bc000927b0ac8a",
+          "rssBytes": 362283008,
+          "peakRssBytes": 362283008
+        },
+        "head": "64c133d865af56ecc72f4d1ba7bb1c3d2b82db4e439c76249fa829fbe87dc7c1",
+        "source": "/var/folders/l9/ttg7csmn6cdf83lzysp0v08h0000gn/T/langonrock-operations-pDnBVj/source-20000"
+      },
+      "recovery": {
+        "timings": {
+          "recoveryOpenGet": [
+            28.176417
+          ],
+          "gcKeep10": [
+            2014.83975
+          ]
+        },
+        "peakRssBytes": 625213440,
+        "rssBytes": 625213440,
+        "checks": {
+          "head": "64c133d865af56ecc72f4d1ba7bb1c3d2b82db4e439c76249fa829fbe87dc7c1",
+          "diskBeforeGc": {
+            "logical": 563690865,
+            "allocated": 563785728
+          },
+          "gc": {
+            "removed": [
+              "snapshots/2571c2e1b18da7e519b2d64340cf01f4dacf170a7ea0463ddf21c6fc90ee3c5b.tnt",
+              "snapshots/27d3139d8d5459ef1ce6195b35e4ebd9f92546fb3b0f8e87a39cf55e6d76118f.tnt",
+              "snapshots/2e7d83894b9bf4898674c19164c54cdc070f6acc84bd564aeb45807714da7fd9.tnt",
+              "sources/8b9b71f7277e81b661ee473f9ffe8ac74112ce683df5123c8b1a1b6391396ee2.src",
+              "sources/f9553f772b6ec46b34d77a62f1f379c79bf011385b2eaebe9502efd85c99ab14.src",
+              "sources/023a83a3f3361443636a8c6b55b0e1cd2f467c7bd105fb10d3ab6fd2e1b7d5a6.src",
+              "revisions/6c62a455a5d8da19e36c793b1354e97c11b537e2f2fade6e168de4b580a5d12e.rev",
+              "revisions/1cfe5bb5a74a02e5d8850e386caae4b499d8fd50422c2b5909010206c737d6f3.rev",
+              "revisions/5350f78459e5eb330d5dbae25fbceded0ec2c15922fcb3e2f83dde196faa402f.rev",
+              "revisions/4e94e9533214b0577398587e31b8d2d34f36a6cebc489d45cc08de2d87fc7958.rev"
+            ],
+            "partials": [
+              "staging/4a7d2129-4283-4e6c-bb70-0f6d16cfcb42"
+            ],
+            "skipped": [],
+            "bytesFreed": 129451590,
+            "tenant": "benchmark",
+            "current": "d1013c67bcfb1a42a7f529be57e439ba4df1c17fb5ff5245ca848d396bd80a50",
+            "currentCorrupt": false,
+            "kept": 10,
+            "corrupt": []
+          },
+          "diskAfterGc": {
+            "logical": 434240054,
+            "allocated": 434307072
+          },
+          "retainedRevisions": 10
+        }
+      },
+      "retention": {
+        "before": {
+          "before": {
+            "logical": 244180269,
+            "allocated": 244215808
+          },
+          "after": {
+            "logical": 221982812,
+            "allocated": 222015488
+          },
+          "source": {
+            "logical": 45238815,
+            "allocated": 84705280
+          },
+          "manifest": "d3598ddd74ddff654868246f0a3392756951724b62f756d1c86b7835167f389a",
+          "retained": 10,
+          "edits": 10
+        },
+        "after": {
+          "before": {
+            "logical": 477290557,
+            "allocated": 477392896
+          },
+          "after": {
+            "logical": 434148894,
+            "allocated": 434241536
+          },
+          "source": {
+            "logical": 45238787,
+            "allocated": 84705280
+          },
+          "manifest": "d3598ddd74ddff654868246f0a3392756951724b62f756d1c86b7835167f389a",
+          "retained": 10,
+          "edits": 10
+        }
+      }
+    },
+    {
+      "size": 20000,
+      "repetition": 5,
+      "fixture": "a1c1638cd368b9b8fc947f50763e62ba6604d98da417e465a98076a63ce874e3",
+      "maintenance": {
+        "timings": {
+          "batchCreate25": [
+            281.857791
+          ],
+          "batchReplace25": [
+            156.806167,
+            137.681,
+            133.1835,
+            134.112292,
+            135.614375,
+            137.949791,
+            134.855,
+            131.024875,
+            129.764333
+          ],
+          "historyFirst5": [
+            0.963792
+          ],
+          "historyNext5": [
+            0.925042
+          ],
+          "restore": [
+            257.276417
+          ]
+        },
+        "peakRssBytes": 939311104,
+        "rssBytes": 939311104,
+        "checks": {
+          "batches": 10,
+          "documentsPerBatch": 25,
+          "revisions": 12,
+          "manifestBytes": 3343691,
+          "manifestTokenEstimate": 835923,
+          "manifestHash": "d3598ddd74ddff654868246f0a3392756951724b62f756d1c86b7835167f389a",
+          "head": "9868373552b18ea9165979cfe7f67b94743521ef7371da1469bc000927b0ac8a"
+        }
+      },
+      "concurrent": {
+        "simultaneousWorkerRssBytes": 1111162880,
+        "coordinatorRssBytes": 151764992,
+        "barrierMemory": [
+          {
+            "rssBytes": 378290176,
+            "peakRssBytes": 378290176
+          },
+          {
+            "rssBytes": 406323200,
+            "peakRssBytes": 406323200
+          },
+          {
+            "rssBytes": 326549504,
+            "peakRssBytes": 326549504
+          }
+        ],
+        "writers": [
+          {
+            "outcome": "committed",
+            "revision": "64c133d865af56ecc72f4d1ba7bb1c3d2b82db4e439c76249fa829fbe87dc7c1",
+            "elapsed": 26.670667,
+            "rssBytes": 378978304,
+            "peakRssBytes": 378978304
+          },
+          {
+            "outcome": "conflict",
+            "elapsed": 29.938584,
+            "rssBytes": 406962176,
+            "peakRssBytes": 406962176
+          }
+        ],
+        "reader": {
+          "outcome": "pinned",
+          "revision": "9868373552b18ea9165979cfe7f67b94743521ef7371da1469bc000927b0ac8a",
+          "rssBytes": 326615040,
+          "peakRssBytes": 326615040
+        },
+        "head": "64c133d865af56ecc72f4d1ba7bb1c3d2b82db4e439c76249fa829fbe87dc7c1",
+        "source": "/var/folders/l9/ttg7csmn6cdf83lzysp0v08h0000gn/T/langonrock-operations-pDnBVj/source-20000"
+      },
+      "recovery": {
+        "timings": {
+          "recoveryOpenGet": [
+            26.484792
+          ],
+          "gcKeep10": [
+            2034.578833
+          ]
+        },
+        "peakRssBytes": 630226944,
+        "rssBytes": 630226944,
+        "checks": {
+          "head": "64c133d865af56ecc72f4d1ba7bb1c3d2b82db4e439c76249fa829fbe87dc7c1",
+          "diskBeforeGc": {
+            "logical": 563690865,
+            "allocated": 563785728
+          },
+          "gc": {
+            "removed": [
+              "snapshots/2571c2e1b18da7e519b2d64340cf01f4dacf170a7ea0463ddf21c6fc90ee3c5b.tnt",
+              "snapshots/27d3139d8d5459ef1ce6195b35e4ebd9f92546fb3b0f8e87a39cf55e6d76118f.tnt",
+              "snapshots/2e7d83894b9bf4898674c19164c54cdc070f6acc84bd564aeb45807714da7fd9.tnt",
+              "sources/8b9b71f7277e81b661ee473f9ffe8ac74112ce683df5123c8b1a1b6391396ee2.src",
+              "sources/f9553f772b6ec46b34d77a62f1f379c79bf011385b2eaebe9502efd85c99ab14.src",
+              "sources/023a83a3f3361443636a8c6b55b0e1cd2f467c7bd105fb10d3ab6fd2e1b7d5a6.src",
+              "revisions/6c62a455a5d8da19e36c793b1354e97c11b537e2f2fade6e168de4b580a5d12e.rev",
+              "revisions/1cfe5bb5a74a02e5d8850e386caae4b499d8fd50422c2b5909010206c737d6f3.rev",
+              "revisions/5350f78459e5eb330d5dbae25fbceded0ec2c15922fcb3e2f83dde196faa402f.rev",
+              "revisions/4e94e9533214b0577398587e31b8d2d34f36a6cebc489d45cc08de2d87fc7958.rev"
+            ],
+            "partials": [
+              "staging/ef985ae6-f10c-496d-9e5f-2360fba6ebd5"
+            ],
+            "skipped": [],
+            "bytesFreed": 129451590,
+            "tenant": "benchmark",
+            "current": "d1013c67bcfb1a42a7f529be57e439ba4df1c17fb5ff5245ca848d396bd80a50",
+            "currentCorrupt": false,
+            "kept": 10,
+            "corrupt": []
+          },
+          "diskAfterGc": {
+            "logical": 434240054,
+            "allocated": 434307072
+          },
+          "retainedRevisions": 10
+        }
+      },
+      "retention": {
+        "after": {
+          "before": {
+            "logical": 477290557,
+            "allocated": 477392896
+          },
+          "after": {
+            "logical": 434148894,
+            "allocated": 434241536
+          },
+          "source": {
+            "logical": 45238787,
+            "allocated": 84705280
+          },
+          "manifest": "d3598ddd74ddff654868246f0a3392756951724b62f756d1c86b7835167f389a",
+          "retained": 10,
+          "edits": 10
+        },
+        "before": {
+          "before": {
+            "logical": 244180269,
+            "allocated": 244215808
+          },
+          "after": {
+            "logical": 221982812,
+            "allocated": 222015488
+          },
+          "source": {
+            "logical": 45238815,
+            "allocated": 84705280
+          },
+          "manifest": "d3598ddd74ddff654868246f0a3392756951724b62f756d1c86b7835167f389a",
+          "retained": 10,
+          "edits": 10
+        }
+      }
+    },
+    {
+      "size": 20000,
+      "repetition": 6,
+      "fixture": "a1c1638cd368b9b8fc947f50763e62ba6604d98da417e465a98076a63ce874e3",
+      "maintenance": {
+        "timings": {
+          "batchCreate25": [
+            274.684083
+          ],
+          "batchReplace25": [
+            146.563458,
+            132.674333,
+            133.128125,
+            127.834208,
+            128.607416,
+            132.434,
+            127.302375,
+            130.395958,
+            128.529125
+          ],
+          "historyFirst5": [
+            0.9895
+          ],
+          "historyNext5": [
+            0.875375
+          ],
+          "restore": [
+            258.206333
+          ]
+        },
+        "peakRssBytes": 879427584,
+        "rssBytes": 879427584,
+        "checks": {
+          "batches": 10,
+          "documentsPerBatch": 25,
+          "revisions": 12,
+          "manifestBytes": 3343691,
+          "manifestTokenEstimate": 835923,
+          "manifestHash": "d3598ddd74ddff654868246f0a3392756951724b62f756d1c86b7835167f389a",
+          "head": "9868373552b18ea9165979cfe7f67b94743521ef7371da1469bc000927b0ac8a"
+        }
+      },
+      "concurrent": {
+        "simultaneousWorkerRssBytes": 1076805632,
+        "coordinatorRssBytes": 151764992,
+        "barrierMemory": [
+          {
+            "rssBytes": 369721344,
+            "peakRssBytes": 369721344
+          },
+          {
+            "rssBytes": 378175488,
+            "peakRssBytes": 378175488
+          },
+          {
+            "rssBytes": 328908800,
+            "peakRssBytes": 328908800
+          }
+        ],
+        "writers": [
+          {
+            "outcome": "committed",
+            "revision": "64c133d865af56ecc72f4d1ba7bb1c3d2b82db4e439c76249fa829fbe87dc7c1",
+            "elapsed": 28.204875,
+            "rssBytes": 370425856,
+            "peakRssBytes": 370425856
+          },
+          {
+            "outcome": "conflict",
+            "elapsed": 30.021334,
+            "rssBytes": 378765312,
+            "peakRssBytes": 378765312
+          }
+        ],
+        "reader": {
+          "outcome": "pinned",
+          "revision": "9868373552b18ea9165979cfe7f67b94743521ef7371da1469bc000927b0ac8a",
+          "rssBytes": 328908800,
+          "peakRssBytes": 328908800
+        },
+        "head": "64c133d865af56ecc72f4d1ba7bb1c3d2b82db4e439c76249fa829fbe87dc7c1",
+        "source": "/var/folders/l9/ttg7csmn6cdf83lzysp0v08h0000gn/T/langonrock-operations-pDnBVj/source-20000"
+      },
+      "recovery": {
+        "timings": {
+          "recoveryOpenGet": [
+            28.131042
+          ],
+          "gcKeep10": [
+            1980.54425
+          ]
+        },
+        "peakRssBytes": 561135616,
+        "rssBytes": 561135616,
+        "checks": {
+          "head": "64c133d865af56ecc72f4d1ba7bb1c3d2b82db4e439c76249fa829fbe87dc7c1",
+          "diskBeforeGc": {
+            "logical": 563690865,
+            "allocated": 563785728
+          },
+          "gc": {
+            "removed": [
+              "snapshots/2571c2e1b18da7e519b2d64340cf01f4dacf170a7ea0463ddf21c6fc90ee3c5b.tnt",
+              "snapshots/27d3139d8d5459ef1ce6195b35e4ebd9f92546fb3b0f8e87a39cf55e6d76118f.tnt",
+              "snapshots/2e7d83894b9bf4898674c19164c54cdc070f6acc84bd564aeb45807714da7fd9.tnt",
+              "sources/8b9b71f7277e81b661ee473f9ffe8ac74112ce683df5123c8b1a1b6391396ee2.src",
+              "sources/f9553f772b6ec46b34d77a62f1f379c79bf011385b2eaebe9502efd85c99ab14.src",
+              "sources/023a83a3f3361443636a8c6b55b0e1cd2f467c7bd105fb10d3ab6fd2e1b7d5a6.src",
+              "revisions/6c62a455a5d8da19e36c793b1354e97c11b537e2f2fade6e168de4b580a5d12e.rev",
+              "revisions/1cfe5bb5a74a02e5d8850e386caae4b499d8fd50422c2b5909010206c737d6f3.rev",
+              "revisions/5350f78459e5eb330d5dbae25fbceded0ec2c15922fcb3e2f83dde196faa402f.rev",
+              "revisions/4e94e9533214b0577398587e31b8d2d34f36a6cebc489d45cc08de2d87fc7958.rev"
+            ],
+            "partials": [
+              "staging/42549ad8-8b43-429b-ab14-07999f09bdd4"
+            ],
+            "skipped": [],
+            "bytesFreed": 129451590,
+            "tenant": "benchmark",
+            "current": "d1013c67bcfb1a42a7f529be57e439ba4df1c17fb5ff5245ca848d396bd80a50",
+            "currentCorrupt": false,
+            "kept": 10,
+            "corrupt": []
+          },
+          "diskAfterGc": {
+            "logical": 434240054,
+            "allocated": 434307072
+          },
+          "retainedRevisions": 10
+        }
+      },
+      "retention": {
+        "before": {
+          "before": {
+            "logical": 244180269,
+            "allocated": 244215808
+          },
+          "after": {
+            "logical": 221982812,
+            "allocated": 222015488
+          },
+          "source": {
+            "logical": 45238815,
+            "allocated": 84705280
+          },
+          "manifest": "d3598ddd74ddff654868246f0a3392756951724b62f756d1c86b7835167f389a",
+          "retained": 10,
+          "edits": 10
+        },
+        "after": {
+          "before": {
+            "logical": 477290557,
+            "allocated": 477392896
+          },
+          "after": {
+            "logical": 434148894,
+            "allocated": 434241536
+          },
+          "source": {
+            "logical": 45238787,
+            "allocated": 84705280
+          },
+          "manifest": "d3598ddd74ddff654868246f0a3392756951724b62f756d1c86b7835167f389a",
+          "retained": 10,
+          "edits": 10
+        }
+      }
+    },
+    {
+      "size": 20000,
+      "repetition": 7,
+      "fixture": "a1c1638cd368b9b8fc947f50763e62ba6604d98da417e465a98076a63ce874e3",
+      "maintenance": {
+        "timings": {
+          "batchCreate25": [
+            274.081542
+          ],
+          "batchReplace25": [
+            138.909916,
+            133.115583,
+            129.719667,
+            130.689583,
+            129.72825,
+            130.17,
+            128.158209,
+            128.104958,
+            135.957417
+          ],
+          "historyFirst5": [
+            1.133
+          ],
+          "historyNext5": [
+            0.864542
+          ],
+          "restore": [
+            249.983542
+          ]
+        },
+        "peakRssBytes": 850296832,
+        "rssBytes": 850296832,
+        "checks": {
+          "batches": 10,
+          "documentsPerBatch": 25,
+          "revisions": 12,
+          "manifestBytes": 3343691,
+          "manifestTokenEstimate": 835923,
+          "manifestHash": "d3598ddd74ddff654868246f0a3392756951724b62f756d1c86b7835167f389a",
+          "head": "9868373552b18ea9165979cfe7f67b94743521ef7371da1469bc000927b0ac8a"
+        }
+      },
+      "concurrent": {
+        "simultaneousWorkerRssBytes": 1120550912,
+        "coordinatorRssBytes": 152551424,
+        "barrierMemory": [
+          {
+            "rssBytes": 377585664,
+            "peakRssBytes": 377585664
+          },
+          {
+            "rssBytes": 404176896,
+            "peakRssBytes": 404176896
+          },
+          {
+            "rssBytes": 338788352,
+            "peakRssBytes": 338788352
+          }
+        ],
+        "writers": [
+          {
+            "outcome": "committed",
+            "revision": "64c133d865af56ecc72f4d1ba7bb1c3d2b82db4e439c76249fa829fbe87dc7c1",
+            "elapsed": 26.387542,
+            "rssBytes": 378306560,
+            "peakRssBytes": 378306560
+          },
+          {
+            "outcome": "conflict",
+            "elapsed": 29.65075,
+            "rssBytes": 404766720,
+            "peakRssBytes": 404766720
+          }
+        ],
+        "reader": {
+          "outcome": "pinned",
+          "revision": "9868373552b18ea9165979cfe7f67b94743521ef7371da1469bc000927b0ac8a",
+          "rssBytes": 338804736,
+          "peakRssBytes": 338804736
+        },
+        "head": "64c133d865af56ecc72f4d1ba7bb1c3d2b82db4e439c76249fa829fbe87dc7c1",
+        "source": "/var/folders/l9/ttg7csmn6cdf83lzysp0v08h0000gn/T/langonrock-operations-pDnBVj/source-20000"
+      },
+      "recovery": {
+        "timings": {
+          "recoveryOpenGet": [
+            27.438917
+          ],
+          "gcKeep10": [
+            1968.98925
+          ]
+        },
+        "peakRssBytes": 555565056,
+        "rssBytes": 555565056,
+        "checks": {
+          "head": "64c133d865af56ecc72f4d1ba7bb1c3d2b82db4e439c76249fa829fbe87dc7c1",
+          "diskBeforeGc": {
+            "logical": 563690865,
+            "allocated": 563785728
+          },
+          "gc": {
+            "removed": [
+              "snapshots/2571c2e1b18da7e519b2d64340cf01f4dacf170a7ea0463ddf21c6fc90ee3c5b.tnt",
+              "snapshots/27d3139d8d5459ef1ce6195b35e4ebd9f92546fb3b0f8e87a39cf55e6d76118f.tnt",
+              "snapshots/2e7d83894b9bf4898674c19164c54cdc070f6acc84bd564aeb45807714da7fd9.tnt",
+              "sources/8b9b71f7277e81b661ee473f9ffe8ac74112ce683df5123c8b1a1b6391396ee2.src",
+              "sources/f9553f772b6ec46b34d77a62f1f379c79bf011385b2eaebe9502efd85c99ab14.src",
+              "sources/023a83a3f3361443636a8c6b55b0e1cd2f467c7bd105fb10d3ab6fd2e1b7d5a6.src",
+              "revisions/6c62a455a5d8da19e36c793b1354e97c11b537e2f2fade6e168de4b580a5d12e.rev",
+              "revisions/1cfe5bb5a74a02e5d8850e386caae4b499d8fd50422c2b5909010206c737d6f3.rev",
+              "revisions/5350f78459e5eb330d5dbae25fbceded0ec2c15922fcb3e2f83dde196faa402f.rev",
+              "revisions/4e94e9533214b0577398587e31b8d2d34f36a6cebc489d45cc08de2d87fc7958.rev"
+            ],
+            "partials": [
+              "staging/70380237-5b1a-46d8-88c4-6f4669bc8697"
+            ],
+            "skipped": [],
+            "bytesFreed": 129451590,
+            "tenant": "benchmark",
+            "current": "d1013c67bcfb1a42a7f529be57e439ba4df1c17fb5ff5245ca848d396bd80a50",
+            "currentCorrupt": false,
+            "kept": 10,
+            "corrupt": []
+          },
+          "diskAfterGc": {
+            "logical": 434240054,
+            "allocated": 434307072
+          },
+          "retainedRevisions": 10
+        }
+      },
+      "retention": {
+        "after": {
+          "before": {
+            "logical": 477290557,
+            "allocated": 477392896
+          },
+          "after": {
+            "logical": 434148894,
+            "allocated": 434241536
+          },
+          "source": {
+            "logical": 45238787,
+            "allocated": 84705280
+          },
+          "manifest": "d3598ddd74ddff654868246f0a3392756951724b62f756d1c86b7835167f389a",
+          "retained": 10,
+          "edits": 10
+        },
+        "before": {
+          "before": {
+            "logical": 244180269,
+            "allocated": 244215808
+          },
+          "after": {
+            "logical": 221982812,
+            "allocated": 222015488
+          },
+          "source": {
+            "logical": 45238815,
+            "allocated": 84705280
+          },
+          "manifest": "d3598ddd74ddff654868246f0a3392756951724b62f756d1c86b7835167f389a",
+          "retained": 10,
+          "edits": 10
+        }
+      }
+    },
+    {
+      "size": 20000,
+      "repetition": 8,
+      "fixture": "a1c1638cd368b9b8fc947f50763e62ba6604d98da417e465a98076a63ce874e3",
+      "maintenance": {
+        "timings": {
+          "batchCreate25": [
+            271.959042
+          ],
+          "batchReplace25": [
+            144.368584,
+            134.15075,
+            133.415833,
+            133.083417,
+            130.080959,
+            127.62075,
+            131.374417,
+            130.11325,
+            129.631709
+          ],
+          "historyFirst5": [
+            1.129041
+          ],
+          "historyNext5": [
+            1.010417
+          ],
+          "restore": [
+            259.564792
+          ]
+        },
+        "peakRssBytes": 844988416,
+        "rssBytes": 844988416,
+        "checks": {
+          "batches": 10,
+          "documentsPerBatch": 25,
+          "revisions": 12,
+          "manifestBytes": 3343691,
+          "manifestTokenEstimate": 835923,
+          "manifestHash": "d3598ddd74ddff654868246f0a3392756951724b62f756d1c86b7835167f389a",
+          "head": "9868373552b18ea9165979cfe7f67b94743521ef7371da1469bc000927b0ac8a"
+        }
+      },
+      "concurrent": {
+        "simultaneousWorkerRssBytes": 1078738944,
+        "coordinatorRssBytes": 152600576,
+        "barrierMemory": [
+          {
+            "rssBytes": 373325824,
+            "peakRssBytes": 373325824
+          },
+          {
+            "rssBytes": 375930880,
+            "peakRssBytes": 375930880
+          },
+          {
+            "rssBytes": 329482240,
+            "peakRssBytes": 329482240
+          }
+        ],
+        "writers": [
+          {
+            "outcome": "conflict",
+            "elapsed": 29.788541,
+            "rssBytes": 373915648,
+            "peakRssBytes": 373915648
+          },
+          {
+            "outcome": "committed",
+            "revision": "525a3b91efbff8128e13ca178cab5260b1171ba88236e4030ab4442bdf9a6323",
+            "elapsed": 26.7065,
+            "rssBytes": 376619008,
+            "peakRssBytes": 376619008
+          }
+        ],
+        "reader": {
+          "outcome": "pinned",
+          "revision": "9868373552b18ea9165979cfe7f67b94743521ef7371da1469bc000927b0ac8a",
+          "rssBytes": 329564160,
+          "peakRssBytes": 329564160
+        },
+        "head": "525a3b91efbff8128e13ca178cab5260b1171ba88236e4030ab4442bdf9a6323",
+        "source": "/var/folders/l9/ttg7csmn6cdf83lzysp0v08h0000gn/T/langonrock-operations-pDnBVj/source-20000"
+      },
+      "recovery": {
+        "timings": {
+          "recoveryOpenGet": [
+            26.169291
+          ],
+          "gcKeep10": [
+            1960.343625
+          ]
+        },
+        "peakRssBytes": 579059712,
+        "rssBytes": 579059712,
+        "checks": {
+          "head": "525a3b91efbff8128e13ca178cab5260b1171ba88236e4030ab4442bdf9a6323",
+          "diskBeforeGc": {
+            "logical": 563690862,
+            "allocated": 563785728
+          },
+          "gc": {
+            "removed": [
+              "snapshots/2571c2e1b18da7e519b2d64340cf01f4dacf170a7ea0463ddf21c6fc90ee3c5b.tnt",
+              "snapshots/27d3139d8d5459ef1ce6195b35e4ebd9f92546fb3b0f8e87a39cf55e6d76118f.tnt",
+              "snapshots/fba78946a4a737d121b044f077868b534688dac62142af5d4da79d069022433e.tnt",
+              "sources/102480dc2847248b75416f1581f9856197586e3ca126aae9aa475ccc6cd71903.src",
+              "sources/8b9b71f7277e81b661ee473f9ffe8ac74112ce683df5123c8b1a1b6391396ee2.src",
+              "sources/f9553f772b6ec46b34d77a62f1f379c79bf011385b2eaebe9502efd85c99ab14.src",
+              "revisions/6c62a455a5d8da19e36c793b1354e97c11b537e2f2fade6e168de4b580a5d12e.rev",
+              "revisions/5350f78459e5eb330d5dbae25fbceded0ec2c15922fcb3e2f83dde196faa402f.rev",
+              "revisions/4e94e9533214b0577398587e31b8d2d34f36a6cebc489d45cc08de2d87fc7958.rev",
+              "revisions/c8730e55097e813683b40e0631099d797d04cd23598e0ab70086bfc37b661bfe.rev"
+            ],
+            "partials": [
+              "staging/d88aa65c-f7e0-45a6-8b6f-467c7e393313"
+            ],
+            "skipped": [],
+            "bytesFreed": 129451590,
+            "tenant": "benchmark",
+            "current": "6d25224d7eede8724bcdb59eb49b113321bb227f593b8b230f61e2e1c140c97c",
+            "currentCorrupt": false,
+            "kept": 10,
+            "corrupt": []
+          },
+          "diskAfterGc": {
+            "logical": 434240051,
+            "allocated": 434307072
+          },
+          "retainedRevisions": 10
+        }
+      },
+      "retention": {
+        "before": {
+          "before": {
+            "logical": 244180269,
+            "allocated": 244215808
+          },
+          "after": {
+            "logical": 221982812,
+            "allocated": 222015488
+          },
+          "source": {
+            "logical": 45238815,
+            "allocated": 84705280
+          },
+          "manifest": "d3598ddd74ddff654868246f0a3392756951724b62f756d1c86b7835167f389a",
+          "retained": 10,
+          "edits": 10
+        },
+        "after": {
+          "before": {
+            "logical": 477290557,
+            "allocated": 477392896
+          },
+          "after": {
+            "logical": 434148894,
+            "allocated": 434241536
+          },
+          "source": {
+            "logical": 45238787,
+            "allocated": 84705280
+          },
+          "manifest": "d3598ddd74ddff654868246f0a3392756951724b62f756d1c86b7835167f389a",
+          "retained": 10,
+          "edits": 10
+        }
+      }
+    },
+    {
+      "size": 20000,
+      "repetition": 9,
+      "fixture": "a1c1638cd368b9b8fc947f50763e62ba6604d98da417e465a98076a63ce874e3",
+      "maintenance": {
+        "timings": {
+          "batchCreate25": [
+            280.868375
+          ],
+          "batchReplace25": [
+            145.238625,
+            141.583292,
+            136.242792,
+            134.022667,
+            132.409666,
+            132.035833,
+            132.306,
+            132.559709,
+            133.97125
+          ],
+          "historyFirst5": [
+            4.249583
+          ],
+          "historyNext5": [
+            1.084792
+          ],
+          "restore": [
+            258.852334
+          ]
+        },
+        "peakRssBytes": 933380096,
+        "rssBytes": 933380096,
+        "checks": {
+          "batches": 10,
+          "documentsPerBatch": 25,
+          "revisions": 12,
+          "manifestBytes": 3343691,
+          "manifestTokenEstimate": 835923,
+          "manifestHash": "d3598ddd74ddff654868246f0a3392756951724b62f756d1c86b7835167f389a",
+          "head": "9868373552b18ea9165979cfe7f67b94743521ef7371da1469bc000927b0ac8a"
+        }
+      },
+      "concurrent": {
+        "simultaneousWorkerRssBytes": 1059291136,
+        "coordinatorRssBytes": 152551424,
+        "barrierMemory": [
+          {
+            "rssBytes": 374358016,
+            "peakRssBytes": 374358016
+          },
+          {
+            "rssBytes": 362659840,
+            "peakRssBytes": 362659840
+          },
+          {
+            "rssBytes": 322273280,
+            "peakRssBytes": 322273280
+          }
+        ],
+        "writers": [
+          {
+            "outcome": "committed",
+            "revision": "64c133d865af56ecc72f4d1ba7bb1c3d2b82db4e439c76249fa829fbe87dc7c1",
+            "elapsed": 27.97625,
+            "rssBytes": 375062528,
+            "peakRssBytes": 375062528
+          },
+          {
+            "outcome": "conflict",
+            "elapsed": 30.474708,
+            "rssBytes": 363249664,
+            "peakRssBytes": 363249664
+          }
+        ],
+        "reader": {
+          "outcome": "pinned",
+          "revision": "9868373552b18ea9165979cfe7f67b94743521ef7371da1469bc000927b0ac8a",
+          "rssBytes": 322289664,
+          "peakRssBytes": 322289664
+        },
+        "head": "64c133d865af56ecc72f4d1ba7bb1c3d2b82db4e439c76249fa829fbe87dc7c1",
+        "source": "/var/folders/l9/ttg7csmn6cdf83lzysp0v08h0000gn/T/langonrock-operations-pDnBVj/source-20000"
+      },
+      "recovery": {
+        "timings": {
+          "recoveryOpenGet": [
+            25.9025
+          ],
+          "gcKeep10": [
+            1989.957583
+          ]
+        },
+        "peakRssBytes": 557187072,
+        "rssBytes": 557187072,
+        "checks": {
+          "head": "64c133d865af56ecc72f4d1ba7bb1c3d2b82db4e439c76249fa829fbe87dc7c1",
+          "diskBeforeGc": {
+            "logical": 563690865,
+            "allocated": 563785728
+          },
+          "gc": {
+            "removed": [
+              "snapshots/2571c2e1b18da7e519b2d64340cf01f4dacf170a7ea0463ddf21c6fc90ee3c5b.tnt",
+              "snapshots/27d3139d8d5459ef1ce6195b35e4ebd9f92546fb3b0f8e87a39cf55e6d76118f.tnt",
+              "snapshots/2e7d83894b9bf4898674c19164c54cdc070f6acc84bd564aeb45807714da7fd9.tnt",
+              "sources/8b9b71f7277e81b661ee473f9ffe8ac74112ce683df5123c8b1a1b6391396ee2.src",
+              "sources/f9553f772b6ec46b34d77a62f1f379c79bf011385b2eaebe9502efd85c99ab14.src",
+              "sources/023a83a3f3361443636a8c6b55b0e1cd2f467c7bd105fb10d3ab6fd2e1b7d5a6.src",
+              "revisions/6c62a455a5d8da19e36c793b1354e97c11b537e2f2fade6e168de4b580a5d12e.rev",
+              "revisions/1cfe5bb5a74a02e5d8850e386caae4b499d8fd50422c2b5909010206c737d6f3.rev",
+              "revisions/5350f78459e5eb330d5dbae25fbceded0ec2c15922fcb3e2f83dde196faa402f.rev",
+              "revisions/4e94e9533214b0577398587e31b8d2d34f36a6cebc489d45cc08de2d87fc7958.rev"
+            ],
+            "partials": [
+              "staging/036ba2d7-7aa9-428e-b59a-f4b033cc2aab"
+            ],
+            "skipped": [],
+            "bytesFreed": 129451590,
+            "tenant": "benchmark",
+            "current": "d1013c67bcfb1a42a7f529be57e439ba4df1c17fb5ff5245ca848d396bd80a50",
+            "currentCorrupt": false,
+            "kept": 10,
+            "corrupt": []
+          },
+          "diskAfterGc": {
+            "logical": 434240054,
+            "allocated": 434307072
+          },
+          "retainedRevisions": 10
+        }
+      },
+      "retention": {
+        "after": {
+          "before": {
+            "logical": 477290557,
+            "allocated": 477392896
+          },
+          "after": {
+            "logical": 434148894,
+            "allocated": 434241536
+          },
+          "source": {
+            "logical": 45238787,
+            "allocated": 84705280
+          },
+          "manifest": "d3598ddd74ddff654868246f0a3392756951724b62f756d1c86b7835167f389a",
+          "retained": 10,
+          "edits": 10
+        },
+        "before": {
+          "before": {
+            "logical": 244180269,
+            "allocated": 244215808
+          },
+          "after": {
+            "logical": 221982812,
+            "allocated": 222015488
+          },
+          "source": {
+            "logical": 45238815,
+            "allocated": 84705280
+          },
+          "manifest": "d3598ddd74ddff654868246f0a3392756951724b62f756d1c86b7835167f389a",
+          "retained": 10,
+          "edits": 10
+        }
+      }
+    }
+  ],
+  "schemas": {
+    "default": {
+      "count": 6,
+      "bytes": 6869,
+      "tokenEstimate": 1718
+    },
+    "optIn": {
+      "count": 9,
+      "bytes": 8911,
+      "tokenEstimate": 2228
+    }
+  }
+}

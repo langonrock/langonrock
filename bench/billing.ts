@@ -4,7 +4,7 @@
  * add nothing new is a turn the agent never spends, so a navigation artifact is
  * fetched once per session. Both read paths are billed through this same model.
  */
-export const CACHE_RATE = 0.1
+const CACHE_RATE = 0.1
 
 export interface Turn {
   parts: { key: string; tokens: number }[]

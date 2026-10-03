@@ -1,0 +1,619 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Project skill | langonrock blueprint</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      :root {
+        color-scheme: dark;
+        --page: #09090b;
+        --ink: #f4f4f5;
+        --muted: #a1a1aa;
+        --card: rgba(24, 24, 27, 0.65);
+        --line: #3f3f46;
+        --accent: #a7f3d0;
+        --code: #111113;
+      }
+      html.light {
+        color-scheme: light;
+        --page: #fafaf9;
+        --ink: #18181b;
+        --muted: #52525b;
+        --card: rgba(255, 255, 255, 0.85);
+        --line: #d4d4d8;
+        --accent: #065f46;
+        --code: #f1f1f0;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--page) !important;
+        color: var(--ink) !important;
+        font:
+          16px/1.7 ui-sans-serif,
+          system-ui,
+          sans-serif;
+      }
+      a {
+        color: var(--accent);
+        text-underline-offset: 4px;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+      button,
+      summary,
+      a {
+        -webkit-tap-highlight-color: transparent;
+      }
+      :focus-visible {
+        outline: 3px solid var(--accent);
+        outline-offset: 4px;
+      }
+      button {
+        font: inherit;
+        font-size: 0.875rem;
+        cursor: pointer;
+        padding: 0.5rem 0.85rem;
+        border: 1px solid var(--line);
+        border-radius: 0.5rem;
+        background: var(--card);
+        color: var(--ink);
+      }
+      button:hover {
+        border-color: var(--accent);
+      }
+      .skip {
+        position: absolute;
+        left: 1rem;
+        top: -100px;
+        padding: 0.5rem 1rem;
+        background: var(--page);
+        z-index: 10;
+      }
+      .skip:focus {
+        top: 1rem;
+      }
+      .shell {
+        display: grid;
+        grid-template-columns: 230px minmax(0, 1fr);
+        max-width: 1400px;
+        margin: auto;
+      }
+      aside {
+        padding: 2rem 1.25rem;
+        border-right: 1px solid var(--line);
+        align-self: start;
+        position: sticky;
+        top: 0;
+        max-height: 100vh;
+        overflow: auto;
+      }
+      .brand {
+        display: block;
+        color: var(--ink);
+        font-weight: 700;
+        letter-spacing: -0.04em;
+        font-size: 1.45rem;
+        text-decoration: none;
+      }
+      .eyebrow {
+        color: var(--muted);
+        font-size: 0.7rem;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        margin: 0 0 0.5rem;
+      }
+      nav details {
+        margin: 1.3rem 0 0;
+      }
+      nav summary {
+        color: var(--muted);
+        font-size: 0.8rem;
+        cursor: pointer;
+        margin-bottom: 0.5rem;
+      }
+      nav a {
+        display: block;
+        color: var(--muted);
+        padding: 0.35rem 0.55rem;
+        text-decoration: none;
+        border-radius: 0.4rem;
+        font-size: 0.875rem;
+      }
+      nav a[aria-current] {
+        color: var(--accent);
+        background: var(--card);
+        box-shadow: inset 2px 0 var(--accent);
+      }
+      main {
+        min-width: 0;
+        padding: 3.5rem clamp(1.2rem, 4vw, 4rem);
+        max-width: 1120px;
+      }
+      header {
+        margin-bottom: 2rem;
+      }
+      h1 {
+        font-size: clamp(2rem, 4vw, 3.4rem);
+        font-weight: 650;
+        line-height: 1.15;
+        letter-spacing: -0.04em;
+        margin: 0.8rem 0 1.1rem;
+        overflow-wrap: anywhere;
+      }
+      h2 {
+        font-size: 1.12rem;
+        font-weight: 600;
+        display: inline;
+        line-height: 1.4;
+        margin: 0;
+      }
+      h3 {
+        font-size: 1rem;
+        font-weight: 600;
+        margin: 1.6rem 0 0.5rem;
+      }
+      p {
+        margin: 0.8rem 0;
+      }
+      .muted {
+        color: var(--muted);
+      }
+      .badges,
+      .tools {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.6rem;
+      }
+      .tools {
+        margin-top: 1.4rem;
+      }
+      .badge {
+        font-size: 0.72rem;
+        padding: 0.15rem 0.6rem;
+        border: 1px solid var(--line);
+        border-radius: 2rem;
+        color: var(--muted);
+      }
+      .badge:first-child {
+        color: var(--accent);
+      }
+      .card {
+        background: var(--card);
+        backdrop-filter: blur(12px);
+        border: 1px solid var(--line);
+        border-radius: 0.8rem;
+        padding: 1.2rem 1.4rem;
+        margin: 1rem 0;
+        overflow-wrap: anywhere;
+        scroll-margin-top: 1rem;
+      }
+      .card summary {
+        cursor: pointer;
+      }
+      .card[open] summary {
+        margin-bottom: 1rem;
+      }
+      .intro p:first-child {
+        margin-top: 0;
+      }
+      .intro p:last-child {
+        margin-bottom: 0;
+      }
+      ul,
+      ol {
+        padding-left: 1.4rem;
+        margin: 0.8rem 0;
+      }
+      li {
+        margin: 0.4rem 0;
+      }
+      li::marker {
+        color: var(--muted);
+      }
+      code {
+        font:
+          0.87em/1.65 ui-monospace,
+          SFMono-Regular,
+          Consolas,
+          monospace;
+        background: var(--code);
+        padding: 0.15em 0.35em;
+        border-radius: 0.2rem;
+        overflow-wrap: anywhere;
+      }
+      pre {
+        padding: 1rem;
+        border: 1px solid var(--line);
+        border-radius: 0.5rem;
+        overflow: auto;
+        background: var(--code);
+        line-height: 1.5;
+        font-size: 0.84rem;
+      }
+      pre code {
+        padding: 0;
+        background: none;
+        white-space: pre;
+        overflow-wrap: normal;
+      }
+      .table-wrap {
+        max-width: 100%;
+        overflow: auto;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.875rem;
+        text-align: left;
+      }
+      th {
+        color: var(--muted);
+        font-size: 0.75rem;
+        font-weight: 600;
+      }
+      th,
+      td {
+        vertical-align: top;
+        padding: 0.8rem 0.7rem;
+        border-bottom: 1px solid var(--line);
+        min-width: 110px;
+      }
+      td code {
+        white-space: normal;
+      }
+      hr {
+        border: 0;
+        border-top: 1px solid var(--line);
+        margin: 1.5rem 0;
+      }
+      blockquote {
+        margin: 1rem 0;
+        padding-left: 1rem;
+        border-left: 2px solid var(--accent);
+        color: var(--muted);
+      }
+      input[type='checkbox'] {
+        margin-right: 0.5rem;
+        accent-color: var(--accent);
+      }
+      footer {
+        margin-top: 2rem;
+        color: var(--muted);
+        font-size: 0.8rem;
+      }
+      @media (max-width: 800px) {
+        .shell {
+          display: block;
+        }
+        aside {
+          position: static;
+          max-height: none;
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+          padding: 1.1rem;
+        }
+        nav {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 0 1rem;
+        }
+        nav details {
+          margin-top: 0.8rem;
+        }
+        main {
+          padding: 1.8rem 1rem;
+        }
+        .card {
+          padding: 1rem;
+        }
+      }
+      @media print {
+        aside,
+        .tools,
+        .skip {
+          display: none;
+        }
+        .shell {
+          display: block;
+        }
+        main {
+          max-width: none;
+          padding: 0;
+        }
+        .card {
+          break-inside: avoid;
+          backdrop-filter: none;
+        }
+      }
+    </style>
+  </head>
+  <body class="bg-zinc-950 text-zinc-100">
+    <a class="skip" href="#content">Skip to content</a>
+    <div class="shell">
+      <aside>
+        <p class="eyebrow">Project blueprint</p>
+        <a class="brand" href="README.html">langonrock</a>
+        <nav aria-label="Blueprint navigation">
+          <details open>
+            <summary>Project</summary>
+            <a href="../../AGENTS.html">Start here</a>
+            <a href="README.html" aria-current="page">Project skill</a>
+          </details>
+          <details open>
+            <summary>References</summary>
+            <a href="reference/architecture.html">Architecture</a>
+            <a href="reference/verification.html">Verification</a>
+            <a href="reference/engineering-guidelines.html"
+              >Engineering guidelines</a
+            >
+            <a href="reference/routing-matrix.html">Routing matrix</a>
+            <a href="reference/role-contracts.html">Role contracts</a>
+          </details>
+          <details open>
+            <summary>Workflows</summary>
+            <a href="workflows/dbms/README.html">DBMS</a>
+            <a href="workflows/implement/README.html">Implement</a>
+            <a href="workflows/review/README.html">Review</a>
+            <a href="workflows/document/README.html">Document</a>
+          </details>
+          <details open>
+            <summary>Runbooks</summary>
+            <a href="../../docs/runbooks/agent-role-system.html"
+              >Agent runbook</a
+            >
+          </details>
+        </nav>
+      </aside>
+      <main id="content" tabindex="-1">
+        <header>
+          <p class="eyebrow">Project</p>
+          <h1>langonrock</h1>
+          <div class="badges">
+            <span class="badge">Repository guide</span
+            ><span class="badge">Markdown source</span
+            ><span class="badge">Bun + TypeScript</span>
+          </div>
+          <div class="tools">
+            <button id="theme" type="button" aria-pressed="false">
+              Use light theme</button
+            ><button type="button" data-expand="true">Expand sections</button
+            ><button type="button" data-expand="false">Collapse sections</button
+            ><a href="SKILL.md">Read Markdown</a>
+          </div>
+        </header>
+        <div class="document">
+          <section class="card intro">
+            <p>
+              langonrock stores Markdown documents in its own native engine and
+              compiles deterministic tenant read models. Its CLI, HTTP server,
+              and MCP server share source preconditions, atomic commits,
+              history, and restore. Legacy stores remain readable and require
+              explicit migration. Start with
+              <a href="reference/architecture.html">architecture</a> when
+              locating code for a change.
+            </p>
+          </section>
+          <details class="card" id="orchestrator" open>
+            <summary><h2>Orchestrator</h2></summary>
+            <ol>
+              <li>
+                Read the request and
+                <a href="reference/engineering-guidelines.html"
+                  >engineering guidelines</a
+                >. Preserve the existing working tree. Identify the requested
+                outcome and its verification before changing files.
+              </li>
+              <li>
+                Select one workflow from the table below. Load only that
+                contract and the references relevant to the task. A question
+                about the code can be answered from the architecture map without
+                starting an implementation workflow.
+              </li>
+              <li>
+                Complete the selected contract's review gate. Report changed
+                behavior, checks performed, unresolved failures, and any
+                requirement still incomplete.
+              </li>
+            </ol>
+          </details>
+          <details class="card" id="command-routing">
+            <summary><h2>Command routing</h2></summary>
+            <p>
+              This is a router-only project skill. Interpret
+              <code>/langonrock &lt;cmd&gt;</code> as an instruction to load the
+              matching file. If the client does not parse subcommands, read the
+              command from the user's message. These are repository conventions;
+              this blueprint does not register commands in any particular agent
+              client. There are no flat alias skills.
+            </p>
+            <div
+              class="table-wrap"
+              tabindex="0"
+              role="region"
+              aria-label="Scrollable table"
+            >
+              <table>
+                <thead>
+                  <tr>
+                    <th>Command</th>
+                    <th>Load</th>
+                    <th>Intent</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><code>/langonrock dbms</code></td>
+                    <td>
+                      <a href="workflows/dbms/README.html"
+                        >workflows/dbms/SKILL.md</a
+                      >
+                    </td>
+                    <td>
+                      Implement the approved native DBMS and performance
+                      contract
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>/langonrock implement</code></td>
+                    <td>
+                      <a href="workflows/implement/README.html"
+                        >workflows/implement/SKILL.md</a
+                      >
+                    </td>
+                    <td>Add, fix, or refactor requested behavior</td>
+                  </tr>
+                  <tr>
+                    <td><code>/langonrock review</code></td>
+                    <td>
+                      <a href="workflows/review/README.html"
+                        >workflows/review/SKILL.md</a
+                      >
+                    </td>
+                    <td>Inspect a diff and report concrete findings</td>
+                  </tr>
+                  <tr>
+                    <td><code>/langonrock document</code></td>
+                    <td>
+                      <a href="workflows/document/README.html"
+                        >workflows/document/SKILL.md</a
+                      >
+                    </td>
+                    <td>
+                      Update docs and blueprint manuals from code evidence
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p>
+              When no command is given, classify the requested outcome using the
+              <a href="reference/routing-matrix.html">routing matrix</a>. An
+              unknown command is not a new workflow; explain the available
+              commands and use the user's stated intent when it is clear.
+            </p>
+          </details>
+          <details class="card" id="project-constraints">
+            <summary><h2>Project constraints</h2></summary>
+            <ul>
+              <li>
+                Use Bun 1.4.2 or newer and TypeScript with explicit
+                <code>.ts</code> imports. The store and server require Bun; the
+                <code>langonrock/client</code> dependency graph must remain
+                usable without Bun runtime APIs.
+              </li>
+              <li>
+                Preserve snapshot determinism, tenant boundaries, source
+                preconditions, and transport parity as specified in the
+                <a href="reference/architecture.html#invariants"
+                  >architecture invariants</a
+                >.
+              </li>
+              <li>
+                Markdown remains authoritative for legacy stores. New and
+                migrated stores follow the
+                <a href="workflows/dbms/README.html">native DBMS contract</a>. A
+                legacy <code>.tnt</code> alone cannot recover original
+                frontmatter.
+              </li>
+              <li>
+                Keep MCP stdout reserved for JSON-RPC. Retain the six existing
+                tools unless the requested API change calls for a different
+                contract.
+              </li>
+              <li>
+                Follow the
+                <a href="reference/verification.html">verification map</a> for
+                affected layers. Do not weaken lint, type, or coverage
+                thresholds to pass a change.
+              </li>
+              <li>
+                Default integration branch is <code>main</code>, as configured
+                by CI and <code>origin/HEAD</code>. Use the user's requested
+                base when supplied; inspect local refs before choosing a diff
+                range. Do not switch branches just to inspect a change.
+              </li>
+            </ul>
+          </details>
+          <details class="card" id="references">
+            <summary><h2>References</h2></summary>
+            <ul>
+              <li><a href="README.html">Interactive HTML view</a></li>
+              <li><a href="template.json">Command manifest</a></li>
+              <li>
+                <a href="reference/routing-matrix.html">Routing matrix</a>
+              </li>
+              <li>
+                <a href="reference/role-contracts.html">Role contracts</a>
+              </li>
+              <li>
+                <a href="reference/engineering-guidelines.html"
+                  >Engineering guidelines</a
+                >
+              </li>
+              <li><a href="reference/architecture.html">Architecture</a></li>
+              <li><a href="reference/verification.html">Verification</a></li>
+              <li>
+                <a href="../../docs/runbooks/agent-role-system.html"
+                  >Agent runbook</a
+                >
+              </li>
+            </ul>
+          </details>
+        </div>
+        <footer>
+          Source: <a href="SKILL.md">skills/langonrock/SKILL.md</a>. Edit the
+          Markdown source and regenerate this view.
+        </footer>
+      </main>
+    </div>
+    <script>
+      const themeButton = document.querySelector('#theme')
+      function setTheme(light) {
+        document.documentElement.classList.toggle('light', light)
+        document.documentElement.classList.toggle('dark', !light)
+        themeButton.textContent = light ? 'Use dark theme' : 'Use light theme'
+        themeButton.setAttribute('aria-pressed', String(light))
+      }
+      let saved = null
+      try {
+        saved = sessionStorage.getItem('langonrock-blueprint-theme')
+      } catch {}
+      setTheme(saved === 'light')
+      themeButton.addEventListener('click', () => {
+        const light = !document.documentElement.classList.contains('light')
+        setTheme(light)
+        try {
+          sessionStorage.setItem(
+            'langonrock-blueprint-theme',
+            light ? 'light' : 'dark'
+          )
+        } catch {}
+      })
+      for (const button of document.querySelectorAll('[data-expand]')) {
+        button.addEventListener('click', () => {
+          for (const section of document.querySelectorAll('main details'))
+            section.open = button.dataset.expand === 'true'
+        })
+      }
+      function revealAnchor() {
+        const target = document.getElementById(
+          decodeURIComponent(location.hash.slice(1))
+        )
+        const section = target?.closest('details')
+        if (section) {
+          section.open = true
+          target.scrollIntoView()
+        }
+      }
+      window.addEventListener('hashchange', revealAnchor)
+      revealAnchor()
+    </script>
+  </body>
+</html>

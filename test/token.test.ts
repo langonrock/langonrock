@@ -2,12 +2,12 @@ import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { stripVTControlCharacters } from 'node:util'
 
 import { addToken, generateToken, loadTokens } from '../src/server/tokens.ts'
 
 const CLI = `${import.meta.dir}/../src/cli.ts`
 const ON_POSIX = process.platform !== 'win32'
-const ANSI = /\[\d+m/g
 
 const scratch = await mkdtemp(join(tmpdir(), 'lr-token-'))
 
@@ -36,7 +36,7 @@ async function run(args: string[]): Promise<{ out: string; err: string }> {
 
   await proc.exited
 
-  return { out, err: err.replaceAll(ANSI, '') }
+  return { out, err: stripVTControlCharacters(err) }
 }
 
 describe('generateToken', () => {

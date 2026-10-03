@@ -15,11 +15,16 @@ import {
   serve,
   writeSource
 } from '../src/index.ts'
-import { snapshotsDir } from '../src/store/paths.ts'
+import { snapshotsDir, tenantDir } from '../src/store/paths.ts'
+import { disk } from './dbms/fixtures.ts'
 import { median, memory } from './billing.ts'
 import { PROFILES } from './profiles.ts'
 
-import type { Connection } from '../src/index.ts'
+import type {
+  Connection,
+  DatabaseConnection,
+  TenantReader
+} from '../src/index.ts'
 import type { Corpus } from './okf.ts'
 
 const HERE = import.meta.dir
@@ -32,7 +37,9 @@ const EDITS = 10
 
 async function diskUsage(tenant: string): Promise<{
   snapshots: number
+  snapshotBytes: number
   bytes: number
+  allocated: number
 }> {
   const dir = snapshotsDir(STORE, tenant)
   const names = await readdir(dir)
@@ -40,9 +47,13 @@ async function diskUsage(tenant: string): Promise<{
     names.map(async name => (await stat(`${dir}/${name}`)).size)
   )
 
+  const total = await disk(tenantDir(STORE, tenant))
+
   return {
     snapshots: names.length,
-    bytes: sizes.reduce((sum, size) => sum + size, 0)
+    snapshotBytes: sizes.reduce((sum, size) => sum + size, 0),
+    bytes: total.logical,
+    allocated: total.allocated
   }
 }
 
@@ -50,13 +61,9 @@ function sync(): Promise<{ snapshot: string; bytes: number; reused: boolean }> {
   return putTenantRoot(SOURCE, { root: STORE, tenant: TENANT })
 }
 
-/**
- * A snapshot is one immutable file per tenant, named by its own hash. Nothing
- * is shared between two snapshots, so the question worth answering is what a
- * one-file edit costs on disk, not what the first write costs.
- */
 async function snapshots(corpus: Corpus) {
   const first = await sync()
+  const initial = await diskUsage(TENANT)
   const unchangedMs = await median(5, sync)
   const unchanged = await sync()
   const concept = corpus.concepts[0]
@@ -87,7 +94,23 @@ async function snapshots(corpus: Corpus) {
     editsMade: EDITS,
     diskSnapshots: after.snapshots,
     diskBytes: after.bytes,
-    diskAmplification: after.bytes / first.bytes
+    initialDiskBytes: initial.bytes,
+    diskAllocatedBytes: after.allocated,
+    diskSnapshotBytes: after.snapshotBytes,
+    diskAmplification: after.bytes / initial.bytes
+  }
+}
+
+async function withReader<T>(
+  tenant: string,
+  action: (reader: TenantReader) => Promise<T>
+): Promise<T> {
+  const reader = await openTenant(STORE, tenant)
+
+  try {
+    return await action(reader)
+  } finally {
+    reader.close?.()
   }
 }
 
@@ -96,26 +119,23 @@ async function snapshots(corpus: Corpus) {
  * question costs against a daemon that already holds the index.
  */
 async function coldVersusWarm(probe: string) {
-  const coldMs = await median(5, async () => {
-    const reader = await openTenant(STORE, TENANT)
-
-    await searchTenant(
-      await buildTenantIndex(reader),
-      probe,
-      { k: 8 },
-      reader.get
+  const coldMs = await median(5, () =>
+    withReader(TENANT, async reader =>
+      searchTenant(await buildTenantIndex(reader), probe, { k: 8 }, reader.get)
     )
-  })
-  const reader = await openTenant(STORE, TENANT)
-  const index = await buildTenantIndex(reader)
+  )
 
-  return {
-    coldMs,
-    warmMs: await median(50, () =>
-      searchTenant(index, probe, { k: 8 }, reader.get)
-    ),
-    warmManifestMs: await median(50, () => reader.manifest())
-  }
+  return withReader(TENANT, async reader => {
+    const index = await buildTenantIndex(reader)
+
+    return {
+      coldMs,
+      warmMs: await median(50, () =>
+        searchTenant(index, probe, { k: 8 }, reader.get)
+      ),
+      warmManifestMs: await median(50, () => reader.manifest())
+    }
+  })
 }
 
 /**
@@ -133,9 +153,7 @@ async function perTenant(count: number) {
 
     await putTenantRoot(SOURCE, { root: STORE, tenant })
 
-    const reader = await openTenant(STORE, tenant)
-
-    held.push(await buildTenantIndex(reader))
+    held.push(await withReader(tenant, buildTenantIndex))
     rss.push(memory().rss)
   }
 
@@ -150,13 +168,13 @@ async function perTenant(count: number) {
   }
 }
 
-function textOf(result: { content?: unknown }): string {
+function textOf(result: Record<string, unknown>): string {
   const parts = (result.content ?? []) as { text?: string }[]
 
   return parts.map(part => part.text ?? '').join('\n')
 }
 
-function hashOffered(result: { content?: unknown }): string {
+function hashOffered(result: Record<string, unknown>): string {
   return /retry with replaces: "([0-9a-f]+)"/.exec(textOf(result))?.[1] ?? ''
 }
 
@@ -166,8 +184,8 @@ function hashOffered(result: { content?: unknown }): string {
  * so the two numbers move independently and only the second one moves with the
  * implementation.
  */
-function counting(connection: Connection): {
-  connection: Connection
+function counting(connection: DatabaseConnection): {
+  connection: DatabaseConnection
   trips: () => number
   reset: () => void
 } {
@@ -182,6 +200,7 @@ function counting(connection: Connection): {
   return {
     connection: {
       ...connection,
+      transact: request => count(() => connection.transact(request)),
       readSource: (bundle, path) =>
         count(() => connection.readSource(bundle, path)),
       writeSource: (bundle, path, content, replaces) =>
@@ -281,7 +300,7 @@ async function mcpMutationCost() {
 }
 
 /**
- * The four tool definitions sit in the client's system prompt for the whole
+ * The six default tool definitions sit in the client's system prompt for the whole
  * session, whether or not the model ever asks about knowledge. That is a fixed
  * tax. The call latency is separate and is what the MCP layer itself adds on
  * top of the connection underneath it.
@@ -290,12 +309,11 @@ async function mcpCost(probe: string) {
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair()
   const client = new Client({ name: 'bench', version: '0.0.0' })
   const direct = open(`okf://${STORE}?tenant=${TENANT}`)
+  const mcpConnection = open(`okf://${STORE}?tenant=${TENANT}`)
   const advice = adviceFor(await direct.manifest())
 
   await Promise.all([
-    createMcpServer(open(`okf://${STORE}?tenant=${TENANT}`), advice).connect(
-      serverSide
-    ),
+    createMcpServer(mcpConnection, advice).connect(serverSide),
     client.connect(clientSide)
   ])
 
@@ -314,6 +332,7 @@ async function mcpCost(probe: string) {
 
   await client.close()
   await direct.close()
+  await mcpConnection.close()
 
   return result
 }
@@ -355,7 +374,7 @@ async function daemon(corpus: Corpus, probe: string) {
   }
 
   await connection.close()
-  server.stop(true)
+  await server.stop(true)
   await rm(socket, { force: true })
 
   return timings
@@ -417,7 +436,7 @@ async function editRoundTrip(corpus: Corpus) {
 
     await writeSource(SOURCE, bundle, path, `${current?.content ?? ''}\n`)
     await sync()
-    await openTenant(STORE, TENANT)
+    await withReader(TENANT, () => Promise.resolve())
     round++
   })
 

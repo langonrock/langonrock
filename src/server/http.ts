@@ -1,25 +1,39 @@
-import { createSearchCache } from '../search/cache.ts'
-import { searchTenant } from '../search/tenant.ts'
-import { createReaderCache } from '../store/cache.ts'
-import { HttpError } from './errors.ts'
 import {
-  MAX_UPLOAD_BYTES,
-  bundlesResponse,
-  sourceResponse
-} from './sourceroutes.ts'
+  ConflictError,
+  IndeterminateCommitError,
+  InvalidRequestError,
+  LegacyTenantError,
+  MissingDatabaseError
+} from '../db/errors.ts'
+import { readHead } from '../db/head.ts'
+import { createReadCache, withReader } from '../db/readcache.ts'
+import { searchTenant } from '../search/tenant.ts'
+import { currentFile } from '../store/paths.ts'
+import { databaseResponse } from './dbmsroutes.ts'
+import { databaseBundle, databaseSource } from './dbsources.ts'
+import { HttpError } from './errors.ts'
+import { bundlesResponse, sourceResponse } from './sourceroutes.ts'
 
 import type { SearchCache } from '../search/cache.ts'
+import type { ReadCache } from '../db/readcache.ts'
 import type { SearchOptions, TenantIndex } from '../search/tenant.ts'
 import type { GetOptions } from '../types.ts'
 import type { TenantReader } from '../store/reader.ts'
-import type { PutResult } from '../store/writer.ts'
+import type { PutResult } from '../store/contracts.ts'
 import type { Grant } from './tokens.ts'
 
 export type LangonrockServer = ReturnType<typeof Bun.serve>
 
 const READ_VERBS = new Set(['manifest', 'get', 'snapshot', 'search'])
 
-const WRITE_VERBS = new Set(['source', 'bundles', 'sync'])
+const WRITE_VERBS = new Set([
+  'source',
+  'bundles',
+  'sync',
+  'history',
+  'transact',
+  'restore'
+])
 
 const VERBS = new Set([...READ_VERBS, ...WRITE_VERBS])
 
@@ -44,23 +58,26 @@ export interface Tls {
 export interface ServeOptions {
   root: string
   tokens?: Map<string, Grant>
+  /** Enables native writes for tenants granted write access. Defaults to false. */
+  writable?: boolean
   /**
-   * Where a tenant's OKF Markdown lives, or undefined when it has none. Absent
-   * altogether means no tenant is writable. `create` is passed only by a write
-   * that has already been accepted on every other ground, so answering it is
-   * what brings a tenant into existence.
+   * Legacy source lookup and optional native write authorization. Native writes
+   * enabled by `writable` do not require a source folder. `create` is passed only
+   * after request validation and token authorization.
    */
   sourceDir?: (
     tenant: string,
     create: boolean
   ) => Promise<string | undefined> | string | undefined
-  /** Recompiles a tenant now, so a client can make its write visible. */
+  /** Recompiles legacy sources after edits. Native writes commit directly. */
   sync?: (tenant: string) => Promise<PutResult>
   /**
    * Share the search cache with the caller, so a watcher can rebuild an index
    * right after a sync instead of leaving the cost on the first search.
    */
   indexes?: SearchCache
+  /** Shared with warm-up callers; stopping the server closes this cache. */
+  readers?: ReadCache
   unix?: string
   hostname?: string
   port?: number
@@ -306,8 +323,30 @@ async function toResponse(request: Request, cause: unknown): Promise<Response> {
     await request.body?.cancel().catch(() => undefined)
   }
 
+  if (cause instanceof InvalidRequestError) {
+    return new Response(cause.message, { status: 400 })
+  }
+
   if (cause instanceof HttpError) {
     return new Response(cause.message, { status: cause.status })
+  }
+
+  if (cause instanceof ConflictError || cause instanceof LegacyTenantError) {
+    return Response.json(
+      { code: cause.code, message: cause.message },
+      { status: 409 }
+    )
+  }
+
+  if (cause instanceof MissingDatabaseError) {
+    return new Response(cause.message, { status: 409 })
+  }
+
+  if (cause instanceof IndeterminateCommitError) {
+    return Response.json(
+      { code: cause.code, message: cause.message, revision: cause.revision },
+      { status: 503 }
+    )
   }
 
   const message = cause instanceof Error ? cause.message : String(cause)
@@ -351,6 +390,15 @@ async function dispatchWrite(
   access: Access,
   options: ServeOptions
 ): Promise<Response> {
+  const target = { root: options.root, tenant: access.tenant }
+  const native =
+    (await readHead(target)) !== undefined ||
+    !(await Bun.file(currentFile(target.root, target.tenant)).exists())
+
+  if (native || ['history', 'transact', 'restore'].includes(matched.verb)) {
+    return dispatchDatabase(request, matched, access, options)
+  }
+
   const dir = sourceDirFor(access, options)
 
   if (matched.verb === 'sync') {
@@ -382,6 +430,33 @@ async function dispatchWrite(
   return matched.verb === 'bundles'
     ? bundlesResponse(request, context)
     : sourceResponse(request, context)
+}
+
+async function dispatchDatabase(
+  request: Request,
+  matched: Route,
+  access: Access,
+  options: ServeOptions
+): Promise<Response> {
+  const context = {
+    target: { root: options.root, tenant: access.tenant },
+    write: access.write,
+    authorize: async (create: boolean) => {
+      if (options.writable !== true) {
+        await sourceDirFor(access, options)(create)
+      }
+    },
+    ...(matched.bundle === undefined ? {} : { bundle: matched.bundle }),
+    ...(matched.path === undefined ? {} : { path: matched.path })
+  }
+
+  if (matched.verb === 'source') {
+    return databaseSource(request, context)
+  }
+
+  return matched.verb === 'bundles'
+    ? databaseBundle(request, context)
+    : databaseResponse(request, matched.verb, context)
 }
 
 /**
@@ -448,15 +523,14 @@ export function serve(options: ServeOptions): LangonrockServer {
 
   assertSafeToBind(options, tokens)
 
-  const cache = createReaderCache(options.root)
-  const indexes = options.indexes ?? createSearchCache(options.root)
+  const cache = options.readers ?? createReadCache(options.root)
 
-  return Bun.serve({
+  const server = Bun.serve({
     ...listenerFor(options),
     // A backstop against something absurd, not the concept limit. The route
     // reads the body and answers 413 itself, which keeps the status and the
     // message the same everywhere and leaves nothing unread on the socket.
-    maxRequestBodySize: MAX_UPLOAD_BYTES,
+    maxRequestBodySize: 17 * 1024 * 1024,
     fetch: async request => {
       try {
         const matched = route(new URL(request.url).pathname)
@@ -471,13 +545,31 @@ export function serve(options: ServeOptions): LangonrockServer {
           return await dispatchWrite(request, matched, access, options)
         }
 
-        return await dispatch(request, matched.verb, {
-          reader: await cache(access.tenant),
-          index: () => indexes(access.tenant)
-        })
+        return await withReader(cache, access.tenant, lease =>
+          dispatch(request, matched.verb, {
+            reader: lease.reader,
+            index: async () => {
+              const shared = await options.indexes?.(access.tenant)
+
+              return shared?.snapshot === lease.reader.snapshot
+                ? shared
+                : lease.index()
+            }
+          })
+        )
       } catch (cause) {
         return await toResponse(request, cause)
       }
     }
   })
+
+  const stop = server.stop.bind(server)
+
+  server.stop = close => {
+    cache.close()
+
+    return stop(close)
+  }
+
+  return server
 }

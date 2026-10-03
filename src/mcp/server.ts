@@ -3,24 +3,24 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 
 import { open } from '../client/connection.ts'
+import { hash } from '../db/format.ts'
 import { adviceFor } from '../search/advice.ts'
 import { renderConcepts } from '../store/slice.ts'
+import { GET_LIMIT, MANIFEST_URI } from './constants.ts'
+import { registerDatabase } from './dbms.ts'
+
+import type { McpOptions } from './dbms.ts'
 
 import type { Connection } from '../client/connection.ts'
 import type { SearchOptions } from '../search/tenant.ts'
-import type { GetOptions, SyncResult } from '../types.ts'
+import type {
+  DatabaseConnection,
+  DocumentChange,
+  GetOptions,
+  RevisionResult,
+  SyncResult
+} from '../types.ts'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
-
-export const MANIFEST_URI = 'okf://manifest'
-
-/**
- * The MCP boundary is where an unbounded read becomes a context blowup, so it
- * is the one layer that caps by default. 15,000 characters is roughly 4,000
- * tokens: every ordinary concept passes through whole, and only a document
- * that genuinely needs paging gets framed as a partial slice. The library and
- * the HTTP API stay uncapped, because their callers are programs, not prompts.
- */
-export const GET_LIMIT = 15_000
 
 const MANIFEST_DESCRIPTION = `Read the tenant's knowledge manifest: one dense TSV row per concept with its id, bundle, kind, status, grain, a one-line summary, and outgoing links.
 
@@ -44,7 +44,7 @@ Reach for this instead of reading the whole manifest when the tenant is large, o
 
 Pass "bundle" to rank only within one bundle.`
 
-const WRITE_DESCRIPTION = `Create or replace one concept's Markdown source, then recompile so the change is immediately visible to "manifest", "search" and "get".
+const WRITE_DESCRIPTION = `Create or replace one concept's Markdown source and make the committed change immediately visible to "manifest", "search" and "get".
 
 Pass the whole document in "content", not a patch: this replaces the file. Write OKF frontmatter with at least a "type" so the concept compiles as a concept rather than as plain Markdown.
 
@@ -54,7 +54,7 @@ Replacing an existing concept needs "replaces", the hash of the version you are 
 
 Ids are derived from paths, so adding a file can rename a concept nobody edited; re-read the manifest after writing rather than reusing ids you saw before.`
 
-const DELETE_DESCRIPTION = `Remove one concept and recompile, so it leaves "manifest", "search" and "get" immediately.
+const DELETE_DESCRIPTION = `Remove one concept, so the committed change leaves "manifest", "search" and "get" immediately.
 
 Needs "replaces", the hash of the version being removed. Call without it and the refusal names the hash to retry with, the same way "write" does.
 
@@ -261,6 +261,14 @@ async function refused(
   path: string,
   cause: unknown
 ): Promise<CallToolResult> {
+  if (
+    cause instanceof Error &&
+    'code' in cause &&
+    cause.code === 'INDETERMINATE_COMMIT'
+  ) {
+    return failure(cause)
+  }
+
   const current = await connection
     .readSource(bundle, path)
     .catch(() => undefined)
@@ -285,22 +293,60 @@ function diagnosticsFor(result: SyncResult, path: string): string[] {
     .map(diagnostic => `${diagnostic.level} ${path}: ${diagnostic.message}`)
 }
 
-/**
- * Both verbs are the same shape: change one concept, recompile, report the new
- * snapshot. Only the change can fail a precondition, so the recompile is kept
- * out of that catch. Reporting a failed recompile as a refused change would
- * hand back the hash of a change that already landed, and the model would
- * satisfy the precondition and make it again.
- */
+async function nativeCommit(
+  connection: Connection,
+  change: DocumentChange
+): Promise<RevisionResult | undefined> {
+  const database = connection as Partial<DatabaseConnection>
+
+  if (database.transact === undefined) {
+    return undefined
+  }
+
+  try {
+    return await database.transact({ changes: [change] })
+  } catch (cause) {
+    if (
+      cause instanceof Error &&
+      'code' in cause &&
+      cause.code === 'LEGACY_TENANT'
+    ) {
+      return undefined
+    }
+
+    throw cause
+  }
+}
+
+function completed(done: string, result: SyncResult, path: string) {
+  return text(
+    [
+      `${done}, snapshot ${result.snapshot}, ${result.concepts} concepts`,
+      ...diagnosticsFor(result, path)
+    ].join('\n')
+  )
+}
+
 async function mutate(
   connection: Connection,
-  bundle: string,
-  path: string,
+  change: DocumentChange,
   apply: () => Promise<string>
 ): Promise<CallToolResult> {
+  const { bundle, path } = change
   let done: string
 
   try {
+    const committed = await nativeCommit(connection, change)
+
+    if (committed !== undefined) {
+      const label =
+        change.operation === 'write'
+          ? `wrote ${bundle}/${path} (hash ${hash(change.content)})`
+          : `deleted ${bundle}/${path}`
+
+      return completed(label, committed, path)
+    }
+
     done = await apply()
   } catch (cause) {
     return refused(connection, bundle, path, cause)
@@ -309,12 +355,7 @@ async function mutate(
   try {
     const result = await connection.sync()
 
-    return text(
-      [
-        `${done}, snapshot ${result.snapshot}, ${result.concepts} concepts`,
-        ...diagnosticsFor(result, path)
-      ].join('\n')
-    )
+    return completed(done, result, path)
   } catch (cause) {
     return failure(
       new Error(`${done}, but the recompile failed: ${messageOf(cause)}`)
@@ -351,16 +392,26 @@ function registerWrite(server: McpServer, connection: Connection): void {
       }
     },
     async ({ bundle, path, content, replaces }) =>
-      mutate(connection, bundle, path, async () => {
-        const hash = await connection.writeSource(
+      mutate(
+        connection,
+        {
+          operation: 'write',
           bundle,
           path,
           content,
-          replaces
-        )
+          ...(replaces === undefined ? {} : { replaces })
+        },
+        async () => {
+          const hash = await connection.writeSource(
+            bundle,
+            path,
+            content,
+            replaces
+          )
 
-        return `wrote ${bundle}/${path} (hash ${hash})`
-      })
+          return `wrote ${bundle}/${path} (hash ${hash})`
+        }
+      )
   )
 }
 
@@ -411,11 +462,15 @@ function registerDelete(server: McpServer, connection: Connection): void {
     async ({ bundle, path, replaces }) =>
       replaces === undefined
         ? missingHash(connection, bundle, path)
-        : mutate(connection, bundle, path, async () => {
-            await connection.deleteSource(bundle, path, replaces)
+        : mutate(
+            connection,
+            { operation: 'delete', bundle, path, replaces },
+            async () => {
+              await connection.deleteSource(bundle, path, replaces)
 
-            return `deleted ${bundle}/${path}`
-          })
+              return `deleted ${bundle}/${path}`
+            }
+          )
   )
 }
 
@@ -440,7 +495,8 @@ function registerSnapshot(server: McpServer, connection: Connection): void {
  */
 export function createMcpServer(
   connection: Connection,
-  advice?: string
+  advice?: string,
+  options: McpOptions = {}
 ): McpServer {
   const server = new McpServer({ name: 'langonrock', version: '0.0.0' })
 
@@ -450,6 +506,10 @@ export function createMcpServer(
   registerSnapshot(server, connection)
   registerWrite(server, connection)
   registerDelete(server, connection)
+
+  if (options.databaseTools === true) {
+    registerDatabase(server, connection)
+  }
 
   return server
 }
@@ -463,17 +523,21 @@ export function createMcpServer(
  * shape underneath a running server keeps the old advice until the next
  * session. It is a hint about corpus shape, and shape moves slowly.
  */
-export async function serveMcp(dsn: string): Promise<void> {
+export async function serveMcp(
+  dsn: string,
+  options: McpOptions = {}
+): Promise<void> {
   const connection = open(dsn)
   const advice = await connection
     .manifest()
     .then(adviceFor)
     .catch(() => undefined)
-  const server = createMcpServer(connection, advice)
+  const server = createMcpServer(connection, advice, options)
   const transport = new StdioServerTransport()
 
   await server.connect(transport)
   await new Promise<void>(resolve => {
     transport.onclose = () => resolve()
   })
+  await connection.close()
 }

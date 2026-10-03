@@ -21,7 +21,7 @@ let built: TenantIndex
 let reader: Awaited<ReturnType<typeof openTenant>>
 
 /** For indexes built by hand with no store behind them: every pos is `-`. */
-const none = async () => new Map()
+const none = () => Promise.resolve(new Map())
 
 beforeAll(async () => {
   scratch = await mkdtemp(join(tmpdir(), 'lr-search-'))

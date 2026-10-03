@@ -1,10 +1,12 @@
+import { releaseBuffer } from '../buffers.ts'
+
 const ASCII_TOKEN = /[a-z0-9]+/g
 const TOKEN = /[\p{L}\p{N}]+/gu
-const NON_ASCII = /[^\x00-\x7f]/
+const NON_ASCII = /[\u0080-\uffff]/
 const MARKS = /\p{M}+/gu
 
-export const K1 = 1.2
-export const B = 0.75
+const K1 = 1.2
+const B = 0.75
 
 /**
  * How many times a manifest cell counts against a word of prose. Compiling the
@@ -17,7 +19,7 @@ export const B = 0.75
  * start costing recall on queries that describe a concept instead of naming
  * one, so this is the smallest value that captures the gain.
  */
-export const FIELD_WEIGHT = 2
+const FIELD_WEIGHT = 2
 
 /**
  * How many times the concept's own names — its id and its frontmatter title —
@@ -31,7 +33,7 @@ export const FIELD_WEIGHT = 2
  * outside noise, and describing queries never move at all — the recall cost
  * that capped FIELD_WEIGHT does not apply to a concept's own name.
  */
-export const NAME_WEIGHT = 4
+const NAME_WEIGHT = 4
 
 export interface Document {
   id: string
@@ -109,6 +111,13 @@ function createList(): PostingList {
   }
 }
 
+function discard(list: PostingList): void {
+  if (list.documents.byteLength >= 4096) {
+    releaseBuffer(list.documents)
+    releaseBuffer(list.frequencies)
+  }
+}
+
 function push(list: PostingList, document: number, frequency: number): void {
   if (list.length === list.documents.length) {
     const documents = new Uint32Array(list.length * 2)
@@ -116,6 +125,7 @@ function push(list: PostingList, document: number, frequency: number): void {
 
     documents.set(list.documents)
     frequencies.set(list.frequencies)
+    discard(list)
     list.documents = documents
     list.frequencies = frequencies
   }
@@ -130,11 +140,12 @@ function trim(list: PostingList): PostingList {
     return list
   }
 
-  return {
-    documents: list.documents.slice(0, list.length),
-    frequencies: list.frequencies.slice(0, list.length),
-    length: list.length
-  }
+  const documents = list.documents.slice(0, list.length)
+  const frequencies = list.frequencies.slice(0, list.length)
+
+  discard(list)
+
+  return { documents, frequencies, length: list.length }
 }
 
 export interface IndexBuilder {

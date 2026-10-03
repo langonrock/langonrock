@@ -91,8 +91,8 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
-  server?.stop(true)
-  tcp?.stop(true)
+  await server?.stop(true)
+  await tcp?.stop(true)
   await rm(socket, { force: true })
   await rm(scratch, { recursive: true, force: true })
 })
@@ -440,12 +440,12 @@ describe('the source routes', () => {
         }
       }),
       duplex: 'half'
-    } as RequestInit)
+    })
 
     expect(request.headers.get('content-length')).toBeNull()
 
     const refusal = await sourceResponse(request, {
-      dir: async () => source,
+      dir: () => Promise.resolve(source),
       write: true,
       bundle: 'sales',
       path: 'tables/streamed.md'
@@ -508,7 +508,7 @@ describe('tenants without a source directory', () => {
         'no source directory'
       )
     } finally {
-      bare.stop(true)
+      await bare.stop(true)
     }
   })
 
@@ -556,7 +556,7 @@ describe('bootstrapping a tenant from nothing', () => {
   })
 
   afterAll(async () => {
-    started?.stop(true)
+    await started?.stop(true)
     await rm(bare, { recursive: true, force: true })
   })
 
@@ -594,7 +594,7 @@ describe('bootstrapping a tenant from nothing', () => {
       expect(response.status).toBe(409)
       expect(await Bun.file(`${untouched}/sources.json`).exists()).toBe(false)
     } finally {
-      other.stop(true)
+      await other.stop(true)
       await rm(untouched, { recursive: true, force: true })
     }
   })
@@ -648,7 +648,7 @@ describe('bootstrapping a tenant from nothing', () => {
 
         return response.status
       } finally {
-        other.stop(true)
+        await other.stop(true)
         await rm(empty, { recursive: true, force: true })
       }
     }
@@ -659,7 +659,7 @@ describe('bootstrapping a tenant from nothing', () => {
           { method: 'PUT', headers: { 'if-none-match': '*' }, body: CONCEPT },
           '/source/inbox/notes.txt'
         )
-      ).resolves.toBe(404)
+      ).resolves.toBe(400)
     })
 
     test('a body past the concept limit', async () => {
@@ -672,17 +672,15 @@ describe('bootstrapping a tenant from nothing', () => {
       ).resolves.toBe(413)
     })
 
-    // Only `If-None-Match: *` asserts a new concept, so any other write shape
-    // is answered at the tenant level rather than at the header.
     test('a write with no precondition at all', async () => {
-      await expect(refuse({ method: 'PUT', body: CONCEPT })).resolves.toBe(409)
+      await expect(refuse({ method: 'PUT', body: CONCEPT })).resolves.toBe(428)
     })
 
     test('a replacement of a concept that cannot exist', async () => {
       await expect(
         refuse({
           method: 'PUT',
-          headers: { 'if-match': '"deadbeef"' },
+          headers: { 'if-match': `"${'0'.repeat(64)}"` },
           body: CONCEPT
         })
       ).resolves.toBe(409)
@@ -720,7 +718,7 @@ describe('bootstrapping a tenant from nothing', () => {
 
       expect(response.status).toBe(409)
     } finally {
-      other.stop(true)
+      await other.stop(true)
       await rm(closed, { recursive: true, force: true })
     }
   })

@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { stripVTControlCharacters } from 'node:util'
 
 const CLI = `${import.meta.dir}/../src/cli.ts`
 
@@ -28,10 +29,6 @@ interface Run {
   code: number
 }
 
-// Bun paints console.error red, so a hash read off stderr arrives wrapped in
-// escape codes and would be passed straight back as a bogus precondition.
-const ANSI = /\[\d+m/g
-
 async function run(args: string[], stdin?: string): Promise<Run> {
   const proc = Bun.spawn(['bun', CLI, ...args], {
     stdin: stdin === undefined ? 'ignore' : new TextEncoder().encode(stdin),
@@ -45,7 +42,7 @@ async function run(args: string[], stdin?: string): Promise<Run> {
     proc.exited
   ])
 
-  return { stdout, stderr: stderr.replaceAll(ANSI, ''), code }
+  return { stdout, stderr: stripVTControlCharacters(stderr), code }
 }
 
 async function query(args: string[], stdin?: string): Promise<Run> {
@@ -166,13 +163,18 @@ describe('query write', () => {
 })
 
 describe('query sync and delete', () => {
-  test('sync compiles the writes into a new snapshot', async () => {
+  test('sync reports immediately committed writes without creating another revision', async () => {
     const before = await query(['snapshot'])
+    const history = await query(['history'])
+
+    expect((await query(['manifest'])).stdout).toContain('created')
+
     const result = await query(['sync'])
 
     expect(result.code).toBe(0)
     expect(result.stderr).toContain('concepts')
-    expect((await query(['snapshot'])).stdout).not.toBe(before.stdout)
+    expect((await query(['snapshot'])).stdout).toBe(before.stdout)
+    expect((await query(['history'])).stdout).toBe(history.stdout)
     expect((await query(['manifest'])).stdout).toContain('created')
   })
 
